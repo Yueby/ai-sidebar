@@ -1,0 +1,147 @@
+import type { AssistantMessage, ToolResultMessage, UserMessage } from '@earendil-works/pi-ai';
+import type { RefTab } from './pageContext';
+
+/** 接口协议类型,与 pi-ai 的 KnownApi 对齐 */
+export type ApiType = 'openai-completions' | 'openai-responses' | 'anthropic-messages';
+
+export interface ModelConfig {
+  id: string;
+  displayName?: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  /** 信息位:是否支持工具调用(pi-ai 要求模型支持工具,此字段供筛选/展示) */
+  tools?: boolean;
+  vision?: boolean;
+  reasoning?: boolean;
+  /** 该模型支持的思考等级(不含 off;空/缺省回退默认三档 low/medium/high) */
+  reasoningLevels?: ReasoningLevel[];
+  /** 参数由 models.dev 自动预填过 */
+  prefilled?: boolean;
+}
+
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  api: ApiType;
+  baseUrl: string;
+  apiKey: string;
+  models: ModelConfig[];
+}
+
+/** 思考等级,与 pi-ai/pi-agent-core 的 ThinkingLevel 对齐(额外含 off) */
+export type ReasoningLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export const REASONING_LEVELS: ReasoningLevel[] = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+
+/** 思考等级展示文案(short=按钮/紧凑位,full=下拉/完整位),UI 统一消费此处 */
+export const REASONING_LEVEL_LABELS: Record<ReasoningLevel, { short: string; full: string }> = {
+  off: { short: '关', full: '关闭' },
+  minimal: { short: '极低', full: '极低 (minimal)' },
+  low: { short: '低', full: '低 (low)' },
+  medium: { short: '中', full: '中 (medium)' },
+  high: { short: '高', full: '高 (high)' },
+  xhigh: { short: '超高', full: '超高 (xhigh)' },
+  max: { short: '最大', full: '最大 (max)' },
+};
+
+/**
+ * Agent 工具展示文案的**唯一来源**(AgentTool.label / 流式执行 chip / 历史 toolCall chip 全部消费此处)。
+ * 暂时统一中文;多语言以后再做。
+ */
+export const TOOL_LABELS: Record<string, string> = {
+  extract_page: '读取网页内容',
+  read_element: '读取页面元素',
+};
+
+/** 取工具展示文案:未知工具名原样返回 */
+export function toolLabel(name: string): string {
+  return TOOL_LABELS[name] ?? name;
+}
+
+export interface Settings {
+  providers: ProviderConfig[];
+  activeProviderId: string | null;
+  activeModelId: string | null;
+  /** 发送时启用页面上下文(引用当前标签页,AI 经 extract_page 工具按需读取正文) */
+  includePageContext: boolean;
+  /** 思考等级,仅当激活模型 reasoning=true 时生效 */
+  reasoningLevel: ReasoningLevel;
+}
+
+/**
+ * user 消息 content 内嵌的 <page-refs> 块的结构(发送瞬间序列化为 JSON,此后永不改变):
+ * 一份数据两个消费者 —— LLM 直接读 content 里的块,UI 从同一 content 解析渲染。
+ */
+export interface RefTabMeta {
+  tabId: number;
+  title: string;
+  url: string;
+  /** 发送时刻活动且在引用列表内的标签页(仅 true 时序列化进块) */
+  focused?: boolean;
+}
+
+export interface RefElementMeta {
+  tabId: number;
+  selector: string;
+  tagName: string;
+  preview: string;
+}
+
+export interface PageRefs {
+  tabs: RefTabMeta[];
+  elements: RefElementMeta[];
+}
+
+/**
+ * 会话消息 = pi-ai 消息联合,直接按 pi 形状持久化。
+ * 好处:agent 回放零转换;assistant 消息自带 thinking 块/toolCall/usage。
+ * 旧版 {id, role:'user'|'assistant', content, createdAt} 结构由 storage.sanitizeMessage 迁移;
+ * 引用信息不是自定义字段,而是序列化为 user 消息 content 内的 <page-refs> 块(lib/pageRefs.ts)。
+ */
+export type ChatMessage = UserMessage | AssistantMessage | ToolResultMessage;
+export type { AssistantMessage, ToolResultMessage, UserMessage };
+
+/** 每会话 composer 草稿(输入文本 + 引用标签页 + 框选元素),随会话持久化到 IndexedDB */
+export interface SessionDraft {
+  input: string;
+  refTabs: RefTab[];
+  pickedElements: PickedElement[];
+}
+
+export interface Session {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
+  /** 会话草稿;旧数据缺省 undefined,由 UI 视为空草稿 */
+  draft?: SessionDraft;
+}
+
+/** content.ts 页面提取应答 */
+export interface PageContext {
+  title: string;
+  url: string;
+  text: string;
+}
+
+/** 用户在页面上框选的元素引用(selector 由 @medv/finder 生成,保证唯一) */
+export interface PickedElement {
+  id: string;
+  tabId: number;
+  selector: string;
+  tagName: string;
+  /** 元素可见文本预览(截 100 字) */
+  preview: string;
+}
+
+/** 消息协议(与 entrypoints/content.ts 对应) */
+export const EXTRACT_PAGE_MESSAGE = 'ai-sidebar/extract-page' as const;

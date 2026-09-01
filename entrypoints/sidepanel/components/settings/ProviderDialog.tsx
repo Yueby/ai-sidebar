@@ -1,0 +1,766 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Eye,
+  EyeOff,
+  Zap,
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  Plus,
+  CloudDownload,
+  RefreshCw,
+  Pencil,
+  Trash2,
+  Search,
+  Check,
+  X,
+} from 'lucide-react';
+import type { ProviderConfig, ModelConfig, ApiType } from '@/lib/types';
+import { API_TYPE_OPTIONS, createProviderDraft } from '@/lib/providers';
+import {
+  testConnection,
+  fetchProviderModels,
+  fetchModelsDevMeta,
+  applyModelMeta,
+  syncModelsWithModelsDev,
+  type ModelMeta,
+} from '@/lib/models';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
+import { ModelConfigDialog } from './ModelConfigDialog';
+
+interface ProviderDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  provider: ProviderConfig | null;
+  isNew: boolean;
+  onSave: (provider: ProviderConfig) => void;
+}
+
+interface FetchedCandidate {
+  id: string;
+  meta?: ModelMeta;
+  isExisting: boolean;
+}
+
+export function ProviderDialog({
+  open,
+  onOpenChange,
+  provider,
+  isNew,
+  onSave,
+}: ProviderDialogProps) {
+  const [draft, setDraft] = useState<ProviderConfig>(() =>
+    provider ? { ...provider, models: [...provider.models] } : createProviderDraft()
+  );
+
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Inline model fetch & candidate selection states
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [syncingModels, setSyncingModels] = useState(false);
+  const [fetchResultMsg, setFetchResultMsg] = useState<string | null>(null);
+  const [fetchErrorMsg, setFetchErrorMsg] = useState<string | null>(null);
+  const [modelSearch, setModelSearch] = useState('');
+
+  // Candidate selection list (populated when user clicks "拉取")
+  const [candidates, setCandidates] = useState<FetchedCandidate[] | null>(null);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
+  const [candidateSearch, setCandidateSearch] = useState('');
+
+  // Model config dialog
+  const [modelConfigTarget, setModelConfigTarget] = useState<ModelConfig | null>(null);
+  const [modelConfigOpen, setModelConfigOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setDraft(
+        provider
+          ? { ...provider, models: [...provider.models] }
+          : createProviderDraft()
+      );
+      setShowApiKey(false);
+      setTestResult(null);
+      setFetchResultMsg(null);
+      setFetchErrorMsg(null);
+      setModelSearch('');
+      setCandidates(null);
+      setSelectedCandidateIds(new Set());
+      setCandidateSearch('');
+    }
+  }, [open, provider]);
+
+  // Protocol change
+  const handleApiChange = (newApi: ApiType) => {
+    const defaultUrl =
+      API_TYPE_OPTIONS.find((o) => o.value === newApi)?.defaultBaseUrl || draft.baseUrl;
+    setDraft((prev) => ({
+      ...prev,
+      api: newApi,
+      baseUrl: defaultUrl,
+    }));
+    setTestResult(null);
+    setCandidates(null);
+  };
+
+  // Test connection
+  const handleTest = async () => {
+    if (!draft.baseUrl) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const msg = await testConnection({
+        api: draft.api,
+        baseUrl: draft.baseUrl,
+        apiKey: draft.apiKey,
+      });
+      setTestResult({ success: true, message: msg });
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err?.message || '连接失败，请检查 Base URL 与 API Key',
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  // Fetch models and show candidates selection list
+  const handleFetchModels = async () => {
+    if (!draft.baseUrl) return;
+    setFetchingModels(true);
+    setFetchResultMsg(null);
+    setFetchErrorMsg(null);
+    setCandidates(null);
+    setSelectedCandidateIds(new Set());
+    setCandidateSearch('');
+
+    try {
+      const [remoteIds, devMetaMap] = await Promise.all([
+        fetchProviderModels({
+          api: draft.api,
+          baseUrl: draft.baseUrl,
+          apiKey: draft.apiKey,
+        }),
+        fetchModelsDevMeta(),
+      ]);
+
+      if (remoteIds.length === 0) {
+        setFetchResultMsg('未拉取到可用模型');
+        return;
+      }
+
+      const existingSet = new Set(draft.models.map((m) => m.id));
+      const candidateList: FetchedCandidate[] = remoteIds.map((id) => ({
+        id,
+        meta: devMetaMap.get(id),
+        isExisting: existingSet.has(id),
+      }));
+
+      setCandidates(candidateList);
+
+      // Default select all newly discovered models
+      const newIds = new Set(candidateList.filter((c) => !c.isExisting).map((c) => c.id));
+      setSelectedCandidateIds(newIds);
+    } catch (err: any) {
+      setFetchErrorMsg(err?.message || '拉取模型失败，请检查端点与密钥');
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  // Toggle selection for candidate
+  const toggleCandidateSelection = (id: string) => {
+    setSelectedCandidateIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Toggle select all filtered candidates
+  const toggleSelectAllCandidates = (filtered: FetchedCandidate[]) => {
+    const selectable = filtered.filter((c) => !c.isExisting);
+    const allSelected = selectable.every((c) => selectedCandidateIds.has(c.id));
+
+    setSelectedCandidateIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        selectable.forEach((c) => next.delete(c.id));
+      } else {
+        selectable.forEach((c) => next.add(c.id));
+      }
+      return next;
+    });
+  };
+
+  // Import selected candidates
+  const handleImportSelectedCandidates = () => {
+    if (!candidates) return;
+
+    const existingMap = new Map(draft.models.map((m) => [m.id, m]));
+    let count = 0;
+
+    for (const c of candidates) {
+      if (selectedCandidateIds.has(c.id) && !c.isExisting && !existingMap.has(c.id)) {
+        const enriched = applyModelMeta({ id: c.id }, c.meta);
+        existingMap.set(c.id, enriched);
+        count++;
+      }
+    }
+
+    setDraft((prev) => ({ ...prev, models: Array.from(existingMap.values()) }));
+    setCandidates(null);
+    setFetchResultMsg(`已成功导入 ${count} 个模型`);
+  };
+
+  // Sync parameters with models.dev
+  const handleSyncModels = async () => {
+    if (draft.models.length === 0) return;
+    setSyncingModels(true);
+    setFetchResultMsg(null);
+    setFetchErrorMsg(null);
+
+    try {
+      const { models: updatedModels, updatedCount } = await syncModelsWithModelsDev(draft.models);
+      setDraft((prev) => ({ ...prev, models: updatedModels }));
+      if (updatedCount > 0) {
+        setFetchResultMsg(`已从 models.dev 补全 ${updatedCount} 个模型的参数`);
+      } else {
+        setFetchResultMsg('所有模型参数已是最新');
+      }
+    } catch (err: any) {
+      setFetchErrorMsg(err?.message || '同步 models.dev 参数失败');
+    } finally {
+      setSyncingModels(false);
+    }
+  };
+
+  // Save model from config dialog
+  const handleSaveModelConfig = (savedModel: ModelConfig) => {
+    setDraft((prev) => {
+      const idx = prev.models.findIndex((m) => m.id === savedModel.id);
+      if (idx >= 0) {
+        const nextModels = [...prev.models];
+        nextModels[idx] = savedModel;
+        return { ...prev, models: nextModels };
+      }
+      return { ...prev, models: [...prev.models, savedModel] };
+    });
+  };
+
+  const handleDeleteModel = (modelId: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      models: prev.models.filter((m) => m.id !== modelId),
+    }));
+  };
+
+  const handleSave = () => {
+    const finalProvider: ProviderConfig = {
+      ...draft,
+      name: draft.name.trim() || '未命名提供商',
+      baseUrl: draft.baseUrl.trim(),
+      apiKey: draft.apiKey.trim(),
+    };
+    onSave(finalProvider);
+    onOpenChange(false);
+  };
+
+  const formatTokens = (n?: number) => {
+    if (!n) return null;
+    return n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`;
+  };
+
+  const filteredModels = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase();
+    if (!q) return draft.models;
+    return draft.models.filter(
+      (m) =>
+        m.id.toLowerCase().includes(q) ||
+        (m.displayName && m.displayName.toLowerCase().includes(q))
+    );
+  }, [draft.models, modelSearch]);
+
+  const filteredCandidates = useMemo(() => {
+    if (!candidates) return [];
+    const q = candidateSearch.trim().toLowerCase();
+    if (!q) return candidates;
+    return candidates.filter(
+      (c) =>
+        c.id.toLowerCase().includes(q) ||
+        (c.meta?.name && c.meta.name.toLowerCase().includes(q))
+    );
+  }, [candidates, candidateSearch]);
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="w-[calc(100vw-24px)] max-w-[380px] p-4 gap-3 max-h-[88vh] flex flex-col">
+          <DialogHeader className="gap-1 text-left">
+            <DialogTitle className="text-base font-semibold">
+              {isNew ? '添加 AI 提供商' : '编辑提供商配置'}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              配置端点地址、协议格式与模型列表
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Form Content */}
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+            {/* Provider Name */}
+            <div className="space-y-1">
+              <Label className="text-xs">提供商名称</Label>
+              <Input
+                value={draft.name}
+                onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
+                placeholder="如 DeepSeek, OpenRouter, 本地 Ollama"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* Protocol */}
+            <div className="space-y-1">
+              <Label className="text-xs">接口协议</Label>
+              <Select value={draft.api} onValueChange={(v) => handleApiChange(v as ApiType)}>
+                <SelectTrigger className="h-8 text-xs w-full">
+                  <SelectValue placeholder="选择协议" />
+                </SelectTrigger>
+                <SelectContent>
+                  {API_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Base URL */}
+            <div className="space-y-1">
+              <Label className="text-xs">Base URL</Label>
+              <Input
+                value={draft.baseUrl}
+                onChange={(e) => setDraft((p) => ({ ...p, baseUrl: e.target.value }))}
+                placeholder="https://api.openai.com/v1"
+                className="h-8 text-xs font-mono truncate"
+              />
+            </div>
+
+            {/* API Key */}
+            <div className="space-y-1">
+              <Label className="text-xs">API Key</Label>
+              <div className="relative">
+                <Input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={draft.apiKey}
+                  onChange={(e) => setDraft((p) => ({ ...p, apiKey: e.target.value }))}
+                  placeholder="sk-..."
+                  className="h-8 text-xs font-mono pr-8 truncate"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey((v) => !v)}
+                  className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+                  title={showApiKey ? '隐藏密钥' : '显示密钥'}
+                >
+                  {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Test Connection Button & Result */}
+            <div className="flex items-center gap-2 pt-0.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={testing || !draft.baseUrl}
+                onClick={handleTest}
+                className="h-7 text-xs gap-1.5"
+              >
+                {testing ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Zap className="size-3" />
+                )}
+                <span>{testing ? '测试中...' : '测试连通性'}</span>
+              </Button>
+
+              {testResult && (
+                <div className="text-[11px] truncate flex-1 font-medium">
+                  <span className={testResult.success ? 'text-foreground' : 'text-destructive'}>
+                    {testResult.message}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <Separator className="my-2" />
+
+            {/* Inline Candidate Selection Box (Expanded when candidates is not null) */}
+            {candidates ? (
+              <div className="rounded-lg border bg-muted/20 p-2.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between gap-1">
+                  <div className="font-medium text-foreground text-xs flex items-center gap-1 min-w-0">
+                    <span className="truncate">挑选导入模型</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1 font-normal">
+                      {candidates.length}
+                    </Badge>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSelectAllCandidates(filteredCandidates)}
+                    className="h-6 text-[11px] px-1.5 font-normal"
+                  >
+                    全选 / 反选
+                  </Button>
+                </div>
+
+                {/* Candidate filter input */}
+                {candidates.length > 3 && (
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2 size-3 text-muted-foreground" />
+                    <Input
+                      value={candidateSearch}
+                      onChange={(e) => setCandidateSearch(e.target.value)}
+                      placeholder="过滤拉取的模型..."
+                      className="h-7 pl-7 text-xs font-mono"
+                    />
+                  </div>
+                )}
+
+                {/* Candidate list items */}
+                <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-0.5">
+                  {filteredCandidates.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-muted-foreground">
+                      未匹配到模型
+                    </div>
+                  ) : (
+                    filteredCandidates.map((c) => {
+                      const isChecked = selectedCandidateIds.has(c.id);
+                      const isExisting = c.isExisting;
+                      const ctx = formatTokens(c.meta?.contextWindow);
+                      const out = formatTokens(c.meta?.maxTokens);
+
+                      return (
+                        <label
+                          key={c.id}
+                          className={cn(
+                            'flex items-start gap-2 rounded border bg-card p-1.5 text-left select-none transition-colors',
+                            isExisting
+                              ? 'opacity-50 border-border bg-muted/40 cursor-not-allowed'
+                              : 'cursor-pointer hover:bg-accent/40'
+                          )}
+                        >
+                          <Checkbox
+                            checked={isChecked || isExisting}
+                            disabled={isExisting}
+                            onCheckedChange={() => !isExisting && toggleCandidateSelection(c.id)}
+                            className="mt-0.5"
+                          />
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="truncate font-mono text-xs font-medium text-foreground">
+                                {c.id}
+                              </span>
+                              {c.meta?.name && (
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  ({c.meta.name})
+                                </span>
+                              )}
+                              {isExisting && (
+                                <Badge variant="secondary" className="text-[9px] h-3.5 px-1 font-normal">
+                                  已添加
+                                </Badge>
+                              )}
+                            </div>
+
+                            {c.meta && (
+                              <div className="flex items-center gap-1 mt-0.5 flex-wrap text-[10px] text-muted-foreground">
+                                {ctx && <span>{ctx} ctx</span>}
+                                {out && <span>· {out} out</span>}
+                                {c.meta.vision && (
+                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                    Vision
+                                  </Badge>
+                                )}
+                                {c.meta.reasoning && (
+                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                    推理
+                                  </Badge>
+                                )}
+                                {c.meta.tools && (
+                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                    工具
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Candidate actions */}
+                <div className="flex items-center justify-between pt-1 border-t">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCandidates(null)}
+                    className="h-6.5 text-xs px-2"
+                  >
+                    取消
+                  </Button>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={selectedCandidateIds.size === 0}
+                    onClick={handleImportSelectedCandidates}
+                    className="h-6.5 text-xs px-2.5"
+                  >
+                    导入已选 ({selectedCandidateIds.size})
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              /* Normal Model Management */
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-foreground flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">模型列表</span>
+                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-normal">
+                      {draft.models.length}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={fetchingModels || syncingModels || !draft.baseUrl}
+                      onClick={handleFetchModels}
+                      className="h-6.5 text-xs gap-1 px-1.5"
+                      title="从提供商端点拉取模型列表"
+                    >
+                      {fetchingModels ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <CloudDownload className="size-3" />
+                      )}
+                      <span>{fetchingModels ? '拉取中' : '拉取'}</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={syncingModels || fetchingModels || draft.models.length === 0}
+                      onClick={handleSyncModels}
+                      className="h-6.5 text-xs gap-1 px-1.5"
+                      title="从 models.dev 自动同步并补全模型参数"
+                    >
+                      {syncingModels ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="size-3" />
+                      )}
+                      <span>{syncingModels ? '同步中' : '同步'}</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setModelConfigTarget(null);
+                        setModelConfigOpen(true);
+                      }}
+                      className="h-6.5 text-xs gap-1 px-1.5"
+                      title="手动添加模型"
+                    >
+                      <Plus className="size-3" />
+                      <span>手动</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Inline fetch status feedback */}
+                {fetchResultMsg && (
+                  <div className="text-[11px] text-muted-foreground bg-muted/40 p-1.5 rounded">
+                    {fetchResultMsg}
+                  </div>
+                )}
+                {fetchErrorMsg && (
+                  <div className="text-[11px] text-destructive bg-destructive/10 p-1.5 rounded">
+                    {fetchErrorMsg}
+                  </div>
+                )}
+
+                {/* Search input for models */}
+                {draft.models.length > 3 && (
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2 size-3 text-muted-foreground" />
+                    <Input
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      placeholder="过滤模型..."
+                      className="h-7 pl-7 text-xs font-mono"
+                    />
+                  </div>
+                )}
+
+                {/* Model items */}
+                {draft.models.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+                    <p>暂无模型</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                      点击上方「拉取」或「手动」添加
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-0.5">
+                    {filteredModels.map((m) => {
+                      const ctx = formatTokens(m.contextWindow);
+                      const out = formatTokens(m.maxTokens);
+
+                      return (
+                        <div
+                          key={m.id}
+                          className="group relative flex items-center justify-between rounded-lg border bg-card p-2 text-left"
+                        >
+                          <div className="flex flex-1 flex-col min-w-0 pr-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="truncate text-xs font-mono font-medium text-foreground">
+                                {m.id}
+                              </span>
+                              {m.displayName && (
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  ({m.displayName})
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap text-[10px] text-muted-foreground">
+                              {ctx && <span>{ctx} ctx</span>}
+                              {out && <span>· {out} out</span>}
+                              {m.vision && (
+                                <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                  Vision
+                                </Badge>
+                              )}
+                              {m.reasoning && (
+                                <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                  推理
+                                </Badge>
+                              )}
+                              {m.tools && (
+                                <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                  工具
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setModelConfigTarget(m);
+                                setModelConfigOpen(true);
+                              }}
+                              className="size-6 text-muted-foreground hover:text-foreground"
+                              title="配置参数"
+                            >
+                              <Pencil className="size-3" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteModel(m.id)}
+                              className="size-6 text-muted-foreground hover:text-destructive"
+                              title="删除模型"
+                            >
+                              <Trash2 className="size-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex flex-row justify-end gap-2 pt-2 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              className="h-7 text-xs"
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!draft.name.trim() || !draft.baseUrl.trim()}
+              onClick={handleSave}
+              className="h-7 text-xs"
+            >
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Model Config Dialog */}
+      <ModelConfigDialog
+        open={modelConfigOpen}
+        onOpenChange={setModelConfigOpen}
+        model={modelConfigTarget}
+        onSave={handleSaveModelConfig}
+      />
+    </>
+  );
+}

@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-09-01T10:00:00.000Z",
+  "dependencies": [
+    {
+      "name": "@earendil-works/pi-ai / @earendil-works/pi-agent-core / @earendil-works/pi-coding-agent",
+      "resolvedVersion": "0.84.4 (main @ a63fb12)",
+      "repoUrl": "https://github.com/earendil-works/pi.git",
+      "ref": "main",
+      "path": ".slim/clonedeps/repos/earendil-works__pi",
+      "packagePath": "packages/ai; packages/agent; packages/coding-agent",
+      "reason": "pi 上游 monorepo 源码:对齐 BYOK 模型 compat(如 supportsDeveloperRole)、agent 循环与 compaction 的上游做法"
+    }
+  ]
+}

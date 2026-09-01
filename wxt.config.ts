@@ -8,7 +8,9 @@ export default defineConfig({
   manifest: {
     name: 'AI Sidebar',
     description: 'BYOK AI sidebar — chat with any page using your own API key.',
-    permissions: ['storage', 'sidePanel'],
+    // scripting: 程序化注入 content script(兜底扩展加载前已存在的标签页)
+    // activeTab: 用户点击工具栏图标时临时授权,便于对未持 host 权限的页面执行注入
+    permissions: ['storage', 'sidePanel', 'unlimitedStorage', 'scripting', 'activeTab'],
     host_permissions: ['http://*/*', 'https://*/*'],
   },
   vite: () => ({
