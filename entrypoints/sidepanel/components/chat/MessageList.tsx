@@ -30,6 +30,8 @@ interface MessageListProps {
   pendingGateTotal?: number;
   /** 尾部 N 条消息刚从 live 流式气泡接管(in-flight 物化):跳过入场动画避免交接闪烁 */
   quietTailCount?: number;
+  /** 会话压缩标记:摘要 user 消息在消息流内渲染为分隔线卡 */
+  compaction?: { summaryTimestamp: number; tokensBefore: number } | null;
   isCancelled?: boolean;
   errorMessage?: string | null;
   onDismissError?: () => void;
@@ -76,6 +78,7 @@ export function MessageList({
   gateRequest,
   pendingGateTotal,
   quietTailCount,
+  compaction,
   isCancelled,
   errorMessage,
   onDismissError,
@@ -416,6 +419,11 @@ export function MessageList({
                   activeGateRequest={gateRequest}
                   pendingGateTotal={pendingGateTotal}
                   suppressEntryAnimation={i >= quietFrom}
+                  compactionInfo={
+                    compaction && msg.timestamp === compaction.summaryTimestamp
+                      ? { tokensBefore: compaction.tokensBefore }
+                      : null
+                  }
                 />
               ))}
             {isStreaming && (

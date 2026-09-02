@@ -27,6 +27,10 @@ export function useChatTurn(params: {
   dismissPendingGates: () => void;
   resetResolvedGateCount: () => void;
   setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
+  /** AI 自主压缩标记:compact_context 工具执行时置位(App 持有),turn finalize 后消费 */
+  compactRequestedRef: React.RefObject<boolean>;
+  /** 轮末自主压缩触发(互斥守卫在 useCompact) */
+  onAutoCompact: () => void;
 }) {
   const {
     settingsRef,
@@ -40,6 +44,8 @@ export function useChatTurn(params: {
     dismissPendingGates,
     resetResolvedGateCount,
     setErrorMessage,
+    compactRequestedRef,
+    onAutoCompact,
   } = params;
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -151,6 +157,8 @@ export function useChatTurn(params: {
 
       const abortCtrl = new AbortController();
       abortControllerRef.current = abortCtrl;
+      // AI 自主压缩标记(try 块内置位消费;finally 需访问,故提升到 try 外)
+      let autoCompactPending = false;
 
       try {
         const result = await runAgentTurn({
@@ -165,6 +173,10 @@ export function useChatTurn(params: {
           thinkingLevel: resolveReasoningLevel(active.model, settingsRef.current.reasoningLevel),
           sessionId: session.id,
           signal: abortCtrl.signal,
+          // compact_context 工具(A 道注册,safe)execute 只置标记;轮末由本 hook 消费
+          onCompactContext: () => {
+            compactRequestedRef.current = true;
+          },
           onEvent: (event) => {
             if (event.type === 'message_update' && event.message.role === 'assistant') {
               const text = event.message.content
@@ -205,6 +217,9 @@ export function useChatTurn(params: {
         // 若会话已被删除(流式中途删掉当前会话),不复活,丢弃本轮转录。
         // R-1:已被新 turn 接管(打断重发)时,旧转录不落盘、不清理新 turn 的 in-flight
         if (seq !== turnSeqRef.current) return;
+        // AI 自主压缩标记:本 turn 置位的消费归属本 turn(新 turn 的标记留给新 turn)
+        autoCompactPending = compactRequestedRef.current;
+        compactRequestedRef.current = false;
         const latest = sessionsRef.current.find((s) => s.id === session!.id);
         if (latest) {
           const finalizedSession: Session = { ...latest, messages: result.messages, updatedAt: Date.now() };
@@ -240,6 +255,11 @@ export function useChatTurn(params: {
           setIsStreaming(false);
           setActiveToolNames([]);
           abortControllerRef.current = null;
+          // 轮末自主压缩:finally 清理完成后再触发(isStreaming 已复位,互斥守卫可通过);
+          // setTimeout 0 = 完全脱离本链,handleCompact 的守卫与错误处理自洽
+          if (autoCompactPending) {
+            setTimeout(() => onAutoCompact(), 0);
+          }
         }
       }
     },
@@ -255,6 +275,8 @@ export function useChatTurn(params: {
       dismissPendingGates,
       resetResolvedGateCount,
       setErrorMessage,
+      compactRequestedRef,
+      onAutoCompact,
     ]
   );
 

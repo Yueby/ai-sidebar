@@ -64,6 +64,7 @@ export const TOOL_LABELS: Record<string, string> = {
   read_time: '读取设备时间',
   ask_user: '询问用户',
   execute_js: '执行页面脚本',
+  compact_context: '压缩上下文',
 };
 
 /** 取工具展示文案:未知工具名原样返回 */
@@ -124,6 +125,21 @@ export interface SessionDraft {
   pickedElements: PickedElement[];
 }
 
+/**
+ * 会话压缩标记:压缩发生一次记一条。
+ * 摘要内容不存此处 —— 写入 summaryTimestamp 对应的那条 user 消息 content
+ * (含 <context-summary> 块 + 被压缩范围 page-refs 并集块,拼装在调用方),
+ * effectiveMessages 据此 timestamp 定位摘要并截断其前历史。
+ */
+export interface SessionCompaction {
+  /** 摘要所在 user 消息的 timestamp(定位键) */
+  summaryTimestamp: number;
+  /** 压缩前的上下文 token 估算 */
+  tokensBefore: number;
+  /** 压缩执行时刻 */
+  compactedAt: number;
+}
+
 export interface Session {
   id: string;
   title: string;
@@ -132,6 +148,8 @@ export interface Session {
   updatedAt: number;
   /** 会话草稿;旧数据缺省 undefined,由 UI 视为空草稿 */
   draft?: SessionDraft;
+  /** 上下文压缩标记;旧数据缺省 undefined */
+  compaction?: SessionCompaction;
 }
 
 /** content.ts 页面提取应答 */

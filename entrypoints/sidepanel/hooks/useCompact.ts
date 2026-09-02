@@ -1,0 +1,123 @@
+import { useCallback, useRef, useState } from 'react';
+import type { Session, SessionCompaction, Settings } from '@/lib/types';
+import { createUserMessage } from '@/lib/storage';
+import { saveSession } from '@/lib/sessionStore';
+import { findActiveModel } from '@/lib/providers';
+import { getErrorMessage } from '@/lib/utils';
+import { effectiveMessages } from '@/lib/contextTokens';
+import { findCutIndex, runCompact } from '@/lib/compaction';
+import { buildProvider } from '@/lib/agent';
+import { collectPageRefs, renderPageRefsBlock } from '@/lib/pageRefs';
+
+/**
+ * 上下文压缩域 hook:isCompacting 状态 + handleCompact(互斥守卫 → runCompact → 非破坏性落盘)。
+ * 非破坏性存储:Session.messages 全保留,摘要 user 消息追加尾部
+ * (content = <context-summary> 块 + 被压缩范围 page-refs 并集块,拼装为调用方职责,
+ * 契约见 lib/types.ts SessionCompaction);Session.compaction.summaryTimestamp 指向摘要消息,
+ * 生效历史 = effectiveMessages() = [摘要] + 之后。错误走 errorMessage 横幅不落盘。
+ */
+export function useCompact(params: {
+  settingsRef: React.RefObject<Settings>;
+  currentSession: Session | null;
+  sessionsRef: React.RefObject<Session[]>;
+  setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
+  pendingDraftSavesRef: React.RefObject<Map<string, Session>>;
+  pendingGateActive: boolean;
+  isStreaming: boolean;
+  setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
+}) {
+  const {
+    settingsRef,
+    currentSession,
+    sessionsRef,
+    setSessions,
+    pendingDraftSavesRef,
+    pendingGateActive,
+    isStreaming,
+    setErrorMessage,
+  } = params;
+
+  const [isCompacting, setIsCompacting] = useState(false);
+  const compactAbortRef = useRef<AbortController | null>(null);
+
+  const handleCompact = useCallback(
+    async ({ customInstructions }: { customInstructions?: string } = {}): Promise<boolean> => {
+      // 互斥守卫:流式/挂起门控/压缩中任一 true 则拒绝
+      if (isStreaming || pendingGateActive || isCompacting) return false;
+      const session = currentSession;
+      if (!session || session.messages.length === 0) return false;
+      const active = findActiveModel(settingsRef.current);
+      if (!active) {
+        setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
+        return false;
+      }
+
+      // 压缩范围 = 当前生效历史(压缩过则 [摘要]+之后)
+      const effective = effectiveMessages(session.messages, session.compaction);
+
+      const abortCtrl = new AbortController();
+      compactAbortRef.current = abortCtrl;
+      setIsCompacting(true);
+      try {
+        const result = await runCompact({
+          provider: buildProvider(active.provider),
+          modelId: active.model.id,
+          messages: effective,
+          signal: abortCtrl.signal,
+          customInstructions,
+        });
+
+        // 摘要 user 消息拼装(调用方职责):<context-summary> 块 + 被压缩范围 page-refs
+        // 并集块 —— 并集让后续轮 collectPageRefs 仍能拿到被截历史的 tab 句柄(read_page 等)
+        const cutIndex = findCutIndex(effective);
+        const refs = collectPageRefs(effective.slice(0, cutIndex));
+        const refsBlock = renderPageRefsBlock(refs);
+        const summaryText = `<context-summary>\n${result.summaryContent}\n</context-summary>${
+          refsBlock ? `\n\n${refsBlock}` : ''
+        }`;
+        const summaryMessage = createUserMessage(summaryText);
+
+        const updated: Session = {
+          ...session,
+          messages: [...session.messages, summaryMessage],
+          updatedAt: Date.now(),
+          compaction: {
+            summaryTimestamp: summaryMessage.timestamp,
+            tokensBefore: result.tokensBefore,
+            compactedAt: Date.now(),
+          } satisfies SessionCompaction,
+        };
+        sessionsRef.current = sessionsRef.current.map((s) => (s.id === session.id ? updated : s));
+        setSessions(sessionsRef.current);
+        pendingDraftSavesRef.current.delete(session.id);
+        await saveSession(updated);
+        return true;
+      } catch (err: unknown) {
+        if (abortCtrl.signal.aborted) return false; // 中止:静默,不落盘
+        setErrorMessage(getErrorMessage(err) || '上下文压缩失败,请重试');
+        return false;
+      } finally {
+        setIsCompacting(false);
+        compactAbortRef.current = null;
+      }
+    },
+    [
+      isStreaming,
+      pendingGateActive,
+      isCompacting,
+      currentSession,
+      settingsRef,
+      sessionsRef,
+      setSessions,
+      pendingDraftSavesRef,
+      setErrorMessage,
+    ]
+  );
+
+  /** 取消进行中的压缩(预留) */
+  const cancelCompact = useCallback(() => {
+    compactAbortRef.current?.abort();
+  }, []);
+
+  return { isCompacting, handleCompact, cancelCompact };
+}

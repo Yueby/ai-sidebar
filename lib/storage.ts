@@ -6,6 +6,7 @@ import type {
   PageRefs,
   PickedElement,
   Session,
+  SessionCompaction,
   SessionDraft,
   Settings,
 } from './types';
@@ -135,8 +136,7 @@ function sanitizeMessage(v: unknown): ChatMessage | null {
   return null;
 }
 
-/** 草稿宽松校验:结构不符/缺省返回 undefined(旧数据无 draft 字段,不炸) */
-function sanitizeDraft(v: unknown): SessionDraft | undefined {
+/** 草稿宽松校验:结构不符/缺省返回 undefined(旧数据无 draft 字段,不炸) */function sanitizeDraft(v: unknown): SessionDraft | undefined {
   if (!v || typeof v !== 'object') return undefined;
   const d = v as Record<string, unknown>;
   const refTabs = Array.isArray(d.refTabs)
@@ -164,6 +164,20 @@ function sanitizeDraft(v: unknown): SessionDraft | undefined {
   return { input: typeof d.input === 'string' ? d.input : '', refTabs, pickedElements };
 }
 
+/**
+ * 压缩标记宽松校验:未知字段宽容(原样丢弃),缺字段补默认(0)。
+ * summaryTimestamp 缺失时标记仍保留 —— effectiveMessages 定位失败会回退原消息数组,不炸。
+ */
+function sanitizeCompaction(v: unknown): SessionCompaction | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const c = v as Record<string, unknown>;
+  return {
+    summaryTimestamp: typeof c.summaryTimestamp === 'number' && Number.isFinite(c.summaryTimestamp) ? c.summaryTimestamp : 0,
+    tokensBefore: typeof c.tokensBefore === 'number' && Number.isFinite(c.tokensBefore) ? c.tokensBefore : 0,
+    compactedAt: typeof c.compactedAt === 'number' && Number.isFinite(c.compactedAt) ? c.compactedAt : 0,
+  };
+}
+
 export function sanitizeSessions(value: unknown): Session[] {
   if (!Array.isArray(value)) return [];
   const out: Session[] = [];
@@ -175,6 +189,7 @@ export function sanitizeSessions(value: unknown): Session[] {
       ? s.messages.map(sanitizeMessage).filter((m): m is ChatMessage => m !== null)
       : [];
     const draft = sanitizeDraft(s.draft);
+    const compaction = sanitizeCompaction(s.compaction);
     out.push({
       id: s.id,
       title: typeof s.title === 'string' ? s.title : '新会话',
@@ -182,6 +197,7 @@ export function sanitizeSessions(value: unknown): Session[] {
       createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
       updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : Date.now(),
       ...(draft ? { draft } : {}),
+      ...(compaction ? { compaction } : {}),
     });
   }
   return out;

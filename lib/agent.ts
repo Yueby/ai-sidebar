@@ -26,8 +26,7 @@ const API_IMPLEMENTATIONS = {
 };
 
 /** 把本地 ModelConfig 映射成 pi-ai 的 Model(缺失参数用保守默认值) */
-export function toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi> {
-  return {
+export function toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi> {  return {
     id: m.id,
     name: m.displayName?.trim() || m.id,
     api: p.api,
@@ -45,7 +44,8 @@ export function toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi> {
   } as Model<KnownApi>;
 }
 
-function buildProvider(p: ProviderConfig) {
+/** 组装 provider 实例(压缩等旁路请求复用;runAgentTurn 内部亦经此构建) */
+export function buildProvider(p: ProviderConfig) {
   return createProvider({
     id: p.id,
     name: p.name || p.id,
@@ -114,6 +114,8 @@ export interface RunAgentOptions {
   signal?: AbortSignal;
   /** Agent 事件透出(message_update/tool_execution_* 等),供 UI 流式渲染 */
   onEvent?: (event: AgentEvent) => void;
+  /** compact_context 工具触发回调(模型申请压缩;轮结束后由调用方执行 runCompact 并落盘) */
+  onCompactContext?: () => void;
 }
 
 export interface RunAgentResult {
@@ -176,6 +178,7 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
     refTabs,
     pickedElements,
     canUseImage: model.input.includes('image'),
+    onCompactContext: options.onCompactContext,
   });
 
   const agent = new Agent({

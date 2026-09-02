@@ -19,6 +19,7 @@ import { toolLabel } from '@/lib/types';
 import { messageText } from '@/lib/storage';
 import { parsePageRefs } from '@/lib/pageRefs';
 import { MarkdownView } from './MarkdownView';
+import { CompactionRow } from './CompactionRow';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -38,6 +39,8 @@ interface MessageItemProps {
   activeGateRequest?: GateRequest | null;
   /** 当前待确认总数 (仅当 >1 时在当前待确认卡标题旁提示) */
   pendingGateTotal?: number;
+  /** 压缩摘要标记:此消息是 Session.compaction 指向的摘要 user 消息 → 渲染分隔线卡 */
+  compactionInfo?: { tokensBefore: number } | null;
   /** 跳过入场动画:该消息刚从 live 流式气泡接管(内容此前已可见),重播入场动画会"闪一下"。
       实例内冻结(useRef 取首帧值)——finalize 后同 key 实例复用,保持不动画,避免二次闪烁 */
   suppressEntryAnimation?: boolean;
@@ -377,6 +380,7 @@ export function MessageItem({
   activeToolNames,
   activeGateRequest,
   pendingGateTotal,
+  compactionInfo,
   suppressEntryAnimation,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
@@ -458,6 +462,12 @@ export function MessageItem({
   const isUser = message.role === 'user';
 
   if (isUser) {
+    // 压缩摘要 user 消息 → 分隔线卡(默认收起徽标,可展开摘要全文)
+    if (compactionInfo) {
+      return (
+        <CompactionRow tokensBefore={compactionInfo.tokensBefore} summary={rawText} />
+      );
+    }
     return (
       <div className="group flex justify-end px-3 py-1 animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none">
         <div className="flex max-w-[85%] flex-col items-end gap-0.5">

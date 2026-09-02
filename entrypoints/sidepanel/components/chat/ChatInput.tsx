@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
+import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
+import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { listCandidateTabs, getActiveTabMeta, type RefTab } from '@/lib/pageContext';
 import { Button } from '@/components/ui/button';
@@ -26,6 +28,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ContextPanel, type RoleShares } from './ContextPanel';
+import { SlashMenu } from './SlashMenu';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -50,6 +54,16 @@ interface ChatInputProps {
   initialInput?: string;
   /** 输入变化上报 → App 写入当前会话 draft.input(防抖落盘) */
   onInputChange?: (text: string) => void;
+  /** 上下文占用(组合层 useMemo 派生;缺省不渲染占用环) */
+  contextUsage?: ContextUsage | null;
+  /** 三角色 token 占比(本地估算,面板占比条用) */
+  roleShares?: RoleShares | null;
+  /** 上下文压缩进行中 */
+  isCompacting?: boolean;
+  /** 压缩上下文(可附补充重点) */
+  onCompact?: (customInstructions?: string) => void;
+  /** 斜杠命令分发:/compact /clear /help;命令文本不进草稿、不走 onSend */
+  onCommand?: (name: string, args: string) => void;
 }
 
 const REASONING_LABEL_MAP = REASONING_LEVEL_LABELS;
@@ -70,9 +84,14 @@ export function ChatInput({
   onRemovePickedElement,
   onOpenSettings,
   disabled = false,
-  placeholder = '输入消息... (Enter 发送, Shift+Enter 换行)',
+  placeholder = '输入消息... (Enter 发送, Shift+Enter 换行, / 唤起命令)',
   initialInput = '',
   onInputChange,
+  contextUsage,
+  roleShares,
+  isCompacting,
+  onCompact,
+  onCommand,
 }: ChatInputProps) {
   // 输入文本内部 state:挂载时用会话草稿 seed(App 以 key=sessionId 重挂载);
   // 每次变化通过 onInputChange 上报给 App 写入 draft(防抖持久化),不回传 value,
@@ -80,15 +99,40 @@ export function ChatInput({
   const [text, setText] = useState(initialInput);
   const [activeTabMeta, setActiveTabMeta] = useState<RefTab | null>(null);
   const [otherCandidateTabs, setOtherCandidateTabs] = useState<RefTab[]>([]);
+  // 斜杠命令:输入以 '/' 开头且无空白 → 浮层;Esc 手动关;空格自然进参数模式
+  const [slashClosed, setSlashClosed] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
   const isComposingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const slashOpen = Boolean(onCommand) && !slashClosed && /^\/[^\s]*$/.test(text);
+  const slashQuery = text.replace(/^\//, '').toLowerCase();
+  const filteredCommands: SlashCommand[] = slashOpen
+    ? SLASH_COMMANDS.filter((c) => c.name.startsWith(slashQuery))
+    : [];
+  const slashActiveIndex = Math.min(slashIndex, Math.max(0, filteredCommands.length - 1));
 
   const reportText = useCallback(
     (value: string) => {
       setText(value);
-      onInputChange?.(value);
+      // 斜杠命令文本不进草稿:以 '/' 开头的输入只在本地态流转
+      if (!value.startsWith('/')) {
+        onInputChange?.(value);
+      }
     },
     [onInputChange]
+  );
+
+  /** 执行斜杠命令:分发 App,清空输入(命令文本不进草稿) */
+  const executeCommand = useCallback(
+    (name: string, args: string) => {
+      onCommand?.(name, args);
+      setSlashClosed(false);
+      setSlashIndex(0);
+      setText('');
+      onInputChange?.('');
+    },
+    [onCommand, onInputChange]
   );
 
   // Load candidate tabs when dropdown menu opens
@@ -133,15 +177,50 @@ export function ChatInput({
       return;
     }
 
+    // 斜杠命令浮层键盘导航(优先于常规快捷键)
+    if (slashOpen) {
+      if (e.key === 'ArrowDown' && filteredCommands.length > 0) {
+        e.preventDefault();
+        setSlashIndex((i) => (i + 1) % filteredCommands.length);
+        return;
+      }
+      if (e.key === 'ArrowUp' && filteredCommands.length > 0) {
+        e.preventDefault();
+        setSlashIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashClosed(true);
+        return;
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && filteredCommands.length > 0) {
+        e.preventDefault();
+        const cmd = filteredCommands[slashActiveIndex];
+        if (cmd) executeCommand(cmd.name, '');
+        return;
+      }
+      // 空格:不拦截,自然进参数模式(含空格后浮层条件失效自动关闭)
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
   };
 
+  /** 斜杠命令识别:参数模式(浮层已关)与直接提交共用;/未知命令按普通文本发送 */
+  const dispatchSlashCommand = (trimmed: string): boolean => {
+    const m = /^\/([a-zA-Z]+)(?:\s+([\s\S]*))?$/.exec(trimmed);
+    if (!m || !SLASH_COMMANDS.some((c) => c.name === m[1])) return false;
+    executeCommand(m[1]!, (m[2] ?? '').trim());
+    return true;
+  };
+
   const handleSubmit = () => {
     const trimmed = text.trim();
     if (!trimmed || isStreaming || disabled) return;
+    if (dispatchSlashCommand(trimmed)) return;
     onSend(trimmed);
     // 规则 4:发送后草稿清空(input 本地清零 + 上报 App 清 draft)
     reportText('');
@@ -342,10 +421,25 @@ export function ChatInput({
 
       {/* Input container */}
       <div className="relative flex flex-col rounded-lg border bg-background focus-within:ring-1 focus-within:ring-ring">
+        {/* 斜杠命令浮层:输入框上方 */}
+        {slashOpen && onCommand && (
+          <SlashMenu
+            commands={filteredCommands}
+            activeIndex={slashActiveIndex}
+            onSelect={(i) => {
+              const cmd = filteredCommands[i];
+              if (cmd) executeCommand(cmd.name, '');
+            }}
+            onHover={setSlashIndex}
+          />
+        )}
         <textarea
           ref={textareaRef}
           value={text}
-          onChange={(e) => reportText(e.target.value)}
+          onChange={(e) => {
+            setSlashClosed(false);
+            reportText(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           onCompositionStart={() => {
             isComposingRef.current = true;
@@ -497,8 +591,18 @@ export function ChatInput({
             )}
           </div>
 
-          {/* Right: Send / Stop button */}
+          {/* Right: Context ring + Send / Stop button */}
           <div className="flex items-center gap-1 shrink-0">
+            {contextUsage && (
+              <ContextPanel
+                usage={contextUsage}
+                roleShares={roleShares}
+                isStreaming={isStreaming}
+                isCompacting={isCompacting}
+                modelName={modelDisplayName}
+                onCompact={onCompact}
+              />
+            )}
             {isStreaming ? (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>

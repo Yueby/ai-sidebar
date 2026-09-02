@@ -1,12 +1,16 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
-import type { Settings, ProviderConfig, ReasoningLevel } from '@/lib/types';
+import { AlertTriangle, Loader2, X } from 'lucide-react';
+import type { Settings, ProviderConfig, ReasoningLevel, ChatMessage } from '@/lib/types';
 import { settingsItem } from '@/lib/storage';
 import { DEFAULT_SETTINGS, findActiveModel } from '@/lib/providers';
+import { effectiveMessages, estimateContextTokens, shouldCompact } from '@/lib/contextTokens';
+import { SLASH_COMMANDS } from '@/lib/slashCommands';
 
 import { useGate } from './hooks/useGate';
 import { useSessionManager } from './hooks/useSessionManager';
 import { useChatTurn } from './hooks/useChatTurn';
 import { usePageContextRefs } from './hooks/usePageContextRefs';
+import { useCompact } from './hooks/useCompact';
 
 // Components
 import { ChatHeader } from './components/chat/ChatHeader';
@@ -15,6 +19,7 @@ import { ChatInput } from './components/chat/ChatInput';
 import { ApprovalSection } from './components/chat/ApprovalSection';
 import { SettingsMainView } from './components/settings/SettingsMainView';
 import { ProviderDialog } from './components/settings/ProviderDialog';
+import { Button } from '@/components/ui/button';
 
 type ViewMode = 'chat' | 'settings';
 
@@ -93,6 +98,12 @@ export default function App() {
   );
 
   // ── 对话轮次域 ──────────────────────────────────────────────────
+  // AI 自主压缩:compact_context 工具置位标记(App 持有),turn finalize 后触发
+  // handleCompact;经 ref 间接层解决 chat→compact 的声明顺序依赖
+  const compactRequestedRef = useRef(false);
+  const autoCompactFnRef = useRef<() => void>(() => {});
+  const onAutoCompact = useCallback(() => autoCompactFnRef.current(), []);
+
   const chat = useChatTurn({
     settingsRef,
     currentSession: session.currentSession,
@@ -105,6 +116,8 @@ export default function App() {
     dismissPendingGates: gate.dismissPendingGates,
     resetResolvedGateCount: gate.resetResolvedGateCount,
     setErrorMessage,
+    compactRequestedRef,
+    onAutoCompact,
   });
 
   // ── 页面引用域 ──────────────────────────────────────────────────
@@ -118,6 +131,37 @@ export default function App() {
     sessionsRef: session.sessionsRef,
     setErrorMessage,
   });
+
+  // ── 上下文压缩域 ────────────────────────────────────────────────
+  const compact = useCompact({
+    settingsRef,
+    currentSession: session.currentSession,
+    sessionsRef: session.sessionsRef,
+    setSessions: session.setSessions,
+    pendingDraftSavesRef: session.pendingDraftSavesRef,
+    pendingGateActive: gate.activeGate !== null,
+    isStreaming: chat.isStreaming,
+    setErrorMessage,
+  });
+  // latest 模式:轮末自主压缩触发最新的 handleCompact(声明顺序依赖的桥)
+  autoCompactFnRef.current = () => {
+    void compact.handleCompact();
+  };
+
+  // 斜杠命令分发:/compact(可附补充重点)→ 压缩;/clear → 复用新建会话;/help → 浮层列命令
+  const [slashHelpOpen, setSlashHelpOpen] = useState(false);
+  const handleCommand = useCallback(
+    (name: string, args: string) => {
+      if (name === 'compact') {
+        void compact.handleCompact(args ? { customInstructions: args } : {});
+      } else if (name === 'clear') {
+        void session.handleNewSession();
+      } else if (name === 'help') {
+        setSlashHelpOpen(true);
+      }
+    },
+    [compact.handleCompact, session.handleNewSession]
+  );
 
   // Navigation & Provider Dialog Handlers
   const handleOpenSettings = useCallback(() => {
@@ -219,6 +263,41 @@ export default function App() {
     return { step: currentStep, total: totalCount };
   }, [gate.activeGate, chat.inFlight, chat.activeToolNames, gate.resolvedGateCount]);
 
+  // 上下文占用派生:有效历史(压缩过 = [摘要]+之后)× 当前模型窗口 + 三角色本地估算
+  const contextData = useMemo(() => {
+    const model = activeModelInfo?.model;
+    if (!model) return null;
+    const messages = session.currentSession?.messages ?? [];
+    const effective = effectiveMessages(messages, session.currentSession?.compaction);
+    const usage = estimateContextTokens(effective, model.contextWindow ?? 128000);
+    const estimate = (m: ChatMessage) => {
+      try {
+        return Math.ceil((JSON.stringify(m.content)?.length ?? 0) / 4);
+      } catch {
+        return 0;
+      }
+    };
+    const roleShares = { user: 0, assistant: 0, toolResult: 0 };
+    for (const m of effective) {
+      const t = estimate(m);
+      if (m.role === 'user') roleShares.user += t;
+      else if (m.role === 'assistant') roleShares.assistant += t;
+      else if (m.role === 'toolResult') roleShares.toolResult += t;
+    }
+    return { usage, roleShares };
+  }, [activeModelInfo, session.currentSession]);
+
+  // 模型切换溢出建议:当前上下文超出新模型窗口(shouldCompact)→ 建议压缩,不自动执行
+  // 用户可手动关闭本次提示(切会话或会话更新后若依然超出可再次自然产生或关闭)
+  const [dismissedOverflowSessionId, setDismissedOverflowSessionId] = useState<string | null>(null);
+  const isOverflowDismissed = dismissedOverflowSessionId === session.currentSession?.id;
+
+  const overflowSuggest =
+    !isOverflowDismissed &&
+    !!contextData &&
+    !compact.isCompacting &&
+    shouldCompact(contextData.usage);
+
   if (!session.loaded) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
@@ -264,6 +343,14 @@ export default function App() {
             gateRequest={gate.activeGate?.request ?? null}
             pendingGateTotal={gatePagination.total}
             quietTailCount={quietTailCount}
+            compaction={
+              session.currentSession?.compaction
+                ? {
+                    summaryTimestamp: session.currentSession.compaction.summaryTimestamp,
+                    tokensBefore: session.currentSession.compaction.tokensBefore,
+                  }
+                : null
+            }
             isCancelled={chat.isCancelled}
             errorMessage={errorMessage}
             onDismissError={() => setErrorMessage(null)}
@@ -276,10 +363,56 @@ export default function App() {
             onOpenSettings={handleOpenSettings}
           />
 
+          {/* 槽位区:溢出建议 → 压缩状态条 → 审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}
+
+          {/* 模型切换溢出建议条:不静默自动压缩,一键交给用户;支持关闭 */}
+          {overflowSuggest && (
+            <div className="w-full shrink-0 px-2 pb-1.5 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+              <div className="flex items-center gap-2 rounded-md border border-amber-600/30 bg-amber-500/10 dark:border-amber-500/30 dark:bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-foreground shadow-2xs">
+                <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span className="min-w-0 flex-1 truncate">
+                  当前上下文超出模型窗口，建议压缩
+                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px] border-amber-600/40 hover:bg-amber-500/20 text-foreground cursor-pointer"
+                    disabled={compact.isCompacting}
+                    onClick={() => {
+                      void compact.handleCompact();
+                    }}
+                  >
+                    压缩
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedOverflowSessionId(session.currentSession?.id ?? 'temp')}
+                    className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    title="忽略建议"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 压缩状态条(轻量) */}
+          {compact.isCompacting && (
+            <div className="w-full shrink-0 px-2 pb-1.5 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/70 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-2xs">
+                <Loader2 className="size-3.5 animate-spin shrink-0 text-foreground" />
+                <span className="font-medium text-foreground">正在压缩上下文…</span>
+              </div>
+            </div>
+          )}
+
           {/* 审批槽位:交互审批 UI 的唯一渲染位(消息流内工具卡一律状态化,零交互控件)。
               in-flow flex 子节点,出现时挤压列表;卡片框架永不滚动,高度由内容决定。 */}
           {gate.activeGate && (
-            <div className="w-full shrink-0 px-2 pb-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+            <div className="w-full shrink-0 px-2 pb-1.5 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <ApprovalSection
                 request={gate.activeGate.request}
                 onApprove={gate.handleGateApprove}
@@ -287,6 +420,36 @@ export default function App() {
                 onAnswer={gate.handleGateAnswer}
                 onCancel={gate.handleGateCancel}
               />
+            </div>
+          )}
+
+          {/* 斜杠 /help 卡 */}
+          {slashHelpOpen && (
+            <div className="w-full shrink-0 px-2 pb-1.5 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+              <div className="space-y-2 rounded-lg border border-border bg-card p-3 text-xs shadow-xs">
+                <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
+                  <span className="text-[11px] font-semibold text-foreground">可用快捷命令</span>
+                  <button
+                    type="button"
+                    onClick={() => setSlashHelpOpen(false)}
+                    className="text-muted-foreground transition-colors hover:text-foreground cursor-pointer rounded p-0.5"
+                    title="关闭"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {SLASH_COMMANDS.map((cmd) => (
+                    <div key={cmd.name} className="flex items-baseline justify-between gap-2 text-[11px]">
+                      <code className="shrink-0 font-mono font-medium text-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                        /{cmd.name}
+                        {cmd.argumentHint ? <span className="text-muted-foreground font-normal"> {cmd.argumentHint}</span> : ''}
+                      </code>
+                      <span className="min-w-0 flex-1 text-right text-muted-foreground">{cmd.description}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -310,6 +473,13 @@ export default function App() {
             disabled={!activeModelInfo}
             initialInput={session.draft.input}
             onInputChange={handleDraftInput}
+            contextUsage={contextData?.usage ?? null}
+            roleShares={contextData?.roleShares ?? null}
+            isCompacting={compact.isCompacting}
+            onCompact={(instructions) => {
+              void compact.handleCompact(instructions ? { customInstructions: instructions } : {});
+            }}
+            onCommand={handleCommand}
           />
         </div>
       )}
