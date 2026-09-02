@@ -135,6 +135,8 @@ export default function App() {
 
   // Refs for managing streaming abort and latest values
   const abortControllerRef = useRef<AbortController | null>(null);
+  // turn 身份守卫:打断重发后旧 turn 的拆卸链与新 turn 并发,seq 不匹配者不得触碰共享状态
+  const turnSeqRef = useRef(0);
   const streamingContentRef = useRef('');
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -795,6 +797,8 @@ export default function App() {
       pendingDraftSavesRef.current.delete(session.id);
       await saveSession(updatedSession);
 
+      // turn 身份守卫:自此新 turn 接管,旧 turn 拆卸链的 setInFlight(null)/落盘/finally 全部失效
+      const seq = ++turnSeqRef.current;
       setIsStreaming(true);
       setStreamingContent('');
       setStreamingThinking('');
@@ -860,6 +864,8 @@ export default function App() {
         // 用完整转录落盘(含 assistant/toolResult,回放零转换;user 消息带 refSnapshot)。
         // 基于该会话的「最新」内存副本:流式期间用户可能已在草稿中添加新引用,不能覆盖。
         // 若会话已被删除(流式中途删掉当前会话),不复活,丢弃本轮转录。
+        // R-1:已被新 turn 接管(打断重发)时,旧转录不落盘、不清理新 turn 的 in-flight
+        if (seq !== turnSeqRef.current) return;
         const latest = sessionsRef.current.find((s) => s.id === session!.id);
         if (latest) {
           const finalizedSession: Session = { ...latest, messages: result.messages, updatedAt: Date.now() };
@@ -880,6 +886,8 @@ export default function App() {
           setErrorMessage(result.errorMessage);
         }
       } catch (err: unknown) {
+        // R-1:旧 turn 已被接管时不清理新 turn 的 in-flight
+        if (seq !== turnSeqRef.current) return;
         // 异常路径不落盘转录,in-flight 无处可归 → 清空避免残留悬空气泡
         setInFlight(null);
         if (abortCtrl.signal.aborted) {
@@ -888,9 +896,12 @@ export default function App() {
           setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置');
         }
       } finally {
-        setIsStreaming(false);
-        setActiveToolNames([]);
-        abortControllerRef.current = null;
+        // R-1:仅当前 turn 的所有者才能拆卸 streaming/abort 状态(不弄坏新 turn 的停止按钮)
+        if (seq === turnSeqRef.current) {
+          setIsStreaming(false);
+          setActiveToolNames([]);
+          abortControllerRef.current = null;
+        }
       }
     },
     [isStreaming, activeGate, currentSession]

@@ -32,6 +32,8 @@ interface MessageItemProps {
   liveToolLabels?: string[];
   /** 按 toolCallId 索引的工具执行结果字典 */
   toolResults?: Map<string, ToolResultMessage>;
+  /** 正在执行的工具原始名列表(块卡执行窗口:message_end 物化先于结果返回,补"执行中"徽标) */
+  activeToolNames?: string[];
   /** 当前待处理的门控请求(confirm/ask;仅用于状态徽标匹配,交互审批在 App 的独立槽位渲染) */
   activeGateRequest?: GateRequest | null;
   /** 当前待确认总数 (仅当 >1 时在当前待确认卡标题旁提示) */
@@ -128,14 +130,15 @@ function ThinkingBlock({
   isGenerating?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  if (!thinking || !thinking.trim()) return null;
 
-  // Extract latest 3 non-empty lines for collapsed preview
+  // Extract latest 3 non-empty lines for collapsed preview(useMemo 必须在条件 return 之前)
   const previewText = useMemo(() => {
     const trimmed = thinking.trim();
     const lines = trimmed.split('\n').filter((l) => l.trim().length > 0);
     return lines.slice(-3).join('\n');
   }, [thinking]);
+
+  if (!thinking || !thinking.trim()) return null;
 
   return (
     <div className="my-1 text-xs w-full">
@@ -371,6 +374,7 @@ export function MessageItem({
   liveThinking,
   liveToolLabels,
   toolResults,
+  activeToolNames,
   activeGateRequest,
   pendingGateTotal,
   suppressEntryAnimation,
@@ -538,6 +542,7 @@ export function MessageItem({
 
     // 状态判定顺序(块卡):结果(终态)→ 等待审批(toolCallId 精确匹配,退化首张未决议同名卡)
     // → 排队中(同轮同名其余未决议;判定优先于执行中,未轮到的调用绝不显示执行中)
+    // → 执行中(结果未返回但该工具正在执行:恢复执行窗口的 spinner,不再落到兜底"已调用")
     const isWaiting =
       !hasResult &&
       Boolean(
@@ -552,6 +557,9 @@ export function MessageItem({
       !isWaiting &&
       Boolean(pendingGateToolName && (block.name === pendingGateToolName || block.name === 'execute_js'));
 
+    const isExecuting =
+      !hasResult && !isWaiting && !isQueued && Boolean(activeToolNames?.includes(block.name));
+
     return (
       <ToolCallCard
         key={block.id || `tool-${i}`}
@@ -559,6 +567,7 @@ export function MessageItem({
         name={block.name}
         args={block.arguments}
         result={result}
+        isExecuting={isExecuting}
         isWaitingConfirmation={isWaiting}
         isQueued={isQueued}
         gateKind={isWaiting ? (activeGateRequest?.kind ?? null) : null}

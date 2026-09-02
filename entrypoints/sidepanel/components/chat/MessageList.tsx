@@ -94,6 +94,8 @@ export function MessageList({
   const userScrolledUpRef = useRef(false);
   // 程序性 smooth 滚动进行中:吞掉中途 scroll 事件(落底前距离必然 > 阈值),防止误判挂起
   const programmaticScrollRef = useRef(false);
+  // 时间盒:smooth 途中用户拖滚动条时事件被吞、标记无法经"落底"清除 → 350ms 兜底复位
+  const programmaticScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const scrollRafId = useRef<number | null>(null);
   const lastScrollTimeRef = useRef<number>(0);
@@ -128,6 +130,12 @@ export function MessageList({
     if (smooth) {
       programmaticScrollRef.current = true;
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      // 每次滚动重启计时,350ms 内未落底也强制复位标记(避免吞掉用户后续 scroll 事件)
+      if (programmaticScrollTimerRef.current) clearTimeout(programmaticScrollTimerRef.current);
+      programmaticScrollTimerRef.current = setTimeout(() => {
+        programmaticScrollRef.current = false;
+        programmaticScrollTimerRef.current = null;
+      }, 350);
     } else {
       // 同步赋值直达底部,落点必在阈值内,无需标记程序性
       el.scrollTop = el.scrollHeight;
@@ -404,6 +412,7 @@ export function MessageList({
                   key={`${msg.timestamp}-${i}`}
                   message={msg}
                   toolResults={toolResultsByCallId}
+                  activeToolNames={activeToolLabels}
                   activeGateRequest={gateRequest}
                   pendingGateTotal={pendingGateTotal}
                   suppressEntryAnimation={i >= quietFrom}
