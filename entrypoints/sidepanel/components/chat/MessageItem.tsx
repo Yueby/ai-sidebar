@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Copy,
   Check,
@@ -19,7 +19,6 @@ import { toolLabel } from '@/lib/types';
 import { messageText } from '@/lib/storage';
 import { parsePageRefs } from '@/lib/pageRefs';
 import { MarkdownView } from './MarkdownView';
-import { ApprovalSection } from './ApprovalSection';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -33,14 +32,13 @@ interface MessageItemProps {
   liveToolLabels?: string[];
   /** 按 toolCallId 索引的工具执行结果字典 */
   toolResults?: Map<string, ToolResultMessage>;
-  /** 当前待处理的门控请求(confirm/ask) */
+  /** 当前待处理的门控请求(confirm/ask;仅用于状态徽标匹配,交互审批在 App 的独立槽位渲染) */
   activeGateRequest?: GateRequest | null;
   /** 当前待确认总数 (仅当 >1 时在当前待确认卡标题旁提示) */
   pendingGateTotal?: number;
-  onGateApprove?: () => void;
-  onGateDeny?: () => void;
-  onGateAnswer?: (answer: string) => void;
-  onGateCancel?: () => void;
+  /** 跳过入场动画:该消息刚从 live 流式气泡接管(内容此前已可见),重播入场动画会"闪一下"。
+      实例内冻结(useRef 取首帧值)——finalize 后同 key 实例复用,保持不动画,避免二次闪烁 */
+  suppressEntryAnimation?: boolean;
 }
 
 function formatTokens(count: number): string {
@@ -183,14 +181,10 @@ interface ToolCallCardProps {
   isExecuting?: boolean;
   isWaitingConfirmation?: boolean;
   isQueued?: boolean;
-  /** 当前待处理的门控请求(仅在 isWaitingConfirmation 时传入) */
-  activeGateRequest?: GateRequest | null;
+  /** 仅 isWaitingConfirmation 时传入:门控种类(决定琥珀/蓝配色);卡内零交互控件 */
+  gateKind?: 'confirm' | 'ask' | null;
   /** 待确认总数(>1 时显示轻提示) */
   pendingGateTotal?: number;
-  onGateApprove?: () => void;
-  onGateDeny?: () => void;
-  onGateAnswer?: (answer: string) => void;
-  onGateCancel?: () => void;
 }
 
 function ToolCallCard({
@@ -200,12 +194,8 @@ function ToolCallCard({
   isExecuting,
   isWaitingConfirmation,
   isQueued,
-  activeGateRequest,
+  gateKind,
   pendingGateTotal,
-  onGateApprove,
-  onGateDeny,
-  onGateAnswer,
-  onGateCancel,
 }: ToolCallCardProps) {
   const [open, setOpen] = useState(false);
   const label = toolLabel(name);
@@ -237,12 +227,12 @@ function ToolCallCard({
 
   // 边框和背景调优: 等待确认时用琥珀色/蓝色警示强调
   const cardBorderClass = isWaitingConfirmation
-    ? activeGateRequest?.kind === 'ask'
+    ? gateKind === 'ask'
       ? 'border-blue-500/40 bg-blue-500/5'
       : 'border-amber-500/40 bg-amber-500/5'
     : 'border-border/60 bg-muted/20';
 
-  const isAskGate = activeGateRequest?.kind === 'ask';
+  const isAskGate = gateKind === 'ask';
 
   return (
     <div className={`my-1.5 w-full max-w-full rounded-lg border p-2 text-xs text-foreground transition-all animate-in fade-in-0 duration-150 motion-reduce:animate-none ${cardBorderClass}`}>
@@ -312,16 +302,7 @@ function ToolCallCard({
         </div>
       </button>
 
-      {/* 嵌入式审批区 (Cline 模式:就地展开,无需收折按钮) */}
-      {isWaitingConfirmation && activeGateRequest && onGateApprove && onGateDeny && onGateAnswer && onGateCancel && (
-        <ApprovalSection
-          request={activeGateRequest}
-          onApprove={onGateApprove}
-          onDeny={onGateDeny}
-          onAnswer={onGateAnswer}
-          onCancel={onGateCancel}
-        />
-      )}
+      {/* 状态化卡:交互审批统一渲染在 App 的审批槽位,卡内只有状态与参数/结果展开 */}
 
       {/* Expanded details (参数与历史结果) */}
       {open && (
@@ -392,18 +373,68 @@ export function MessageItem({
   toolResults,
   activeGateRequest,
   pendingGateTotal,
-  onGateApprove,
-  onGateDeny,
-  onGateAnswer,
-  onGateCancel,
+  suppressEntryAnimation,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
+  // 入场动画抑制:仅取首帧 prop(实例冻结);in-flight 消息 finalize 后 key 稳定复用实例,不会重播动画
+  const suppressAnimRef = useRef(Boolean(suppressEntryAnimation));
 
   // 引用 chips:从本条消息 content 的 <page-refs> 块解析(与 LLM 消费同一份字符串,零中间状态)
   const pageRefs = useMemo(
     () => (message.role === 'user' ? parsePageRefs(message.content) : null),
     [message],
   );
+
+  // ── Assistant 内容块(仅 assistant 消息;其余角色为空,保证无条件 hooks 全部先于条件 return)──
+  const blocks =
+    message.role === 'assistant' && Array.isArray((message as AssistantMessage).content)
+      ? (message as AssistantMessage).content
+      : [];
+  const textBlocks = blocks.filter(
+    (b): b is { type: 'text'; text: string } => b.type === 'text' && b.text.trim().length > 0
+  );
+  const thinkingBlocks = blocks.filter(
+    (b): b is { type: 'thinking'; thinking: string } => b.type === 'thinking' && b.thinking.trim().length > 0
+  );
+  const toolCallBlocks = blocks.filter(
+    (b): b is { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> } =>
+      b.type === 'toolCall'
+  );
+
+  // 块序还原:按 content 原始顺序分组 —— 连续 thinking/text 合并为一个气泡段,toolCall
+  // 独立成卡插在其原始位置(此前工具卡被统一前置到气泡之前,导致「工具卡跑到最前」错乱)
+  const segments = useMemo(() => {
+    const segs: Array<
+      | { kind: 'bubble'; items: typeof blocks }
+      | { kind: 'tool'; block: (typeof toolCallBlocks)[number] }
+    > = [];
+    for (const b of blocks) {
+      if (b.type === 'toolCall') {
+        segs.push({ kind: 'tool', block: b });
+        continue;
+      }
+      if (b.type !== 'text' && b.type !== 'thinking') continue;
+      if (b.type === 'text' && !b.text.trim()) continue;
+      if (b.type === 'thinking' && !b.thinking.trim()) continue;
+      const last = segs[segs.length - 1];
+      if (last && last.kind === 'bubble') {
+        last.items.push(b);
+      } else {
+        segs.push({ kind: 'bubble', items: [b] });
+      }
+    }
+    return segs;
+  }, [blocks]);
+
+  const pendingGateToolName =
+    activeGateRequest?.kind === 'confirm' ? activeGateRequest.toolName : activeGateRequest?.kind === 'ask' ? 'ask_user' : null;
+  const pendingGateToolCallId = activeGateRequest?.toolCallId ?? null;
+
+  // 门控匹配:首个未出结果的 confirm/ask 工具(当无 toolCallId 时退化匹配首个)
+  const firstUnresolvedConfirmCall = useMemo(() => {
+    if (!pendingGateToolName) return null;
+    return toolCallBlocks.find((b) => b.name === pendingGateToolName && !toolResults?.has(b.id)) ?? null;
+  }, [pendingGateToolName, toolCallBlocks, toolResults]);
 
   // 工具结果消息不直接作为独立气泡渲染(已在对应 toolCall 卡片内展示)
   if (message.role === 'toolResult') return null;
@@ -444,211 +475,228 @@ export function MessageItem({
     );
   }
 
-  // Assistant Message
+  // Assistant Message(此时 message.role === 'assistant' 已由上方条件 return 保证)
   const assistantMsg = message as AssistantMessage;
-  const blocks = Array.isArray(assistantMsg.content) ? assistantMsg.content : [];
-  const textBlocks = blocks.filter(
-    (b): b is { type: 'text'; text: string } => b.type === 'text' && b.text.trim().length > 0
-  );
-  const thinkingBlocks = blocks.filter(
-    (b): b is { type: 'thinking'; thinking: string } => b.type === 'thinking' && b.thinking.trim().length > 0
-  );
-  const toolCallBlocks = blocks.filter(
-    (b): b is { type: 'toolCall'; id: string; name: string; arguments: Record<string, unknown> } =>
-      b.type === 'toolCall'
-  );
-
-  const pendingGateToolName =
-    activeGateRequest?.kind === 'confirm' ? activeGateRequest.toolName : activeGateRequest?.kind === 'ask' ? 'ask_user' : null;
-  const pendingGateToolCallId = activeGateRequest?.toolCallId ?? null;
-
-  // 门控匹配:首个未出结果的 confirm/ask 工具(当无 toolCallId 时退化匹配首个)
-  const firstUnresolvedConfirmCall = useMemo(() => {
-    if (!pendingGateToolName) return null;
-    return toolCallBlocks.find((b) => b.name === pendingGateToolName && !toolResults?.has(b.id)) ?? null;
-  }, [pendingGateToolName, toolCallBlocks, toolResults]);
-
-  const hasVisibleTextOrThinking = textBlocks.length > 0 || thinkingBlocks.length > 0 || Boolean(rawText);
-  const hasLiveActivity = Boolean(liveThinking) || (liveToolLabels && liveToolLabels.length > 0);
   const errorMessage = assistantMsg.errorMessage;
   const usage = assistantMsg.usage;
   const hasUsage = usage && usage.totalTokens > 0;
+  const hasVisibleTextOrThinking = textBlocks.length > 0 || thinkingBlocks.length > 0 || Boolean(rawText);
+  const hasLiveActivity = Boolean(liveThinking) || (liveToolLabels && liveToolLabels.length > 0);
+  // gate pending = turn 空闲等待用户操作,并非生成中:打字点与空 live 气泡都不渲染
+  const isTurnIdle = Boolean(activeGateRequest);
+  const hasTextInSegments = segments.some(
+    (s) => s.kind === 'bubble' && s.items.some((it) => it.type === 'text')
+  );
+  const showDots =
+    Boolean(isStreaming) &&
+    !isTurnIdle &&
+    !liveThinking &&
+    (!liveToolLabels || liveToolLabels.length === 0) &&
+    !hasTextInSegments;
+  const emptyReply =
+    !isStreaming && !errorMessage && !hasVisibleTextOrThinking && toolCallBlocks.length === 0;
+  const hasStatus = showDots || Boolean(errorMessage) || Boolean(isCancelled) || emptyReply;
+  // 状态节点/流式光标锚定最后一个「气泡段」(末段可能是工具卡,状态必须仍可见)
+  const lastBubbleIndex = segments.reduce((acc, s, i) => (s.kind === 'bubble' ? i : acc), -1);
+  const hasBubble = lastBubbleIndex >= 0;
+  // 行渲染条件:有内容段/live 活动/真实生成中/状态兜底才渲染(gate 空闲等待时整行不渲染)
+  const shouldRenderRow =
+    segments.length > 0 ||
+    hasLiveActivity ||
+    hasStatus ||
+    Boolean(isStreaming && !isTurnIdle);
+
+  const statusNodes = (
+    <>
+      {showDots && (
+        /* AI Typing Animation (3 bouncing dots) —— 仅真正生成中 */
+        <div className="flex items-center gap-1 py-1 px-1">
+          <span className="size-1.5 rounded-full bg-muted-foreground/70 animate-bounce [animation-delay:-0.3s]" />
+          <span className="size-1.5 rounded-full bg-muted-foreground/70 animate-bounce [animation-delay:-0.15s]" />
+          <span className="size-1.5 rounded-full bg-muted-foreground/70 animate-bounce" />
+        </div>
+      )}
+      {errorMessage && (
+        <div className="text-xs text-muted-foreground italic leading-relaxed break-all whitespace-pre-wrap">
+          {errorMessage}
+        </div>
+      )}
+      {isCancelled && (
+        <div className="mt-1.5 text-xs text-muted-foreground">(已停止生成)</div>
+      )}
+      {emptyReply && (
+        <div className="text-xs text-muted-foreground italic">无回复内容</div>
+      )}
+    </>
+  );
+
+  if (!shouldRenderRow) return null;
+
+  const renderToolCard = (block: (typeof toolCallBlocks)[number], i: number) => {
+    const result = block.id ? toolResults?.get(block.id) : null;
+    const hasResult = Boolean(result);
+
+    // 状态判定顺序(块卡):结果(终态)→ 等待审批(toolCallId 精确匹配,退化首张未决议同名卡)
+    // → 排队中(同轮同名其余未决议;判定优先于执行中,未轮到的调用绝不显示执行中)
+    const isWaiting =
+      !hasResult &&
+      Boolean(
+        (pendingGateToolCallId && block.id === pendingGateToolCallId) ||
+          (!pendingGateToolCallId &&
+            pendingGateToolName === block.name &&
+            firstUnresolvedConfirmCall?.id === block.id)
+      );
+
+    const isQueued =
+      !hasResult &&
+      !isWaiting &&
+      Boolean(pendingGateToolName && (block.name === pendingGateToolName || block.name === 'execute_js'));
+
+    return (
+      <ToolCallCard
+        key={block.id || `tool-${i}`}
+        id={block.id}
+        name={block.name}
+        args={block.arguments}
+        result={result}
+        isWaitingConfirmation={isWaiting}
+        isQueued={isQueued}
+        gateKind={isWaiting ? (activeGateRequest?.kind ?? null) : null}
+        pendingGateTotal={pendingGateTotal}
+      />
+    );
+  };
 
   return (
     <div className="flex flex-col gap-1 px-3 py-1">
-      {/* 1. Independent Tool Call Cards (Ordered) */}
-      {toolCallBlocks.map((block, i) => {
-        const result = block.id ? toolResults?.get(block.id) : null;
-        const hasResult = Boolean(result);
-
-        // 精确匹配 toolCallId;无 toolCallId 时退化为匹配首个未出结果的同名工具
-        const isWaiting =
-          !hasResult &&
-          Boolean(
-            (pendingGateToolCallId && block.id === pendingGateToolCallId) ||
-              (!pendingGateToolCallId &&
-                pendingGateToolName === block.name &&
-                firstUnresolvedConfirmCall?.id === block.id)
-          );
-
-        // 同名或同轮未开始且非当前等待的 confirm 工具标为"排队中"
-        const isQueued =
-          !hasResult &&
-          !isWaiting &&
-          Boolean(pendingGateToolName && (block.name === pendingGateToolName || block.name === 'execute_js'));
-
-        return (
-          <ToolCallCard
-            key={block.id || `tool-${i}`}
-            id={block.id}
-            name={block.name}
-            args={block.arguments}
-            result={result}
-            isWaitingConfirmation={isWaiting}
-            isQueued={isQueued}
-            activeGateRequest={isWaiting ? activeGateRequest : null}
-            pendingGateTotal={pendingGateTotal}
-            onGateApprove={onGateApprove}
-            onGateDeny={onGateDeny}
-            onGateAnswer={onGateAnswer}
-            onGateCancel={onGateCancel}
-          />
-        );
-      })}
-
-      {/* Live executing tool calls during streaming */}
-      {liveToolLabels && liveToolLabels.length > 0 && (
-        <div className="space-y-1">
-          {liveToolLabels.map((toolName, i) => {
-            const isWaiting =
-              Boolean(
-                (pendingGateToolCallId && false) ||
-                  (!pendingGateToolCallId && pendingGateToolName === toolName)
-              );
-            return (
-              <ToolCallCard
-                key={`live-tool-${i}`}
-                name={toolName}
-                isExecuting={!isWaiting}
-                isWaitingConfirmation={isWaiting}
-                activeGateRequest={isWaiting ? activeGateRequest : null}
-                pendingGateTotal={pendingGateTotal}
-                onGateApprove={onGateApprove}
-                onGateDeny={onGateDeny}
-                onGateAnswer={onGateAnswer}
-                onGateCancel={onGateCancel}
-              />
-            );
-          })}
+      <div
+        className={`group flex gap-2.5 py-0.5 ${
+          suppressAnimRef.current
+            ? ''
+            : 'animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none'
+        }`}
+      >
+        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+          <Bot className="size-3.5" />
         </div>
-      )}
 
-      {/* 2. Assistant Message Bubble (Only if there is text, thinking, live stream, or error) */}
-      {(hasVisibleTextOrThinking || hasLiveActivity || isStreaming || errorMessage || toolCallBlocks.length === 0) && (
-        <div className="group flex gap-2.5 py-0.5 animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none">
-          <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
-            <Bot className="size-3.5" />
-          </div>
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 overflow-hidden">
+          {/* 块序还原:thinking → text → toolCall 按 content 原始顺序渲染 */}
+          {segments.map((seg, i) =>
+            seg.kind === 'tool' ? (
+              renderToolCard(seg.block, i)
+            ) : (
+              <div
+                key={i}
+                className="relative min-w-0 w-fit max-w-full rounded-lg border bg-card p-2.5 text-card-foreground overflow-hidden"
+              >
+                {/* Live streaming thinking block(仅 live 气泡;流式消息无物化 thinking 块,置于首段首位) */}
+                {i === 0 && liveThinking && (
+                  <ThinkingBlock
+                    thinking={liveThinking}
+                    isGenerating={Boolean(isStreaming) && !rawText}
+                  />
+                )}
 
-          <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 overflow-hidden">
-            <div className="relative min-w-0 w-fit max-w-full rounded-lg border bg-card p-2.5 text-card-foreground overflow-hidden">
-              {/* Live streaming thinking block */}
-              {liveThinking && (
-                <ThinkingBlock
-                  thinking={liveThinking}
-                  isGenerating={isStreaming && !rawText}
-                />
-              )}
+                {seg.items.map((item, j) =>
+                  item.type === 'thinking' ? (
+                    <ThinkingBlock key={j} thinking={item.thinking} />
+                  ) : item.type === 'text' ? (
+                    <MarkdownView
+                      key={j}
+                      content={item.text}
+                      /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
+                      className={
+                        i === lastBubbleIndex && j === seg.items.length - 1 && isStreaming && rawText
+                          ? 'md-caret'
+                          : ''
+                      }
+                    />
+                  ) : null
+                )}
 
-              {/* Historical thinking blocks */}
-              {thinkingBlocks.map((block, i) => (
-                <ThinkingBlock key={i} thinking={block.thinking} />
-              ))}
+                {/* 状态节点附在最后一个气泡段内;无气泡段时独立壳渲染 */}
+                {i === lastBubbleIndex && hasStatus && statusNodes}
+              </div>
+            )
+          )}
 
-              {/* Text content or loading / error indicators */}
-              {textBlocks.length > 0 ? (
-                textBlocks.map((block, i) => (
-                  <MarkdownView key={i} content={block.text} />
-                ))
-              ) : rawText ? (
-                <MarkdownView content={rawText} />
-              ) : isStreaming ? (
-                !liveThinking && (!liveToolLabels || liveToolLabels.length === 0) ? (
-                  /* AI Typing Animation (3 bouncing dots) */
-                  <div className="flex items-center gap-1 py-1 px-1">
-                    <span className="size-1.5 rounded-full bg-muted-foreground/70 animate-bounce [animation-delay:-0.3s]" />
-                    <span className="size-1.5 rounded-full bg-muted-foreground/70 animate-bounce [animation-delay:-0.15s]" />
-                    <span className="size-1.5 rounded-full bg-muted-foreground/70 animate-bounce" />
-                  </div>
-                ) : null
-              ) : errorMessage ? (
-                <div className="text-xs text-muted-foreground italic leading-relaxed break-all whitespace-pre-wrap">
-                  {errorMessage}
-                </div>
-              ) : toolCallBlocks.length === 0 ? (
-                <div className="text-xs text-muted-foreground italic">无回复内容</div>
-              ) : null}
-
-              {/* Streaming blinking cursor */}
-              {isStreaming && rawText && (
-                <span
-                  className="inline-block h-3.5 w-1.5 ml-1 bg-foreground align-middle animate-pulse"
-                  aria-hidden="true"
-                />
-              )}
-
-              {/* Cancelled indicator */}
-              {isCancelled && (
-                <div className="mt-1.5 text-xs text-muted-foreground">(已停止生成)</div>
-              )}
+          {/* Live executing tool calls during streaming(块卡未物化前的过渡卡;物化后由 MessageList 过滤。
+              置于内容序末尾 = 即将出现的 toolCall 块的位置) */}
+          {liveToolLabels && liveToolLabels.length > 0 && (
+            <div className="w-full space-y-1">
+              {liveToolLabels.map((toolName, i) => {
+                // 状态判定顺序(live 卡):等待审批(仅无 toolCallId 的退化名匹配)→ 排队中 → 执行中。
+                // 有门控挂起而非门控目标时一律排队,绝不显示执行中(排队中判定优先于执行中)
+                const isWaiting = !pendingGateToolCallId && pendingGateToolName === toolName;
+                const isQueued = !isWaiting && Boolean(pendingGateToolName);
+                return (
+                  <ToolCallCard
+                    key={`live-tool-${i}`}
+                    name={toolName}
+                    isExecuting={!isWaiting && !isQueued}
+                    isWaitingConfirmation={isWaiting}
+                    isQueued={isQueued}
+                    gateKind={isWaiting ? (activeGateRequest?.kind ?? null) : null}
+                    pendingGateTotal={pendingGateTotal}
+                  />
+                );
+              })}
             </div>
+          )}
 
-            {/* Action & Usage bar (Only shown when text or usage exists) */}
-            {(hasVisibleTextOrThinking || hasUsage) && (
-              <div className="flex w-full items-center justify-between px-0.5 text-[11px] text-muted-foreground">
-                <div className="flex items-center gap-1.5 truncate min-w-0">
-                  <span>
-                    {message.timestamp
-                      ? new Date(message.timestamp).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : ''}
+          {/* 无气泡段但有状态(纯工具卡报错等):状态独立壳 */}
+          {!hasBubble && hasStatus && (
+            <div className="relative min-w-0 w-fit max-w-full rounded-lg border bg-card p-2.5 text-card-foreground overflow-hidden">
+              {statusNodes}
+            </div>
+          )}
+
+          {/* Action & Usage bar (Only shown when text or usage exists) */}
+          {(hasVisibleTextOrThinking || hasUsage) && (
+            <div className="flex w-full items-center justify-between px-0.5 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 truncate min-w-0">
+                <span>
+                  {message.timestamp
+                    ? new Date(message.timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : ''}
+                </span>
+
+                {hasUsage && (
+                  <span className="text-[10px] text-muted-foreground/70 truncate">
+                    ↑ {formatTokens(usage.input)} ↓ {formatTokens(usage.output)}
                   </span>
-
-                  {hasUsage && (
-                    <span className="text-[10px] text-muted-foreground/70 truncate">
-                      ↑ {formatTokens(usage.input)} ↓ {formatTokens(usage.output)}
-                    </span>
-                  )}
-                </div>
-
-                {hasVisibleTextOrThinking && (
-                  <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={handleCopy}
-                          className="size-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
-                        >
-                          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                          <span className="sr-only">复制</span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <p>{copied ? '已复制' : '复制'}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
                 )}
               </div>
-            )}
-          </div>
+
+              {hasVisibleTextOrThinking && (
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleCopy}
+                        className="size-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                      >
+                        {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                        <span className="sr-only">复制</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p>{copied ? '已复制' : '复制'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -30,6 +30,7 @@ import {
 import { ChatHeader } from './components/chat/ChatHeader';
 import { MessageList } from './components/chat/MessageList';
 import { ChatInput } from './components/chat/ChatInput';
+import { ApprovalSection } from './components/chat/ApprovalSection';
 import { SettingsMainView } from './components/settings/SettingsMainView';
 import { ProviderDialog } from './components/settings/ProviderDialog';
 
@@ -962,6 +963,9 @@ export default function App() {
     inFlight && inFlight.sessionId === currentSession?.id && inFlight.messages.length > 0
       ? [...(currentSession?.messages ?? []), ...inFlight.messages]
       : (currentSession?.messages ?? []);
+  // 尾部 in-flight 消息刚从 live 流式气泡接管:跳过入场动画,交接不闪
+  const quietTailCount =
+    inFlight && inFlight.sessionId === currentSession?.id ? inFlight.messages.length : 0;
 
   return (
     <main className="flex h-dvh w-full flex-col bg-background text-foreground overflow-hidden select-text font-sans antialiased">
@@ -987,10 +991,7 @@ export default function App() {
             activeToolLabels={activeToolNames}
             gateRequest={activeGate?.request ?? null}
             pendingGateTotal={gatePagination.total}
-            onGateApprove={handleGateApprove}
-            onGateDeny={handleGateDeny}
-            onGateAnswer={handleGateAnswer}
-            onGateCancel={handleGateCancel}
+            quietTailCount={quietTailCount}
             isCancelled={isCancelled}
             errorMessage={errorMessage}
             onDismissError={() => setErrorMessage(null)}
@@ -1002,6 +1003,20 @@ export default function App() {
             }
             onOpenSettings={handleOpenSettings}
           />
+
+          {/* 审批槽位:交互审批 UI 的唯一渲染位(消息流内工具卡一律状态化,零交互控件)。
+              in-flow flex 子节点,出现时挤压列表;卡片框架永不滚动,高度由内容决定。 */}
+          {activeGate && (
+            <div className="w-full shrink-0 px-2 pb-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+              <ApprovalSection
+                request={activeGate.request}
+                onApprove={handleGateApprove}
+                onDeny={handleGateDeny}
+                onAnswer={handleGateAnswer}
+                onCancel={handleGateCancel}
+              />
+            </div>
+          )}
 
           {/* Composer:按会话重挂载(key),草稿输入/引用派生自当前会话 draft */}
           <ChatInput

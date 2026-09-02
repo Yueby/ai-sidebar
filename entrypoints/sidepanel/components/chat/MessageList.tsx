@@ -24,14 +24,12 @@ interface MessageListProps {
   streamingThinking?: string;
   /** 正在执行的工具标签 */
   activeToolLabels?: string[];
-  /** 当前待处理的门控请求(confirm/ask) */
+  /** 当前待处理的门控请求(confirm/ask;仅用于工具卡状态徽标匹配,交互审批在 App 的独立槽位渲染) */
   gateRequest?: GateRequest | null;
   /** 待确认总数 (用于首张待确认卡显示「共 N 个待确认」轻提示) */
   pendingGateTotal?: number;
-  onGateApprove?: () => void;
-  onGateDeny?: () => void;
-  onGateAnswer?: (answer: string) => void;
-  onGateCancel?: () => void;
+  /** 尾部 N 条消息刚从 live 流式气泡接管(in-flight 物化):跳过入场动画避免交接闪烁 */
+  quietTailCount?: number;
   isCancelled?: boolean;
   errorMessage?: string | null;
   onDismissError?: () => void;
@@ -77,10 +75,7 @@ export function MessageList({
   activeToolLabels,
   gateRequest,
   pendingGateTotal,
-  onGateApprove,
-  onGateDeny,
-  onGateAnswer,
-  onGateCancel,
+  quietTailCount,
   isCancelled,
   errorMessage,
   onDismissError,
@@ -93,31 +88,52 @@ export function MessageList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
+  // 「用户上翻」只由用户主动滚动行为置位(wheel 向上 / touch 下拖 / PageUp/ArrowUp/Home),
+  // 或非程序性 scroll 事件落在离底 > 阈值处(滚动条拖动/惯性滚动;程序性滚动一律直达底部);
+  // 视口/内容的程序性尺寸变化不改变跟底状态——挂起前若在跟底,尺寸变化后重新贴底
   const userScrolledUpRef = useRef(false);
+  // 程序性 smooth 滚动进行中:吞掉中途 scroll 事件(落底前距离必然 > 阈值),防止误判挂起
+  const programmaticScrollRef = useRef(false);
+  const touchStartYRef = useRef<number | null>(null);
   const scrollRafId = useRef<number | null>(null);
   const lastScrollTimeRef = useRef<number>(0);
+  // 首条消息身份(会话切换检测用)
+  const firstMessageKeyRef = useRef<string | null>(null);
 
-  // Check scroll position to determine if user manually scrolled up
+  /** 用户滚动意图:立即挂起跟底(夺回程序性 smooth 滚动的控制权) */
+  const suspendFollow = useCallback(() => {
+    programmaticScrollRef.current = false;
+    userScrolledUpRef.current = true;
+    setShowScrollBottom(true);
+  }, []);
+
+  // scroll 事件:程序性滚动途中不改变跟底状态,只等落底;非程序性滚动按落点判定
+  // 挂起/恢复(此时 scroll 事件只可能来自用户:滚动条拖动、惯性滚动、键盘滚动)
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const isUp = distanceToBottom > 80;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (programmaticScrollRef.current) {
+      if (distance <= 80) programmaticScrollRef.current = false; // 已落底
+      return;
+    }
+    const isUp = distance > 80;
     userScrolledUpRef.current = isUp;
     setShowScrollBottom(isUp);
   }, []);
 
   const scrollToBottom = useCallback((smooth = false) => {
     const el = scrollRef.current;
-    if (el) {
-      if (smooth) {
-        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-      } else {
-        el.scrollTop = el.scrollHeight;
-      }
-      userScrolledUpRef.current = false;
-      setShowScrollBottom(false);
+    if (!el) return;
+    if (smooth) {
+      programmaticScrollRef.current = true;
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else {
+      // 同步赋值直达底部,落点必在阈值内,无需标记程序性
+      el.scrollTop = el.scrollHeight;
     }
+    userScrolledUpRef.current = false;
+    setShowScrollBottom(false);
   }, []);
 
   const smoothScrollToBottom = useCallback(() => {
@@ -130,14 +146,59 @@ export function MessageList({
     smoothScrollToBottom();
   }, [smoothScrollToBottom]);
 
-  // 1. ResizeObserver: 监听消息内容容器高度变化 (包含气泡加载动画挂载、工具卡片完成、thinking 展开等全场景)
+  // 用户主动滚动手势:wheel 向上 / touch 下拖(仅当确实可向上滚时)
+  const handleWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      if (e.deltaY < 0 && (scrollRef.current?.scrollTop ?? 0) > 0) {
+        suspendFollow();
+      }
+    },
+    [suspendFollow]
+  );
+
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartYRef.current = e.touches[0]?.clientY ?? null;
+  }, []);
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      const startY = touchStartYRef.current;
+      const curY = e.touches[0]?.clientY;
+      if (startY === null || curY === undefined) return;
+      // 手指向下拖(内容随之上移)= 用户向上滚动
+      if (curY - startY > 8 && (scrollRef.current?.scrollTop ?? 0) > 0) {
+        suspendFollow();
+      }
+    },
+    [suspendFollow]
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    touchStartYRef.current = null;
+  }, []);
+
+  // 键盘滚动(PageUp/ArrowUp/Home;焦点须在列表内,Composer 按键不会落到这里)
+  const handleListKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (
+        (e.key === 'PageUp' || e.key === 'ArrowUp' || e.key === 'Home') &&
+        (scrollRef.current?.scrollTop ?? 0) > 0
+      ) {
+        suspendFollow();
+      }
+    },
+    [suspendFollow]
+  );
+
+  // 1. ResizeObserver: 同时观察内容容器与视口容器。跟底状态下任何尺寸变化(内容跳变、
+  // 审批槽位弹出/消失挤压视口)都重新贴底;挂起状态不动作,保持用户阅读位置
   useEffect(() => {
     const contentEl = contentRef.current;
+    const scrollEl = scrollRef.current;
     if (!contentEl) return;
 
     const observer = new ResizeObserver(() => {
       if (!userScrolledUpRef.current) {
-        // 高度跳变时立即跟进到底部
         const el = scrollRef.current;
         if (el) {
           el.scrollTop = el.scrollHeight;
@@ -146,8 +207,26 @@ export function MessageList({
     });
 
     observer.observe(contentEl);
+    if (scrollEl) observer.observe(scrollEl);
     return () => observer.disconnect();
   }, []);
+
+  // 1.5 会话切换检测:首条消息身份变化 → 重置跟底状态并立即贴底(切会话/新会话置底)。
+  // 流式期间首条消息恒定,不误触发
+  useEffect(() => {
+    const first = messages[0];
+    const firstKey = first ? `${first.timestamp}-${first.role}` : 'empty';
+    if (firstMessageKeyRef.current !== null && firstMessageKeyRef.current !== firstKey) {
+      firstMessageKeyRef.current = firstKey;
+      userScrolledUpRef.current = false;
+      programmaticScrollRef.current = false;
+      setShowScrollBottom(false);
+      const el = scrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    } else {
+      firstMessageKeyRef.current = firstKey;
+    }
+  }, [messages]);
 
   // 2. 状态依赖监听 (涵盖发送瞬间、isStreaming 切换、内容追加、工具标签变更、轮次提交、Gate 请求出现)
   useEffect(() => {
@@ -194,7 +273,23 @@ export function MessageList({
     return map;
   }, [messages]);
 
+  // live 执行卡去重:toolCall 块已随 message_end 物化进转录(in-flight)后,同一调用不再以
+  // live 卡重复渲染——否则门控挂起期间同一调用会同时出现「等待确认」块卡与「执行中」live 卡
+  const liveToolLabels = useMemo(() => {
+    if (!activeToolLabels || activeToolLabels.length === 0) return activeToolLabels ?? [];
+    const materialized = new Set<string>();
+    for (const m of messages) {
+      if (m.role !== 'assistant' || !Array.isArray(m.content)) continue;
+      for (const b of m.content) {
+        if (b.type === 'toolCall' && !toolResultsByCallId.has(b.id)) materialized.add(b.name);
+      }
+    }
+    return activeToolLabels.filter((n) => !materialized.has(n));
+  }, [messages, activeToolLabels, toolResultsByCallId]);
+
   const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
+  // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(实例内冻结)
+  const quietFrom = Math.max(0, messages.length - (quietTailCount ?? 0));
 
   return (
     <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-background">
@@ -225,6 +320,11 @@ export function MessageList({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onKeyDown={handleListKeyDown}
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 pt-2.5 pb-2.5"
       >
         {isEmpty ? (
@@ -306,10 +406,7 @@ export function MessageList({
                   toolResults={toolResultsByCallId}
                   activeGateRequest={gateRequest}
                   pendingGateTotal={pendingGateTotal}
-                  onGateApprove={onGateApprove}
-                  onGateDeny={onGateDeny}
-                  onGateAnswer={onGateAnswer}
-                  onGateCancel={onGateCancel}
+                  suppressEntryAnimation={i >= quietFrom}
                 />
               ))}
             {isStreaming && (
@@ -327,14 +424,10 @@ export function MessageList({
                 isStreaming
                 isCancelled={isCancelled}
                 liveThinking={streamingThinking}
-                liveToolLabels={activeToolLabels}
+                liveToolLabels={liveToolLabels}
                 toolResults={toolResultsByCallId}
                 activeGateRequest={gateRequest}
                 pendingGateTotal={pendingGateTotal}
-                onGateApprove={onGateApprove}
-                onGateDeny={onGateDeny}
-                onGateAnswer={onGateAnswer}
-                onGateCancel={onGateCancel}
               />
             )}
           </div>
