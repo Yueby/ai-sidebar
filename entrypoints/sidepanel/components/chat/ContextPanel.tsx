@@ -26,8 +26,8 @@ interface ContextPanelProps {
 
 const ROLE_SEGMENTS: { key: keyof RoleShares; label: string; className: string; dotClass: string }[] = [
   { key: 'user', label: '用户', className: 'bg-foreground', dotClass: 'bg-foreground' },
-  { key: 'assistant', label: '助手', className: 'bg-muted-foreground', dotClass: 'bg-muted-foreground' },
-  { key: 'toolResult', label: '工具', className: 'bg-muted-foreground/40', dotClass: 'bg-muted-foreground/40' },
+  { key: 'assistant', label: '助手', className: 'bg-foreground/50', dotClass: 'bg-foreground/50' },
+  { key: 'toolResult', label: '工具', className: 'bg-foreground/20', dotClass: 'bg-foreground/20' },
 ];
 
 /** 点击环弹出的上下文面板:大数字 + 分解 + 角色占比条 + 压缩操作 */
@@ -110,13 +110,17 @@ export function ContextPanel({
         {total > 0 && (
           <div className="space-y-1.5 pt-0.5">
             <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted/80">
-              {ROLE_SEGMENTS.map((seg) => (
-                <div
-                  key={seg.key}
-                  className={seg.className}
-                  style={{ width: `${pctOf(shares[seg.key])}%` }}
-                />
-              ))}
+              {ROLE_SEGMENTS.map((seg) => {
+                const pct = pctOf(shares[seg.key]);
+                if (pct <= 0) return null;
+                return (
+                  <div
+                    key={seg.key}
+                    className={seg.className}
+                    style={{ width: `${pct}%` }}
+                  />
+                );
+              })}
             </div>
             <div className="flex justify-between text-[10px] text-muted-foreground">
               {ROLE_SEGMENTS.map((seg) => (

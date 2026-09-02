@@ -334,8 +334,8 @@ export default function App() {
 
           {/* 模型切换溢出建议条:不静默自动压缩,一键交给用户;支持关闭 */}
           {overflowSuggest && (
-            <div className="w-full shrink-0 px-2 pb-1.5 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
-              <div className="flex items-center gap-2 rounded-md border border-amber-600/30 bg-amber-500/10 dark:border-amber-500/30 dark:bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-foreground shadow-2xs">
+            <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+              <div className="flex items-center gap-2 rounded-md border border-amber-600/30 bg-amber-500/10 dark:border-amber-400/30 dark:bg-amber-400/10 px-2.5 py-1.5 text-[11px] text-foreground shadow-2xs">
                 <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                 <span className="min-w-0 flex-1 truncate">
                   当前上下文超出模型窗口，建议压缩
@@ -368,7 +368,7 @@ export default function App() {
 
           {/* 压缩状态条(轻量) */}
           {compact.isCompacting && (
-            <div className="w-full shrink-0 px-2 pb-1.5 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+            <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/70 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-2xs">
                 <Loader2 className="size-3.5 animate-spin shrink-0 text-foreground" />
                 <span className="font-medium text-foreground">正在压缩上下文…</span>
@@ -379,7 +379,7 @@ export default function App() {
           {/* 审批槽位:交互审批 UI 的唯一渲染位(消息流内工具卡一律状态化,零交互控件)。
               in-flow flex 子节点,出现时挤压列表;卡片框架永不滚动,高度由内容决定。 */}
           {gate.activeGate && (
-            <div className="w-full shrink-0 px-2 pb-1.5 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+            <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <ApprovalSection
                 request={gate.activeGate.request}
                 onApprove={gate.handleGateApprove}
@@ -392,7 +392,7 @@ export default function App() {
 
           {/* 斜杠 /help 卡 */}
           {slashHelpOpen && (
-            <div className="w-full shrink-0 px-2 pb-1.5 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
+            <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <div className="space-y-2 rounded-lg border border-border bg-card p-3 text-xs shadow-xs">
                 <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
                   <span className="text-[11px] font-semibold text-foreground">可用快捷命令</span>

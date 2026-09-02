@@ -28,7 +28,7 @@ export function CompactionRow({ tokensBefore, summary }: CompactionRowProps) {
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
-          className="flex max-w-[85%] items-center gap-1.5 rounded-full border border-border bg-muted/60 hover:bg-muted px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground cursor-pointer select-none shadow-2xs"
+          className="flex max-w-[85%] items-center gap-1.5 rounded-full border border-border bg-muted/60 hover:bg-accent px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground cursor-pointer select-none shadow-2xs"
           title={open ? '收起摘要全文' : '展开摘要全文'}
         >
           <FoldVertical className="size-3 shrink-0 text-muted-foreground" />

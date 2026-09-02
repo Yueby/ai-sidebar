@@ -195,7 +195,7 @@ export function ChatHeader({
                     return (
                       <div
                         key={s.id}
-                        className="flex items-center gap-1 px-1.5 py-1 text-xs bg-accent/50 rounded-sm"
+                        className="flex items-center gap-1 px-1.5 py-1 text-xs bg-accent/60 rounded-sm border border-border/40"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <input
@@ -215,13 +215,13 @@ export function ChatHeader({
                               handleCancelRename();
                             }
                           }}
-                          className="flex-1 min-w-0 bg-background px-1.5 py-0.5 rounded text-xs border border-border outline-none focus:border-ring text-foreground font-normal"
+                          className="flex-1 min-w-0 bg-background/90 px-1.5 py-0.5 rounded text-xs border border-border outline-none focus:border-ring text-foreground font-normal"
                           maxLength={40}
                         />
                         <button
                           type="button"
                           onClick={() => handleSaveRename(s.id)}
-                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
+                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
                           title="保存 (Enter)"
                         >
                           <Check className="size-3 text-foreground" />
@@ -229,7 +229,7 @@ export function ChatHeader({
                         <button
                           type="button"
                           onClick={handleCancelRename}
-                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
+                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
                           title="取消 (Esc)"
                         >
                           <X className="size-3" />

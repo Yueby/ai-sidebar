@@ -19,14 +19,14 @@ interface ContextRingProps {
 export function ContextRing({ usage, isStreaming, modelName, showTooltip = true }: ContextRingProps) {
   const C = 2 * Math.PI * 7.5;
   const clampedPct = Math.max(0, Math.min(100, usage.pct));
-  // 极小正占比(如 1%~3%)给予视觉保底(至少 offset 保留微小弧段)避免被 strokeLinecap="round" 截断不可见
-  const effectivePct = clampedPct > 0 ? Math.max(clampedPct, 3) : 0;
+  // 极小正占比(如 1%~3%)给予视觉保底(至少 4% 弧段)确保在 strokeLinecap="round" 下清晰可见
+  const effectivePct = clampedPct > 0 ? Math.max(clampedPct, 4) : 0;
   const ringColorClass =
     usage.pct >= 85
       ? 'stroke-destructive'
       : usage.pct >= 60
-        ? 'stroke-amber-500 dark:stroke-amber-400'
-        : 'stroke-muted-foreground/80';
+        ? 'stroke-amber-600 dark:stroke-amber-400'
+        : 'stroke-foreground/75 dark:stroke-foreground/80';
 
   const ringNode = (
     <span
@@ -40,7 +40,7 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
           r="7.5"
           fill="none"
           strokeWidth="2.2"
-          className="stroke-muted/60 dark:stroke-muted/40"
+          className="stroke-muted/80 dark:stroke-muted/50"
         />
         {effectivePct > 0 && (
           <circle
@@ -50,7 +50,7 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
             fill="none"
             strokeWidth="2.2"
             strokeLinecap="round"
-            className={`${ringColorClass} transition-[stroke-dashoffset,stroke] duration-300 ease-out`}
+            className={`${ringColorClass} transition-[stroke-dashoffset,stroke] duration-500 ease-out`}
             strokeDasharray={C}
             strokeDashoffset={C * (1 - effectivePct / 100)}
           />
