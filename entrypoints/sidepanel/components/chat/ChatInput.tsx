@@ -283,20 +283,23 @@ export function ChatInput({
     }
   }, [pickedElements, editor]);
 
-  // 草稿恢复双载(照 sanshu updateData):setContent 纯文本(剥离标记原文)+ 仅重插文本中
+  // 草稿恢复双载(照 sanshu updateData):setContent 纯文本(剥离新旧标记原文)+ 仅重插文本中
   // 标记号命中的徽章(S-1:nonce 重挂载注入预设问题时,不凭空多出草稿元素的徽章);
-  // 徽章 serialized 序列化回 [元素:N],协议零变化。key=sessionId 重挂载保证会话切换重建。
+  // 徽章 serialized 序列化回 [element:N](新协议英文化;旧草稿 [元素:N] 兼容剥离),
+  // 协议零变化。key=sessionId 重挂载保证会话切换重建。
   useEffect(() => {
     if (!editor || restoredRef.current) return;
     restoredRef.current = true;
     const markerIds = new Set<number>();
-    const markerRe = /\[元素:(\d+)\]/g;
+    const markerRe = /\[(?:element|元素):(\d+)\]/g;
     let m: RegExpExecArray | null;
     while ((m = markerRe.exec(initialInput)) !== null) {
       const id = parseInt(m[1]!, 10);
       if (Number.isFinite(id)) markerIds.add(id);
     }
-    const stripped = initialInput.replace(/\s*\[元素:\d+\]/g, '');
+    const stripped = initialInput
+      .replace(/\s*\[element:\d+\]/g, '')
+      .replace(/\s*\[元素:\d+\]/g, '');
     if (stripped.trim()) {
       editor.commands.setContent(stripped);
     }

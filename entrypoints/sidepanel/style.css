@@ -294,25 +294,32 @@
 .composer-editor p + p {
   margin-top: 0.25rem;
 }
-/* inline 徽章节点视图(MessageItem 气泡 chip 同族;NodeViewWrapper as="span" 内联渲染) */
-.composer-badge {
+/* ---- 元素内容预览 chip(共享:输入框徽章 NodeView / 用户气泡 chip;拍板版 label=预览) ---- */
+.element-chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  max-width: 200px;
+  gap: 4px;
+  max-width: 160px;
   margin: 0 2px;
-  padding: 0 5px;
-  border-radius: 4px;
+  padding: 1px 6px;
+  border-radius: 6px;
   border: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
   background: var(--accent);
   color: var(--accent-foreground);
   font-size: 11px;
-  line-height: 18px;
+  line-height: 16px;
   font-weight: 500;
   vertical-align: baseline;
   user-select: none;
+  text-align: left;
 }
-.composer-badge-delete {
+.element-chip-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.element-chip-delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -323,9 +330,22 @@
   color: var(--muted-foreground);
   cursor: pointer;
 }
-.composer-badge-delete:hover {
+.element-chip-delete:hover {
   color: var(--foreground);
   background: color-mix(in oklch, var(--muted) 60%, transparent);
+}
+/* 查无 id 的 chip 兜底(灰样式,不猜内容) */
+.element-chip-unknown {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+/* assistant 回复内标记 → 斜体内容预览引用 */
+.element-quote {
+  font-style: italic;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--accent) 55%, transparent);
+  color: var(--accent-foreground);
 }
 /* 徽章被选区完整覆盖时的装饰(InlineBadge 第二插件) */
 .composer-editor .badge-in-selection {

@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core';
 import type { PickedElement } from '@/lib/types';
 import { makeElementMarker } from '@/lib/types';
+import { elementChipLabel } from '@/lib/elementLabel';
 import type { InlineBadgeAttrs } from './InlineBadge';
 
 /**
@@ -59,9 +60,9 @@ export function extractEditorState(editor: Editor | null): ExtractedEditorState 
   return state;
 }
 
-/** 由框选元素构造徽章 attrs(referenceData 存 PickedElement 全量,identity = elementId 字符串) */
+/** 由框选元素构造徽章 attrs(label = 内容预览;title = #{N} · selector;referenceData 存 PickedElement 全量) */
 export function buildBadgeAttrs(element: PickedElement): InlineBadgeAttrs {
-  const label = element.preview || `元素 ${element.elementId}`;
+  const label = elementChipLabel(element);
   return {
     badgeType: 'element',
     identity: String(element.elementId),
@@ -70,7 +71,7 @@ export function buildBadgeAttrs(element: PickedElement): InlineBadgeAttrs {
     serialized: computeBadgeTag({ badgeType: 'element', label, elementId: element.elementId }),
     referenceData: JSON.stringify(element),
     imageBadgeId: null,
-    title: element.preview,
+    title: `#${element.elementId} · ${element.selector}`,
   };
 }
 

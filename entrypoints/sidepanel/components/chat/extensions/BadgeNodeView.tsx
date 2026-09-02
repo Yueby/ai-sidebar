@@ -35,10 +35,10 @@ export function BadgeNodeView({ node, editor, getPos, deleteNode }: NodeViewProp
   };
 
   return (
-    <NodeViewWrapper as="span" className="composer-badge" title={title}>
+    <NodeViewWrapper as="span" className="element-chip" title={title}>
       <button
         type="button"
-        className="composer-badge-delete"
+        className="element-chip-delete"
         onMouseDown={(e) => e.preventDefault()}
         onClick={deleteBadgeWithSpace}
         title="移除该元素引用"
@@ -46,7 +46,7 @@ export function BadgeNodeView({ node, editor, getPos, deleteNode }: NodeViewProp
         <X className="size-2.5" />
       </button>
       <Icon className="size-3 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="element-chip-label">{label}</span>
     </NodeViewWrapper>
   );
 }

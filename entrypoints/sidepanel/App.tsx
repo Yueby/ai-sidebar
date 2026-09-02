@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, X } from 'lucide-react';
 import type { ProviderConfig, ReasoningLevel, ChatMessage } from '@/lib/types';
 import { DEFAULT_SETTINGS, findActiveModel } from '@/lib/providers';
 import { effectiveMessages, estimateContextTokens, estimateTokens, shouldCompact } from '@/lib/contextTokens';
+import { collectPageRefs } from '@/lib/pageRefs';
 import { SLASH_COMMANDS } from '@/lib/slashCommands';
 
 import { useGate } from './hooks/useGate';
@@ -264,14 +265,6 @@ export default function App() {
     !compact.isCompacting &&
     shouldCompact(contextData.usage);
 
-  if (!loaded) {
-    return (
-      <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
-        加载中...
-      </div>
-    );
-  }
-
   // 渲染源 = 会话转录 + 本次运行的 in-flight assistant 消息(仅当归属当前会话;
   // 流式中途切到别的会话时不串显)。live 气泡仍由 MessageList 追加在最后。
   const displayedMessages =
@@ -281,6 +274,20 @@ export default function App() {
   // 尾部 in-flight 消息刚从 live 流式气泡接管:跳过入场动画,交接不闪
   const quietTailCount =
     inFlight && inFlight.sessionId === currentSession?.id ? inFlight.messages.length : 0;
+  // assistant 回复内元素标记 → 斜体预览引用(数据源用 currentSession.messages:
+  // 数组身份在流式期间不变,避免 displayedMessages 派生数组每 token 打穿 MarkdownView memo)
+  const assistantElementById = useMemo(() => {
+    const refs = collectPageRefs(currentSession?.messages ?? []);
+    return new Map(refs.elements.map((e) => [e.id, e]));
+  }, [currentSession?.messages]);
+
+  if (!loaded) {
+    return (
+      <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
+        加载中...
+      </div>
+    );
+  }
 
   return (
     <main className="flex h-dvh w-full flex-col bg-background text-foreground overflow-hidden select-text font-sans antialiased">

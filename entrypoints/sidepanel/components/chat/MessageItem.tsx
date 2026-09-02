@@ -13,11 +13,13 @@ import {
   ShieldAlert,
   HelpCircle,
 } from 'lucide-react';
-import type { AssistantMessage, ChatMessage, PageRefs, ToolResultMessage } from '@/lib/types';
+import type { AssistantMessage, ChatMessage, PageRefs, RefElementMeta, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
-import { toolLabel, ELEMENT_MARKER_RE } from '@/lib/types';
+import { toolLabel } from '@/lib/types';
 import { messageText } from '@/lib/storage';
 import { parsePageRefs } from '@/lib/pageRefs';
+import { elementChipLabel, elementListLabel } from '@/lib/elementLabel';
+import { renderMarkersInText } from './elementMarkerText';
 import { MarkdownView } from './MarkdownView';
 import { CompactionRow } from './CompactionRow';
 import { Button } from '@/components/ui/button';
@@ -41,6 +43,8 @@ interface MessageItemProps {
   pendingGateTotal?: number;
   /** 压缩摘要标记:此消息是 Session.compaction 指向的摘要 user 消息 → 渲染分隔线卡 */
   compactionInfo?: { tokensBefore: number } | null;
+  /** assistant 回复内元素标记 → 斜体预览引用(App 组合层经 collectPageRefs 提供) */
+  assistantElementById?: Map<number, RefElementMeta> | null;
   /** 跳过入场动画:该消息刚从 live 流式气泡接管(内容此前已可见),重播入场动画会"闪一下"。
       实例内冻结(useRef 取首帧值)——finalize 后同 key 实例复用,保持不动画,避免二次闪烁 */
   suppressEntryAnimation?: boolean;
@@ -55,34 +59,8 @@ function formatTokens(count: number): string {
   return `${count}`;
 }
 
-function renderUserMessageText(text: string) {
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  const regex = new RegExp(ELEMENT_MARKER_RE.source, ELEMENT_MARKER_RE.flags);
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-    const elemId = match[1];
-    parts.push(
-      <span
-        key={`elem-${match.index}`}
-        className="inline-flex items-center gap-1 rounded bg-accent text-accent-foreground px-1.5 py-0.5 text-xs font-medium border border-border/60 align-baseline mx-0.5 select-all"
-      >
-        <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
-        <span>元素 {elemId}</span>
-      </span>
-    );
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return parts;
+function renderUserMessageText(text: string, elementById?: Map<number, RefElementMeta> | null) {
+  return renderMarkersInText(text, elementById, 'chip');
 }
 
 function UserRefSnapshot({ refs }: { refs: PageRefs }) {
@@ -112,17 +90,15 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
           )}
         </div>
       ))}
-      {elements.map((elem, idx) => (
+      {elements.map((elem) => (
         <div
-          key={`elem-${idx}`}
+          key={`elem-${elem.id}`}
           className="flex items-center gap-1.5 text-[10px] text-foreground bg-background/80 border border-border/50 rounded px-1.5 py-0.5 max-w-full overflow-hidden"
-          title={elem.selector || elem.preview}
+          title={`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
         >
+          <span className="font-mono text-muted-foreground shrink-0">{elem.id}.</span>
           <SquareMousePointer className="size-2.5 shrink-0 text-muted-foreground" />
-          {elem.tagName && (
-            <span className="font-mono text-muted-foreground shrink-0">&lt;{elem.tagName.toLowerCase()}&gt;</span>
-          )}
-          <span className="truncate max-w-full">{elem.preview || '页面元素'}</span>
+          <span className="truncate max-w-full">{elementListLabel(elem)}</span>
         </div>
       ))}
     </div>
@@ -411,6 +387,7 @@ export function MessageItem({
   activeGateRequest,
   pendingGateTotal,
   compactionInfo,
+  assistantElementById,
   suppressEntryAnimation,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
@@ -428,6 +405,11 @@ export function MessageItem({
   const pageRefs = useMemo(
     () => (message.role === 'user' ? parsePageRefs(message.content) : null),
     [message],
+  );
+  // 本条消息内标记 id → 元素元数据(用户气泡 chip 的预览/tooltip 数据源)
+  const elementById = useMemo(
+    () => new Map((pageRefs?.elements ?? []).map((e) => [e.id, e])),
+    [pageRefs],
   );
 
   // ── Assistant 内容块(仅 assistant 消息;其余角色为空,保证无条件 hooks 全部先于条件 return)──
@@ -509,9 +491,9 @@ export function MessageItem({
       <div className="group flex justify-end px-3 py-1 animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none">
         <div className="flex max-w-[85%] flex-col items-end gap-0.5">
           <div className="w-fit max-w-full rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-sm shadow-xs">
-            {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON; [元素:N] 渲染为内联高亮标记 */}
+            {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON;标记渲染为内容预览 chip(新旧标记兼容) */}
             <p className="whitespace-pre-wrap break-all leading-relaxed">
-              {renderUserMessageText(rawText)}
+              {renderUserMessageText(rawText, elementById)}
             </p>
             {pageRefs && <UserRefSnapshot refs={pageRefs} />}
           </div>
@@ -663,6 +645,7 @@ export function MessageItem({
                     <MarkdownView
                       key={j}
                       content={item.text}
+                      elementById={assistantElementById}
                       /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
                       className={
                         i === lastBubbleIndex && j === seg.items.length - 1 && isStreaming && rawText

@@ -112,13 +112,18 @@ export interface PageRefs {
 }
 
 /**
- * 元素内嵌标记:`[元素:N]`(N 为 1 起整数,按消息内框选顺序,与 <page-refs> 块 elements[].id 对应)。
- * 标记出现在用户消息文本原位,模型直接可见,不做剥离/转义(冻结契约,UI 高亮消费同一形状)。
+ * 元素内嵌标记(协议英文,#294 延伸):`[element:N]`(N 为 1 起整数,按消息内框选顺序,
+ * 与 <page-refs> 块 elements[].id 对应)。标记出现在用户消息文本原位,模型直接可见,
+ * 不做剥离/转义;UI 永远渲染为内容预览徽章,不向用户暴露原文。
  */
 export function makeElementMarker(id: number): string {
-  return `[元素:${id}]`;
+  return `[element:${id}]`;
 }
-export const ELEMENT_MARKER_RE = /\[元素:(\d+)\]/g;
+export const ELEMENT_MARKER_RE = /\[element:(\d+)\]/g;
+/** 旧消息渲染兼容:协议英文化前的中文标记 */
+export const LEGACY_ELEMENT_MARKER_RE = /\[元素:(\d+)\]/g;
+/** 新旧标记合并匹配(旧会话渲染/剥离兼容) */
+export const ANY_ELEMENT_MARKER_RE = /\[(?:element|元素):(\d+)\]/g;
 
 /**
  * 会话消息 = pi-ai 消息联合,直接按 pi 形状持久化。

@@ -105,14 +105,18 @@ export function useChatTurn(params: {
         pageRefs = { tabs, elements };
       }
       // S-1:悬空标记剥离 —— 文本中 id 不在本次 refs.elements 集合内的标记(如页面刷新
-      // 隐式清空后),发送前从 userText 剥离(连带前导空格),避免 prompt 承诺落空
+      // 隐式清空后、或用户手打的伪造标记),发送前从 userText 剥离(连带前导空格),
+      // 避免 prompt 承诺落空;新旧协议标记([element:N] / [元素:N])统一匹配
       let sendText = userText;
       if (pageRefs) {
         const validIds = new Set(pageRefs.elements.map((e) => e.id));
         sendText = userText.replace(
-          /\s*\[元素:(\d+)\]/g,
+          /\s*\[(?:element|元素):(\d+)\]/g,
           (m, num: string) => (validIds.has(parseInt(num, 10)) ? m : ''),
         );
+      } else {
+        // 无 refs(includePageContext 关闭等):所有标记按定义悬空,全量剥离
+        sendText = userText.replace(/\s*\[(?:element|元素):(\d+)\]/g, '');
       }
       const userMessage = createUserMessage(sendText, pageRefs);
       const messagesWithUser: ChatMessage[] = [...session.messages, userMessage];
