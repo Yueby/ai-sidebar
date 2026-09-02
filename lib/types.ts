@@ -98,12 +98,14 @@ export interface RefTabMeta {
 }
 
 export interface RefElementMeta {
-  /** 元素标记号(1 起整数,按消息内框选顺序;与文本内嵌 [元素:N] 标记的 N 一致;旧消息由解析端按数组序补齐) */
+  /** 元素标记号(1 起整数,按消息内框选顺序;与文本内嵌 [element:N] 标记的 N 一致;旧消息由解析端按数组序补齐) */
   id: number;
   tabId: number;
   selector: string;
   tagName: string;
   preview: string;
+  /** 发送时刻解析的元素 outerHTML(content.ts 截 12000,与 read_element 同源);解析失败不设,请求展开时降级 preview */
+  content?: string;
 }
 
 export interface PageRefs {

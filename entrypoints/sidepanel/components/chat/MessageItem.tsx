@@ -43,8 +43,6 @@ interface MessageItemProps {
   pendingGateTotal?: number;
   /** 压缩摘要标记:此消息是 Session.compaction 指向的摘要 user 消息 → 渲染分隔线卡 */
   compactionInfo?: { tokensBefore: number } | null;
-  /** assistant 回复内元素标记 → 斜体预览引用(App 组合层经 collectPageRefs 提供) */
-  assistantElementById?: Map<number, RefElementMeta> | null;
   /** 跳过入场动画:该消息刚从 live 流式气泡接管(内容此前已可见),重播入场动画会"闪一下"。
       实例内冻结(useRef 取首帧值)——finalize 后同 key 实例复用,保持不动画,避免二次闪烁 */
   suppressEntryAnimation?: boolean;
@@ -60,7 +58,7 @@ function formatTokens(count: number): string {
 }
 
 function renderUserMessageText(text: string, elementById?: Map<number, RefElementMeta> | null) {
-  return renderMarkersInText(text, elementById, 'chip');
+  return renderMarkersInText(text, elementById);
 }
 
 function UserRefSnapshot({ refs }: { refs: PageRefs }) {
@@ -387,7 +385,6 @@ export function MessageItem({
   activeGateRequest,
   pendingGateTotal,
   compactionInfo,
-  assistantElementById,
   suppressEntryAnimation,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
@@ -645,7 +642,6 @@ export function MessageItem({
                     <MarkdownView
                       key={j}
                       content={item.text}
-                      elementById={assistantElementById}
                       /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
                       className={
                         i === lastBubbleIndex && j === seg.items.length - 1 && isStreaming && rawText

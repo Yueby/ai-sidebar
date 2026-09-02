@@ -10,7 +10,7 @@ import {
   X,
   Settings as SettingsIcon,
 } from 'lucide-react';
-import type { AssistantMessage, ChatMessage, RefElementMeta, ToolResultMessage } from '@/lib/types';
+import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
@@ -32,8 +32,6 @@ interface MessageListProps {
   quietTailCount?: number;
   /** 会话压缩标记:摘要 user 消息在消息流内渲染为分隔线卡 */
   compaction?: { summaryTimestamp: number; tokensBefore: number } | null;
-  /** assistant 回复内元素标记 → 斜体预览引用(App 组合层经 collectPageRefs 提供) */
-  assistantElementById?: Map<number, RefElementMeta> | null;
   isCancelled?: boolean;
   errorMessage?: string | null;
   onDismissError?: () => void;
@@ -80,7 +78,6 @@ export function MessageList({
   gateRequest,
   pendingGateTotal,
   quietTailCount,
-  assistantElementById,
   compaction,
   isCancelled,
   errorMessage,
@@ -428,7 +425,6 @@ export function MessageList({
                 activeGateRequest={gateRequest}
                 pendingGateTotal={pendingGateTotal}
                 suppressEntryAnimation={i >= quietFrom}
-                assistantElementById={assistantElementById}
                 compactionInfo={
                   compaction && msg.timestamp === compaction.summaryTimestamp
                     ? { tokensBefore: compaction.tokensBefore }

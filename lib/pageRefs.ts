@@ -19,12 +19,14 @@ export function renderPageRefsBlock(refs: PageRefs): string {
     ...(t.focused === true ? { focused: true } : {}),
   }));
   const elements = refs.elements.map((e) => ({
-    // id = 元素标记号,与用户消息文本内嵌 [元素:N] 标记的 N 一致(冻结契约)
+    // id = 元素标记号,与用户消息文本内嵌 [element:N] 标记的 N 一致(冻结契约)
     id: e.id,
     tabId: e.tabId,
     selector: e.selector,
     tagName: e.tagName,
     preview: e.preview,
+    // 请求时内容内嵌:发送时刻解析的元素 outerHTML;解析失败不设(展开时降级 preview)
+    ...(e.content ? { content: e.content } : {}),
   }));
   return `\n\n<${PAGE_REFS_TAG}>\n${JSON.stringify({ tabs, elements })}\n</${PAGE_REFS_TAG}>`;
 }
@@ -89,6 +91,7 @@ export function parsePageRefs(content: unknown): PageRefs | null {
           selector: x.selector,
           tagName: typeof x.tagName === 'string' ? x.tagName : '',
           preview: typeof x.preview === 'string' ? x.preview : '',
+          ...(typeof x.content === 'string' ? { content: x.content } : {}),
         }];
       })
     : []

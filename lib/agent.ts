@@ -9,15 +9,54 @@ import {
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
-import type { AssistantMessage, UserMessage } from '@earendil-works/pi-ai';
-import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement } from './types';
+import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, UserMessage } from './types';
 import { normalizeBaseUrl } from './providers';
 import type { RefTab } from './pageContext';
 import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
 import { getTools } from './tools/registry';
-import { collectPageRefs } from './pageRefs';
+import { collectPageRefs, PAGE_REFS_TAG, parsePageRefs } from './pageRefs';
 
 export type { AgentEvent } from '@earendil-works/pi-agent-core';
+
+// ── 请求时元素内容内嵌(拍板协议;存储仍为 [element:N] 标记 + refs 块)─────────────────
+
+const ELEMENT_MARKER_TEST_RE = /\[(?:element|元素):\d+\]/;
+const ELEMENT_MARKER_GLOBAL_RE = /\[(?:element|元素):(\d+)\]/g;
+
+type RefElement = PageRefs['elements'][number];
+
+/**
+ * user 消息文本段 → LLM 请求文本:元素标记([element:N],兼容旧 [元素:N])用该消息
+ * 自身 refs 块中对应元素**原位展开**为 <picked-element> 块(content 优先,缺省降级 preview);
+ * 无对应 id 的伪造/悬空标记剥除。只处理 <page-refs> 之前的文本段,
+ * refs JSON 原样保留(元数据 + 工具白名单语义),不触碰块内页面内容。
+ */
+function toLlmUserText(content: string): string {
+  if (!ELEMENT_MARKER_TEST_RE.test(content)) return content;
+  const blockStart = content.indexOf(`<${PAGE_REFS_TAG}>`);
+  const textPart = blockStart >= 0 ? content.slice(0, blockStart) : content;
+  const blockPart = blockStart >= 0 ? content.slice(blockStart) : '';
+  const elementsById = new Map<number, RefElement>();
+  for (const e of parsePageRefs(content)?.elements ?? []) {
+    elementsById.set(e.id, e);
+  }
+  const expanded = textPart.replace(ELEMENT_MARKER_GLOBAL_RE, (marker, idStr: string) => {
+    const el = elementsById.get(parseInt(idStr, 10));
+    if (!el) return ''; // 伪造/悬空标记:剥除
+    const body = el.content ?? el.preview ?? '';
+    // 属性转义:防病态 selector/tagName 中的引号破坏 picked-element 标签结构
+    const esc = (v: string) => v.replace(/"/g, '&quot;');
+    return `<picked-element tabId="${el.tabId}" selector="${esc(el.selector)}" tagName="${esc(el.tagName)}">\n${body}\n</picked-element>`;
+  });
+  return expanded + blockPart;
+}
+
+/** user 消息请求副本:仅变换文本段,不改消息形状;转录外副本,持久化仍是标记 + refs 块 */
+function toLlmMessage(m: ChatMessage): ChatMessage {
+  if (m.role !== 'user' || typeof m.content !== 'string') return m;
+  return { ...m, content: toLlmUserText(m.content) };
+}
 
 const API_IMPLEMENTATIONS = {
   'openai-completions': openAICompletionsApi(),
@@ -88,18 +127,12 @@ export function buildSystemPrompt(): string {
   }
   parts.push(
     '',
-    'User messages may carry a <page-refs> block — the browser context referenced at send time (metadata only):',
+    'User messages may carry a <page-refs> block — the browser context referenced at send time:',
     '- `tabs` lists the referenced tabs; `tabId` is the read handle. The `focused` flag marks the tab the user was viewing when sending — useful background, but NOT by itself the referent of a question.',
-    '- `elements` lists elements the user deliberately picked on a page (selector + a short text preview). Picking is the strongest signal of user intent in this block.',
-    '- Inline markers in the user message text like [element:2] refer to `elements` entries by `id`. Treat a marker as the exact thing the user is pointing at with the words around it.',
-    '- Element markers are inserted by the app and verified at send time — every [element:N] in a message is guaranteed to exist in `elements`. If the user asks about an element id that is not listed there, tell them it is not referenced.',
-    '- When you mention a picked element in your reply, describe it by its content (for example, quote a few words from its `preview`) — never echo the raw marker like [element:2] back to the user.',
+    "- `elements` lists the elements the user picked (metadata only; each element's content is embedded inline in the message text as a <picked-element> block).",
+    "- Some user messages embed picked element content inline inside <picked-element> blocks at the exact point of reference (attributes carry tabId/selector/tagName for re-reads). Answer questions about that content directly from the block; call read_element with the block's tabId+selector only when you need to re-read fresh content (the page may have changed).",
     '- Inline tokens like [url: example.com] are URLs the user pasted as references — they are self-describing; treat them as plain links, not element markers.',
-    '- Referent resolution order:',
-    '  1. An inline element marker — read that element (read_element with its tabId + selector) and answer about it. Its `preview` is only a hint; read the element for the real answer.',
-    '  2. Explicit page wording ("this page", "这个页面") — the focused tab.',
-    '  3. Otherwise ambiguous — ask a short clarifying question; do not guess, and do not open with read_page when a marker or a picked element exists.',
-    '- When you need the actual content of a page or element, call the read_page / read_element tools; tool results are live and win over the block metadata when they conflict.',
+    '- When you need the actual content of a referenced tab, call the read_page tool; tool results are live and win over the block metadata when they conflict.',
     '- A tool result saying unreadable / element not found usually means the tab was closed or has navigated away; respond accordingly and never retry with the exact same arguments.',
   );
   return parts.join('\n');
@@ -196,7 +229,9 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
       model,
       thinkingLevel: options.thinkingLevel,
       tools,
-      messages: options.history,
+      // 请求副本:user 消息的元素标记在请求时原位展开为 <picked-element> 块
+      // (内容取自该消息自身 refs 块);转录外副本 —— 持久化仍是标记 + refs 块
+      messages: options.history.map(toLlmMessage),
     },
     streamFn: (m, ctx, o) => models.streamSimple(m, ctx, o),
     sessionId: options.sessionId,
@@ -216,8 +251,8 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
-    // 以消息对象进入转录:content 内的 <page-refs> 块随消息原样抵达 LLM,无需任何剥离层
-    await agent.prompt(options.userMessage);
+    // 请求副本:本轮 user 消息同样经 toLlmMessage 展开(元素内容内嵌;悬空标记剥除)
+    await agent.prompt(toLlmMessage(options.userMessage) as UserMessage);
   } finally {
     unsubscribe();
     signal?.removeEventListener('abort', onAbort);

@@ -6,7 +6,7 @@ import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
 import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
-import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
+import { resolveElement, getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
 import { normalizePickedElements } from '@/lib/types';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
@@ -40,12 +40,17 @@ export function useChatTurn(params: {
   // turn 身份守卫:打断重发后旧 turn 的拆卸链与新 turn 并发,seq 不匹配者不得触碰共享状态
   const turnSeqRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // 发送解析窗口守卫:resolveElement 期间(非流式)防双击双发
+  const sendInFlightRef = useRef(false);
   // AI 自主压缩标记:compact_context 工具(A 道注册,safe)execute 只置位;轮末由本 hook 消费
   const compactRequestedRef = useRef(false);
 
   // AI Chat & Agent Loop
   const handleSendMessage = useCallback(
     async (userText: string) => {
+      // resolve 解析窗口防双击:窗口内(非流式)的第二次点击静默忽略,
+      // 避免 resolveElement 耗时期间双发(BYOK 双倍计费);流式中的打断重发不受影响
+      if (sendInFlightRef.current) return;
       const store = useAppStore.getState();
       // 若当前正在流式/有 pending 门控/压缩中，按发送视为用户打断当前轮次
       if (isStreaming || hasPendingGate || isCompacting) {
@@ -94,31 +99,29 @@ export function useChatTurn(params: {
           url: t.url,
           ...(t.id === focusedTabId ? { focused: true } : {}),
         }));
-        // B-1:id = 数据侧 elementId(与 ChatInput 插入的 [元素:N] 标记永久对齐)
-        const elements = snapElements.map((e) => ({
-          id: e.elementId,
-          tabId: e.tabId,
-          selector: e.selector,
-          tagName: e.tagName,
-          preview: e.preview,
+        // B-1:id = 数据侧 elementId(与 ChatInput 插入的 [element:N] 标记永久对齐)。
+        // 请求时内容内嵌:并行解析每个元素的当前 outerHTML(resolveElement 与 read_element
+        // 同源,content.ts 截 12000);失败 → 不设 content(请求展开时降级 preview),不阻塞发送。
+        // 解析窗口置位守卫,完成后立即复位(此后由 isStreaming 接管)
+        sendInFlightRef.current = true;
+        const resolved = await Promise.all(
+          snapElements.map(async (e) => {
+            const el = await resolveElement(e.tabId, e.selector).catch(() => null);
+            return { element: e, content: el?.html };
+          }),
+        );
+        sendInFlightRef.current = false;
+        const elements = resolved.map(({ element, content }) => ({
+          id: element.elementId,
+          tabId: element.tabId,
+          selector: element.selector,
+          tagName: element.tagName,
+          preview: element.preview,
+          ...(content ? { content } : {}),
         }));
         pageRefs = { tabs, elements };
       }
-      // S-1:悬空标记剥离 —— 文本中 id 不在本次 refs.elements 集合内的标记(如页面刷新
-      // 隐式清空后、或用户手打的伪造标记),发送前从 userText 剥离(连带前导空格),
-      // 避免 prompt 承诺落空;新旧协议标记([element:N] / [元素:N])统一匹配
-      let sendText = userText;
-      if (pageRefs) {
-        const validIds = new Set(pageRefs.elements.map((e) => e.id));
-        sendText = userText.replace(
-          /\s*\[(?:element|元素):(\d+)\]/g,
-          (m, num: string) => (validIds.has(parseInt(num, 10)) ? m : ''),
-        );
-      } else {
-        // 无 refs(includePageContext 关闭等):所有标记按定义悬空,全量剥离
-        sendText = userText.replace(/\s*\[(?:element|元素):(\d+)\]/g, '');
-      }
-      const userMessage = createUserMessage(sendText, pageRefs);
+      const userMessage = createUserMessage(userText, pageRefs);
       const messagesWithUser: ChatMessage[] = [...session.messages, userMessage];
 
       // 先落盘用户消息,长对话中断也不丢;规则 4:发送即清空该会话草稿
@@ -128,7 +131,7 @@ export function useChatTurn(params: {
         session.customTitle
           ? session.title
           : isFirstMessage
-            ? titleFromText(sendText)
+            ? titleFromText(userText)
             : session.title;
 
       const updatedSession: Session = {
