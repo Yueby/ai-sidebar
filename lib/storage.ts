@@ -191,12 +191,14 @@ export function sanitizeSessions(value: unknown): Session[] {
       : [];
     const draft = sanitizeDraft(s.draft);
     const compaction = sanitizeCompaction(s.compaction);
+    const customTitle = s.customTitle === true;
     out.push({
       id: s.id,
       title: typeof s.title === 'string' ? s.title : '新会话',
       messages,
       createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
       updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : Date.now(),
+      ...(customTitle ? { customTitle: true } : {}),
       ...(draft ? { draft } : {}),
       ...(compaction ? { compaction } : {}),
     });

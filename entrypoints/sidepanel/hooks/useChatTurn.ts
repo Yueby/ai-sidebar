@@ -34,6 +34,8 @@ export function useChatTurn(params: {
   compactRequestedRef: React.RefObject<boolean>;
   /** 轮末自主压缩触发(互斥守卫在 useCompact) */
   onAutoCompact: () => void;
+  /** 首轮对话结束后自动 AI 命名回调(若未手动命名) */
+  onAutoAiTitle?: (sessionId: string) => void;
 }) {
   const {
     settingsRef,
@@ -50,6 +52,7 @@ export function useChatTurn(params: {
     isCompacting,
     compactRequestedRef,
     onAutoCompact,
+    onAutoAiTitle,
   } = params;
 
   const [isStreaming, setIsStreaming] = useState(false);
@@ -132,9 +135,17 @@ export function useChatTurn(params: {
 
       // 先落盘用户消息,长对话中断也不丢;规则 4:发送即清空该会话草稿
       // (流式期间用户可继续为新消息添加引用,故清空在此刻完成而非转录落盘时)
+      // 若该会话此前已手动重命名过(customTitle: true),则自动截断命名不覆盖其已有标题
+      const nextTitle =
+        session.customTitle
+          ? session.title
+          : isFirstMessage
+            ? titleFromText(userText)
+            : session.title;
+
       const updatedSession: Session = {
         ...session,
-        title: isFirstMessage ? titleFromText(userText) : session.title,
+        title: nextTitle,
         messages: messagesWithUser,
         draft: { input: '', refTabs: [], pickedElements: [] },
         updatedAt: Date.now(),
@@ -163,6 +174,8 @@ export function useChatTurn(params: {
       abortControllerRef.current = abortCtrl;
       // AI 自主压缩标记(try 块内置位消费;finally 需访问,故提升到 try 外)
       let autoCompactPending = false;
+      // 记录是否应在完成轮次后尝试一次静默自动 AI 命名(仅首轮对话且非手动命名)
+      const shouldTriggerAutoAiTitle = isFirstMessage && !session.customTitle;
 
       try {
         const result = await runAgentTurn({
@@ -185,6 +198,9 @@ export function useChatTurn(params: {
           },
           onEvent: (event) => {
             if (event.type === 'message_update' && event.message.role === 'assistant') {
+              // S-1:打断重发后,旧 turn 的 aborted partial 事件流必须静默——
+              // 同会话守卫拦不住跨 turn,ghost 半截回答会悬空 + finalize 索引回移重挂载
+              if (seq !== turnSeqRef.current) return;
               const text = event.message.content
                 .filter((b) => b.type === 'text')
                 .map((b) => b.text)
@@ -197,6 +213,8 @@ export function useChatTurn(params: {
               setStreamingContent(text);
               setStreamingThinking(thinking);
             } else if (event.type === 'message_end' && event.message.role === 'assistant') {
+              // S-1:同上,旧 turn 的 message_end 不得进新 turn 的 in-flight
+              if (seq !== turnSeqRef.current) return;
               // 一条 assistant 完成:整体进 in-flight(思考/toolCall/正文齐全),
               // 同一批 setState 里重置 live 流式态,准备承载下一 turn —— 交接无闪烁
               const done = event.message;
@@ -247,6 +265,13 @@ export function useChatTurn(params: {
           // 完整转录已含 in-flight 各条 assistant → 同批清空 inFlight,避免重复渲染闪烁
           setInFlight(null);
           await saveSession(finalizedSession);
+
+          // 首轮对话成功完成:尝试静默自动 AI 命名一次(若失败则保持目前的截断标题)
+          if (shouldTriggerAutoAiTitle && onAutoAiTitle && !abortCtrl.signal.aborted && !result.errorMessage) {
+            setTimeout(() => {
+              onAutoAiTitle(finalizedSession.id);
+            }, 100);
+          }
         } else {
           setInFlight(null);
         }

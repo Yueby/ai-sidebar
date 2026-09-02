@@ -194,10 +194,26 @@ export function ChatInput({
         setSlashClosed(true);
         return;
       }
-      if ((e.key === 'Enter' || e.key === 'Tab') && filteredCommands.length > 0) {
+      if (e.key === 'Enter' && filteredCommands.length > 0) {
+        // Enter = 执行高亮命令(空参数;补充重点用 Tab 补全后追加)
         e.preventDefault();
         const cmd = filteredCommands[slashActiveIndex];
         if (cmd) executeCommand(cmd.name, '');
+        return;
+      }
+      if (e.key === 'Tab' && filteredCommands.length > 0) {
+        // Tab = 自动补全:填入高亮命令文本(尾随空格进入参数模式),光标到末尾;菜单自然关闭
+        e.preventDefault();
+        const cmd = filteredCommands[slashActiveIndex];
+        if (cmd) {
+          reportText(`/${cmd.name} `);
+          requestAnimationFrame(() => {
+            const ta = textareaRef.current;
+            if (ta) {
+              ta.selectionStart = ta.selectionEnd = ta.value.length;
+            }
+          });
+        }
         return;
       }
       // 空格:不拦截,自然进参数模式(含空格后浮层条件失效自动关闭)

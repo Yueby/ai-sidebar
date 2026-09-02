@@ -299,8 +299,12 @@ export function MessageList({
   }, [messages, activeToolLabels, toolResultsByCallId]);
 
   const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
-  // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(实例内冻结)
+  // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(随消息身份重估)
   const quietFrom = Math.max(0, messages.length - (quietTailCount ?? 0));
+  // Bug 4 根治:键 = 过滤后位置(msg-${i})。live 槽键 = 其「未来物化位置」——message_end 时
+  // in-flight 消息顶替 live 槽实例(零重挂载,MarkdownView memo 复用),finalize 后索引不变、
+  // 实例跨转录落盘持续复用,全程无 class/实例翻转 → 肉眼无闪烁
+  const filteredMessages = messages.filter((m) => m.role !== 'toolResult');
 
   return (
     <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-background">
@@ -408,26 +412,29 @@ export function MessageList({
           </div>
         ) : (
           <div ref={contentRef} className="flex flex-col gap-1 pb-4">
-            {messages
-              .filter((m) => m.role !== 'toolResult')
-              .map((msg, i) => (
-                <MessageItem
-                  key={`${msg.timestamp}-${i}`}
-                  message={msg}
-                  toolResults={toolResultsByCallId}
-                  activeToolNames={activeToolLabels}
-                  activeGateRequest={gateRequest}
-                  pendingGateTotal={pendingGateTotal}
-                  suppressEntryAnimation={i >= quietFrom}
-                  compactionInfo={
-                    compaction && msg.timestamp === compaction.summaryTimestamp
-                      ? { tokensBefore: compaction.tokensBefore }
-                      : null
-                  }
-                />
-              ))}
+            {/* S-3|位置键隐式契约:键依赖 pi agent-loop 的 message_end 与 newMessages 推送
+                同一消息对象引用(pi agent-loop.ts:355/368),React 才能跨 live→in-flight→落盘
+                复用同一 MessageItem 实例(live 槽键 = 未来物化位置);若 pi 升级改变此行为
+                (消息对象在转写间重建),流式交接会重现闪烁。 */}
+            {filteredMessages.map((msg, i) => (
+              <MessageItem
+                key={`msg-${i}`}
+                message={msg}
+                toolResults={toolResultsByCallId}
+                activeToolNames={activeToolLabels}
+                activeGateRequest={gateRequest}
+                pendingGateTotal={pendingGateTotal}
+                suppressEntryAnimation={i >= quietFrom}
+                compactionInfo={
+                  compaction && msg.timestamp === compaction.summaryTimestamp
+                    ? { tokensBefore: compaction.tokensBefore }
+                    : null
+                }
+              />
+            ))}
             {isStreaming && (
               <MessageItem
+                key={`msg-${filteredMessages.length}`}
                 message={{
                   role: 'assistant',
                   content: [{ type: 'text', text: streamingContent ?? '' }],

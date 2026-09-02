@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createModels, type AssistantMessage, type Context, type SimpleStreamOptions } from '@earendil-works/pi-ai';
 import type { Session, SessionDraft, Settings } from '@/lib/types';
 import { settingsItem, activeSessionIdItem, sanitizeSettings, createSession } from '@/lib/storage';
 import { migrateLegacySessions, saveSession, deleteSession } from '@/lib/sessionStore';
 import { getActiveTabMeta } from '@/lib/pageContext';
+import { findActiveModel } from '@/lib/providers';
+import { buildProvider } from '@/lib/agent';
 
 /** 空草稿(每次新建对象,避免共享可变引用) */
 export const cloneEmptyDraft = (): SessionDraft => ({ input: '', refTabs: [], pickedElements: [] });
@@ -10,6 +13,80 @@ export const EMPTY_DRAFT: SessionDraft = { input: '', refTabs: [], pickedElement
 
 /** 草稿持久化防抖窗口(ms):逐键输入只进内存,合并写 IndexedDB */
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
+
+/** AI 标题生成 System Prompt (Model-facing 英文规范) */
+const TITLE_GENERATION_SYSTEM_PROMPT = `You are a concise title generator. Generate a very short title (max 20 characters) for a conversation based on the user's initial messages and assistant's response.
+Match the language of the conversation. Output ONLY the plain text title, no quotes, no markdown, no punctuation at the end.`;
+
+/**
+ * 轻量生成会话短标题(AI 命名)
+ * thinking off, maxTokens 32, 失败抛出由调用方捕获兜底
+ */
+async function generateTitleWithAi(
+  settings: Settings,
+  messages: Session['messages'],
+  signal?: AbortSignal,
+): Promise<string> {
+  const active = findActiveModel(settings);
+  if (!active) throw new Error('No active model');
+
+  // 取前几条关键消息(用户与助手)做上下文
+  const sample = messages.slice(0, 4).map((m) => {
+    let text = '';
+    if (typeof m.content === 'string') {
+      text = m.content;
+    } else if (Array.isArray(m.content)) {
+      text = m.content
+        .filter((b) => b.type === 'text' && typeof (b as { text: string }).text === 'string')
+        .map((b) => (b as { text: string }).text)
+        .join('');
+    }
+    // 过滤 page-refs 等结构
+    text = text.replace(/<page-refs>[\s\S]*?<\/page-refs>/g, '').trim();
+    return `[${m.role}]: ${text.slice(0, 300)}`;
+  }).filter((s) => s.length > 5).join('\n\n');
+
+  if (!sample) throw new Error('No content to title');
+
+  const models = createModels();
+  models.setProvider(buildProvider(active.provider));
+  const model = models.getModel(active.provider.id, active.model.id);
+  if (!model) throw new Error(`Model ${active.model.id} not found`);
+
+  const context: Context = {
+    systemPrompt: TITLE_GENERATION_SYSTEM_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: `Conversation excerpt:\n${sample}\n\nTitle:` }],
+        timestamp: Date.now(),
+      },
+    ],
+  };
+
+  const options: SimpleStreamOptions = {
+    maxTokens: 32,
+    signal,
+    cacheRetention: 'none',
+  };
+
+  const response: AssistantMessage = await models.completeSimple(model, context, options);
+  if (response.stopReason === 'error') {
+    throw new Error(response.errorMessage || 'AI titling error');
+  }
+
+  const raw = (response.content || [])
+    .filter((b) => b.type === 'text')
+    .map((b) => (b as { text: string }).text)
+    .join('')
+    .replace(/^["'“”‘’`\s]+|["'“”‘’`\s]+$/g, '')
+    .split('\n')[0]
+    ?.trim() ?? '';
+
+  if (!raw) throw new Error('Empty AI title response');
+  // 长度保证 ≤ 20 字符
+  return raw.length > 20 ? `${raw.slice(0, 20)}…` : raw;
+}
 
 /** 新会话草稿预填(规则 1):includePageContext 开启时自动引用当前活动标签页 */
 async function buildInitialDraft(includePageContext: boolean): Promise<SessionDraft | undefined> {
@@ -20,7 +97,7 @@ async function buildInitialDraft(includePageContext: boolean): Promise<SessionDr
 
 /**
  * 会话域 hook:sessions/activeSessionId/loaded 状态、原子初始化(storage 读取 + 迁移 +
- * settings 初值/watch 由本 effect 一并完成)、IndexedDB 持久化、会话增删切。
+ * settings 初值/watch 由本 effect 一并完成)、IndexedDB 持久化、会话增删切与命名。
  * 同时持有草稿持久化核心(commitSessions/patchActiveDraft/防抖队列)——草稿即 Session.draft,
  * 存储在会话对象上,故归会话域;其他域经参数消费,不建 Context。
  */
@@ -38,11 +115,15 @@ export function useSessionManager(params: {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // 正在进行 AI 命名的会话 ID 集合(防并发重入与 UI loading 态)
+  const [titlingSessionIds, setTitlingSessionIds] = useState<Set<string>>(new Set());
 
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
   const activeSessionIdRef = useRef(activeSessionId);
   activeSessionIdRef.current = activeSessionId;
+  const titlingSessionIdsRef = useRef(titlingSessionIds);
+  titlingSessionIdsRef.current = titlingSessionIds;
 
   // Initialize and subscribe to Storage(原子 init:settings 初值/watch + 会话迁移/预填)
   useEffect(() => {
@@ -181,6 +262,83 @@ export function useSessionManager(params: {
   // 面板关闭(组件卸载)前把未落盘的草稿立即写回
   useEffect(() => () => flushDraftSaves(), [flushDraftSaves]);
 
+  /** 手动重命名会话(标记 customTitle: true, 以后绝不被自动/AI 命名覆盖) */
+  const handleRenameSession = useCallback(
+    async (id: string, newTitle: string) => {
+      const trimmed = newTitle.trim();
+      if (!trimmed) return;
+      const prev = sessionsRef.current;
+      const idx = prev.findIndex((s) => s.id === id);
+      if (idx < 0) return;
+      const session = prev[idx]!;
+      if (session.title === trimmed && session.customTitle) return;
+
+      const updated: Session = {
+        ...session,
+        title: trimmed,
+        customTitle: true,
+        updatedAt: Date.now(),
+      };
+      const next = [...prev];
+      next[idx] = updated;
+      sessionsRef.current = next;
+      setSessions(next);
+      await saveSession(updated);
+    },
+    []
+  );
+
+  /** 手动触发或自动触发 AI 命名 */
+  const handleAiTitleSession = useCallback(
+    async (id: string, isAuto = false) => {
+      const session = sessionsRef.current.find((s) => s.id === id);
+      if (!session) return;
+      // 若已手动命名过，AI 命名不执行
+      if (session.customTitle) return;
+      // 避免并发重入
+      if (titlingSessionIdsRef.current.has(id)) return;
+
+      // 仅当会话中有消息时才生成
+      if (session.messages.length === 0) return;
+
+      // 登记 loading 态
+      setTitlingSessionIds((prev) => new Set(prev).add(id));
+
+      try {
+        const title = await generateTitleWithAi(settingsRef.current, session.messages);
+        // 生成成功，更新会话标题(不标记 customTitle，方便后续再次 AI 命名，但已脱离默认状态)
+        const currentList = sessionsRef.current;
+        const targetIdx = currentList.findIndex((s) => s.id === id);
+        if (targetIdx >= 0) {
+          const currentTarget = currentList[targetIdx]!;
+          // 若在生成期间用户进行了手动重命名，则不覆盖
+          if (currentTarget.customTitle) return;
+
+          const updated: Session = {
+            ...currentTarget,
+            title,
+            updatedAt: Date.now(),
+          };
+          const next = [...currentList];
+          next[targetIdx] = updated;
+          sessionsRef.current = next;
+          setSessions(next);
+          await saveSession(updated);
+        }
+      } catch (err) {
+        // AI 命名失败静默降级，如果是手动点击则保留原标题；自动命名已有截断兜底
+        console.warn('AI titling failed, skipping or fallback retained:', err);
+      } finally {
+        setTitlingSessionIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [settingsRef]
+  );
+
   // 会话切换时冲销未处理门控请求并重置门控统计
   const handleSelectSession = useCallback(
     async (id: string) => {
@@ -289,5 +447,8 @@ export function useSessionManager(params: {
     handleSelectSession,
     handleNewSession,
     handleDeleteSession,
+    handleRenameSession,
+    handleAiTitleSession,
+    titlingSessionIds,
   };
 }

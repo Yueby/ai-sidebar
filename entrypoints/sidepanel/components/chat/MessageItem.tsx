@@ -384,8 +384,15 @@ export function MessageItem({
   suppressEntryAnimation,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
-  // 入场动画抑制:仅取首帧 prop(实例冻结);in-flight 消息 finalize 后 key 稳定复用实例,不会重播动画
+  // 入场动画抑制:随消息身份重估——同位置实例在 live→物化→finalize 间复用(key 稳定),
+  // 抑制态冻结可避免 finalize 的 class 翻转闪烁;会话切换(消息对象全变)时重读 prop,
+  // 入场动画按新会话正常播放
   const suppressAnimRef = useRef(Boolean(suppressEntryAnimation));
+  const lastMessageRef = useRef(message);
+  if (lastMessageRef.current !== message) {
+    lastMessageRef.current = message;
+    suppressAnimRef.current = Boolean(suppressEntryAnimation);
+  }
 
   // 引用 chips:从本条消息 content 的 <page-refs> 块解析(与 LLM 消费同一份字符串,零中间状态)
   const pageRefs = useMemo(
@@ -664,9 +671,16 @@ export function MessageItem({
             </div>
           )}
 
-          {/* 无气泡段但有状态(纯工具卡报错等):状态独立壳 */}
-          {!hasBubble && hasStatus && (
+          {/* 无气泡段但有 live 思考/状态(纯 thinking 阶段、纯工具卡报错等):气泡壳兜底。
+              Bug 3 修复:仅 thinking 时此前整列无气泡壳 → 气泡"消失"空档;此处保证壳连续 */}
+          {!hasBubble && (hasStatus || liveThinking) && (
             <div className="relative min-w-0 w-fit max-w-full rounded-lg border bg-card p-2.5 text-card-foreground overflow-hidden">
+              {liveThinking && (
+                <ThinkingBlock
+                  thinking={liveThinking}
+                  isGenerating={Boolean(isStreaming) && !rawText}
+                />
+              )}
               {statusNodes}
             </div>
           )}

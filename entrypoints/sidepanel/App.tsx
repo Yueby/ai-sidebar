@@ -133,6 +133,9 @@ export default function App() {
     isCompacting: compact.isCompacting,
     compactRequestedRef,
     onAutoCompact,
+    onAutoAiTitle: (sessionId) => {
+      void session.handleAiTitleSession(sessionId, true);
+    },
   });
   // 流式状态镜像(互斥守卫取实时值)
   isStreamingRef.current = chat.isStreaming;
@@ -339,8 +342,11 @@ export default function App() {
           <ChatHeader
             sessions={session.sessions}
             activeSessionId={session.activeSessionId}
+            titlingSessionIds={session.titlingSessionIds}
             onSelectSession={session.handleSelectSession}
             onDeleteSession={session.handleDeleteSession}
+            onRenameSession={session.handleRenameSession}
+            onAiTitleSession={session.handleAiTitleSession}
             onNewSession={session.handleNewSession}
             onOpenSettings={handleOpenSettings}
           />

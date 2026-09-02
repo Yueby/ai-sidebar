@@ -146,6 +146,8 @@ export interface Session {
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
+  /** 是否为用户手动重命名(为 true 时后续静默 AI 自动命名绝不覆盖) */
+  customTitle?: boolean;
   /** 会话草稿;旧数据缺省 undefined,由 UI 视为空草稿 */
   draft?: SessionDraft;
   /** 上下文压缩标记;旧数据缺省 undefined */

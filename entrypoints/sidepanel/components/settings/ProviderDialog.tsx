@@ -298,15 +298,28 @@ export function ProviderDialog({
     return n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`;
   };
 
+  // 模型列表按名称自然序排序(大小写不敏感;拉取与手动添加一视同仁)
+  const sortedModels = useMemo(
+    () =>
+      [...draft.models].sort((a, b) =>
+        (a.displayName || a.id).localeCompare(b.displayName || b.id, undefined, {
+          sensitivity: 'base',
+          numeric: true,
+        }),
+      ),
+    [draft.models],
+  );
+
   const filteredModels = useMemo(() => {
     const q = modelSearch.trim().toLowerCase();
-    if (!q) return draft.models;
-    return draft.models.filter(
+    const base = sortedModels;
+    if (!q) return base;
+    return base.filter(
       (m) =>
         m.id.toLowerCase().includes(q) ||
         (m.displayName && m.displayName.toLowerCase().includes(q))
     );
-  }, [draft.models, modelSearch]);
+  }, [sortedModels, modelSearch]);
 
   const filteredCandidates = useMemo(() => {
     if (!candidates) return [];

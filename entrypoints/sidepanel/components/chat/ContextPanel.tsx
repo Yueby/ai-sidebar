@@ -58,11 +58,11 @@ export function ContextPanel({
           className="flex items-center justify-center size-7 rounded-md outline-none transition-colors hover:bg-muted/70 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
           title="点击查看上下文详情与压缩"
         >
+          {/* Bug 5:hover 简要 tooltip 与点击面板并存(Radix tooltip 在 pointerdown 时自动收起,不冲突) */}
           <ContextRing
             usage={usage}
             isStreaming={isStreaming}
             modelName={modelName}
-            showTooltip={false}
           />
         </button>
       </PopoverTrigger>
