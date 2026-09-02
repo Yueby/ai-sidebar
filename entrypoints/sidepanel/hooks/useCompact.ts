@@ -8,6 +8,7 @@ import { effectiveMessages } from '@/lib/contextTokens';
 import { findCutIndex, runCompact } from '@/lib/compaction';
 import { buildProvider } from '@/lib/agent';
 import { collectPageRefs, renderPageRefsBlock } from '@/lib/pageRefs';
+import { useAppStore } from '../store';
 
 /**
  * 上下文压缩域 hook:isCompacting 状态 + handleCompact(互斥守卫 → runCompact → 非破坏性落盘)。
@@ -22,10 +23,8 @@ export function useCompact(params: {
   sessionsRef: React.RefObject<Session[]>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   pendingDraftSavesRef: React.RefObject<Map<string, Session>>;
-  pendingGateActive: boolean;
   /** 流式状态 ref(声明顺序:本 hook 先于 useChatTurn,经 ref 读实时值,回调取用时判定) */
   isStreamingRef: React.RefObject<boolean>;
-  setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
 }) {
   const {
     settingsRef,
@@ -33,18 +32,19 @@ export function useCompact(params: {
     sessionsRef,
     setSessions,
     pendingDraftSavesRef,
-    pendingGateActive,
     isStreamingRef,
-    setErrorMessage,
   } = params;
 
   const [isCompacting, setIsCompacting] = useState(false);
   const compactAbortRef = useRef<AbortController | null>(null);
+  // 门控/错误域:store 直读(一期杀绕环)
+  const hasPendingGate = useAppStore((s) => s.activeGate !== null);
+  const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
   const handleCompact = useCallback(
     async ({ customInstructions }: { customInstructions?: string } = {}): Promise<boolean> => {
       // 互斥守卫:流式/挂起门控/压缩中任一 true 则拒绝
-      if (isStreamingRef.current || pendingGateActive || isCompacting) return false;
+      if (isStreamingRef.current || hasPendingGate || isCompacting) return false;
       // S-1:按 ref 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
       const session =
         sessionsRef.current.find((s) => s.id === currentSession?.id) ?? currentSession;
@@ -111,7 +111,7 @@ export function useCompact(params: {
     },
     [
       isStreamingRef,
-      pendingGateActive,
+      hasPendingGate,
       isCompacting,
       currentSession,
       settingsRef,

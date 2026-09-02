@@ -6,6 +6,7 @@ import { migrateLegacySessions, saveSession, deleteSession } from '@/lib/session
 import { getActiveTabMeta } from '@/lib/pageContext';
 import { findActiveModel } from '@/lib/providers';
 import { buildProvider } from '@/lib/agent';
+import { useAppStore } from '../store';
 
 /** 空草稿(每次新建对象,避免共享可变引用) */
 export const cloneEmptyDraft = (): SessionDraft => ({ input: '', refTabs: [], pickedElements: [] });
@@ -107,10 +108,10 @@ export function useSessionManager(params: {
   settingsRef: React.RefObject<Settings>;
   /** 会话切换/新建/删除时冲销门控(门控域提供) */
   resetGates: () => void;
-  /** 会话切换/新建时清错误(对话域提供) */
-  clearErrorMessage: () => void;
 }) {
-  const { setSettings, settingsRef, resetGates, clearErrorMessage } = params;
+  const { setSettings, settingsRef, resetGates } = params;
+  // 错误域:store 直读(一期杀绕环——clearErrorMessage 参数收敛)
+  const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -362,9 +363,9 @@ export function useSessionManager(params: {
       }
       setActiveSessionId(id);
       await activeSessionIdItem.setValue(id);
-      clearErrorMessage();
+      setErrorMessage(null);
     },
-    [flushDraftSaves, resetGates, clearErrorMessage]
+    [flushDraftSaves, resetGates, setErrorMessage]
   );
 
   const handleNewSession = useCallback(async () => {
@@ -373,7 +374,7 @@ export function useSessionManager(params: {
       ? sessionsRef.current.find((s) => s.id === activeSessionIdRef.current) ?? null
       : null;
     if (cur && cur.messages.length === 0) {
-      clearErrorMessage();
+      setErrorMessage(null);
       return;
     }
     // 新建会话冲销所有 pending 门控
@@ -390,8 +391,8 @@ export function useSessionManager(params: {
     setActiveSessionId(newSess.id);
     await saveSession(newSess);
     await activeSessionIdItem.setValue(newSess.id);
-    clearErrorMessage();
-  }, [flushDraftSaves, resetGates, clearErrorMessage, settingsRef]);
+    setErrorMessage(null);
+  }, [flushDraftSaves, resetGates, setErrorMessage, settingsRef]);
 
   const handleDeleteSession = useCallback(
     async (id: string) => {

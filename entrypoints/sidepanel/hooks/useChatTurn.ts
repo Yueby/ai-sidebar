@@ -7,6 +7,7 @@ import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
+import { useAppStore } from '../store';
 import { EMPTY_DRAFT } from './useSessionManager';
 
 /**
@@ -23,11 +24,6 @@ export function useChatTurn(params: {
   setActiveSessionId: (id: string) => void;
   draftRef: React.RefObject<SessionDraft>;
   pendingDraftSavesRef: React.RefObject<Map<string, Session>>;
-  /** 是否有挂起门控(打断判定) */
-  pendingGateActive: boolean;
-  dismissPendingGates: () => void;
-  resetResolvedGateCount: () => void;
-  setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
   /** 上下文压缩进行中(压缩/发送互斥) */
   isCompacting: boolean;
   /** AI 自主压缩标记:compact_context 工具执行时置位(App 持有),turn finalize 后消费 */
@@ -45,15 +41,18 @@ export function useChatTurn(params: {
     setActiveSessionId,
     draftRef,
     pendingDraftSavesRef,
-    pendingGateActive,
-    dismissPendingGates,
-    resetResolvedGateCount,
-    setErrorMessage,
     isCompacting,
     compactRequestedRef,
     onAutoCompact,
     onAutoAiTitle,
   } = params;
+
+  // 门控/错误域:store 直读(一期杀绕环——pendingGateActive/dismissPendingGates/
+  // resetResolvedGateCount/setErrorMessage 参数全部收敛)
+  const hasPendingGate = useAppStore((s) => s.activeGate !== null);
+  const dismissPendingGates = useAppStore((s) => s.dismissPendingGates);
+  const resetResolvedGateCount = useAppStore((s) => s.resetResolvedGateCount);
+  const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -77,7 +76,7 @@ export function useChatTurn(params: {
   const handleSendMessage = useCallback(
     async (userText: string) => {
       // 若当前正在流式/有 pending 门控/压缩中，按发送视为用户打断当前轮次
-      if (isStreaming || pendingGateActive || isCompacting) {
+      if (isStreaming || hasPendingGate || isCompacting) {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
         }
@@ -311,7 +310,7 @@ export function useChatTurn(params: {
     },
     [
       isStreaming,
-      pendingGateActive,
+      hasPendingGate,
       isCompacting,
       currentSession,
       settingsRef,

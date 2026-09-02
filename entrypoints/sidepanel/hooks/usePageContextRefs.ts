@@ -7,6 +7,7 @@ import {
   startPickElement,
   type RefTab,
 } from '@/lib/pageContext';
+import { useAppStore } from '../store';
 
 /**
  * 页面引用域 hook:refTabs/pickedElements 读写(写入当前会话草稿)、tabs.onUpdated/onRemoved
@@ -22,7 +23,6 @@ export function usePageContextRefs(params: {
   draftRef: React.RefObject<SessionDraft>;
   commitSessions: (next: Session[], changedIds: string[]) => void;
   sessionsRef: React.RefObject<Session[]>;
-  setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
 }) {
   const {
     settingsRef,
@@ -32,8 +32,9 @@ export function usePageContextRefs(params: {
     draftRef,
     commitSessions,
     sessionsRef,
-    setErrorMessage,
   } = params;
+  // 错误域:store 直读(一期杀绕环)
+  const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
   // 进行中的框选:结果回传时归属 tab;并保留启动时的页面元信息作兜底
   // (回传时 tabs 实时查询可能失败/URL 不可见,此时仍需能加引用,不能静默丢弃)

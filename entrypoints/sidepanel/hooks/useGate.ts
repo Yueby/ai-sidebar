@@ -1,81 +1,29 @@
-import { useCallback, useEffect, useState } from 'react';
-import { type GateRequest, type GateResponse, setGateHandler, flushPendingGates } from '../gateAdapter';
+import { useCallback } from 'react';
+import { useAppStore } from '../store';
 
 /**
- * 门控域 hook:activeGate 状态、UI 处理器注册(gateAdapter)、4 个应答回调、
- * 冲销工具(dismissPendingGates=仅冲销;resetGates=冲销+重置计数,会话切换/新建/删除用)。
- * gatePagination / quietTailCount 跨门控+对话+会话三域,由 App 组合层派生。
+ * 门控域 hook(store 切片消费层):
+ * - activeGate/resolvedGateCount 从 store 读取(useStore selector);
+ * - 4 个应答回调 = store action 薄层(签名与重构前一致,App/ApprovalSection 零改动);
+ * - dismissPendingGates/resetGates/resetResolvedGateCount 直通 store;
+ * - handler 注册已模块化(store/index.ts 模块级 setGateHandler),本 hook 无 effect。
  */
 export function useGate() {
-  // 工具门控请求(confirm/ask)
-  const [activeGate, setActiveGate] = useState<{
-    request: GateRequest;
-    resolve: (res: GateResponse) => void;
-  } | null>(null);
+  const activeGate = useAppStore((s) => s.activeGate);
+  const resolvedGateCount = useAppStore((s) => s.resolvedGateCount);
+  const approveGate = useAppStore((s) => s.approveGate);
+  const denyGate = useAppStore((s) => s.denyGate);
+  const answerGate = useAppStore((s) => s.answerGate);
+  const cancelGate = useAppStore((s) => s.cancelGate);
+  const dismissPendingGates = useAppStore((s) => s.dismissPendingGates);
+  const resetGates = useAppStore((s) => s.resetGates);
+  const resetResolvedGateCount = useAppStore((s) => s.resetResolvedGateCount);
 
-  // 本轮会话中已完成处理的门控次数(用于分页序号与总数统计)
-  const [resolvedGateCount, setResolvedGateCount] = useState(0);
-
-  // 门控响应回调封装
-  const handleGateApprove = useCallback(() => {
-    if (activeGate) {
-      setResolvedGateCount((c) => c + 1);
-      activeGate.resolve({ kind: 'confirm', approved: true });
-      setActiveGate(null);
-    }
-  }, [activeGate]);
-
-  const handleGateDeny = useCallback(() => {
-    if (activeGate) {
-      setResolvedGateCount((c) => c + 1);
-      activeGate.resolve({ kind: 'confirm', approved: false });
-      setActiveGate(null);
-    }
-  }, [activeGate]);
-
-  const handleGateAnswer = useCallback((answer: string) => {
-    if (activeGate) {
-      setResolvedGateCount((c) => c + 1);
-      activeGate.resolve({ kind: 'ask', answer });
-      setActiveGate(null);
-    }
-  }, [activeGate]);
-
-  const handleGateCancel = useCallback(() => {
-    if (activeGate) {
-      setResolvedGateCount((c) => c + 1);
-      activeGate.resolve({ kind: 'ask', answer: '', cancelled: true });
-      setActiveGate(null);
-    }
-  }, [activeGate]);
-
-  /** 冲销挂起门控(安全拒绝),不重置计数:停止生成/打断重发/进设置视图用 */
-  const dismissPendingGates = useCallback(() => {
-    flushPendingGates();
-    setActiveGate(null);
-  }, []);
-
-  /** 冲销挂起门控并重置计数:会话切换/新建/删除用 */
-  const resetGates = useCallback(() => {
-    dismissPendingGates();
-    setResolvedGateCount(0);
-  }, [dismissPendingGates]);
-
-  /** 仅重置门控计数:新一轮发送初始化时用 */
-  const resetResolvedGateCount = useCallback(() => setResolvedGateCount(0), []);
-
-  // 挂载时向 gateAdapter 注册 UI 处理函数
-  useEffect(() => {
-    setGateHandler((req: GateRequest) => {
-      return new Promise<GateResponse>((resolve) => {
-        setActiveGate({ request: req, resolve });
-      });
-    });
-    return () => {
-      setGateHandler(null);
-      flushPendingGates();
-    };
-  }, []);
+  // 门控响应回调(store action 薄层)
+  const handleGateApprove = useCallback(() => approveGate(), [approveGate]);
+  const handleGateDeny = useCallback(() => denyGate(), [denyGate]);
+  const handleGateAnswer = useCallback((answer: string) => answerGate(answer), [answerGate]);
+  const handleGateCancel = useCallback(() => cancelGate(), [cancelGate]);
 
   return {
     activeGate,

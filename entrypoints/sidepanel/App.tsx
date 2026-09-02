@@ -12,6 +12,7 @@ import { useSessionManager } from './hooks/useSessionManager';
 import { useChatTurn } from './hooks/useChatTurn';
 import { usePageContextRefs } from './hooks/usePageContextRefs';
 import { useCompact } from './hooks/useCompact';
+import { useAppStore } from './store';
 
 // Components
 import { ChatHeader } from './components/chat/ChatHeader';
@@ -35,9 +36,9 @@ export default function App() {
   const [selectedProviderForEdit, setSelectedProviderForEdit] = useState<ProviderConfig | null>(null);
   const [isCreatingNewProvider, setIsCreatingNewProvider] = useState(false);
 
-  // errorMessage:会话域(切换/新建清空)与对话域(发送失败写入)共同消费,状态提升到组合层
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const clearErrorMessage = useCallback(() => setErrorMessage(null), []);
+  // errorMessage:errorSlice(会话域切换/新建清空,对话/压缩/框选域写入)
+  const errorMessage = useAppStore((s) => s.errorMessage);
+  const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
   // ── 门控域 ──────────────────────────────────────────────────────
   const gate = useGate();
@@ -47,7 +48,6 @@ export default function App() {
     setSettings,
     settingsRef,
     resetGates: gate.resetGates,
-    clearErrorMessage,
   });
 
   // Model & Provider Helpers
@@ -109,9 +109,7 @@ export default function App() {
     sessionsRef: session.sessionsRef,
     setSessions: session.setSessions,
     pendingDraftSavesRef: session.pendingDraftSavesRef,
-    pendingGateActive: gate.activeGate !== null,
     isStreamingRef,
-    setErrorMessage,
   });
   const onAutoCompact = useCallback(() => {
     void compact.handleCompact();
@@ -126,10 +124,6 @@ export default function App() {
     setActiveSessionId: session.setActiveSessionId,
     draftRef: session.draftRef,
     pendingDraftSavesRef: session.pendingDraftSavesRef,
-    pendingGateActive: gate.activeGate !== null,
-    dismissPendingGates: gate.dismissPendingGates,
-    resetResolvedGateCount: gate.resetResolvedGateCount,
-    setErrorMessage,
     isCompacting: compact.isCompacting,
     compactRequestedRef,
     onAutoCompact,
@@ -149,7 +143,6 @@ export default function App() {
     draftRef: session.draftRef,
     commitSessions: session.commitSessions,
     sessionsRef: session.sessionsRef,
-    setErrorMessage,
   });
 
   // 斜杠命令分发:/compact(可附补充重点)→ 压缩;/clear → 复用新建会话;/help → 浮层列命令
