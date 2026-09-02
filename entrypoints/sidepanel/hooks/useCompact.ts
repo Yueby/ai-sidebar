@@ -34,7 +34,7 @@ export function useCompact() {
       // 互斥守卫:流式/挂起门控/压缩中任一 true 则拒绝
       const store = useAppStore.getState();
       if (store.isStreaming || hasPendingGate || isCompacting) return false;
-      // S-1:按 store 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
+      // 按 store 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
       const latestCurrent = selectCurrentSession(store);
       const session: Session | undefined =
         store.sessions.find((s) => s.id === latestCurrent?.id) ?? latestCurrent ?? undefined;
@@ -60,7 +60,7 @@ export function useCompact() {
           customInstructions,
         });
 
-        // S-6:压缩期间会话可能已被删除——不复活,静默丢弃(对照 useChatTurn finalize 的 latest 守卫)
+        // 压缩期间会话可能已被删除——不复活,静默丢弃(对照 useChatTurn finalize 的 latest 守卫)
         if (!useAppStore.getState().sessions.some((s) => s.id === session.id)) {
           return false;
         }

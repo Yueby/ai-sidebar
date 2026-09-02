@@ -294,7 +294,7 @@
 .composer-editor p + p {
   margin-top: 0.25rem;
 }
-/* ---- 元素内容预览 chip(共享:输入框徽章 NodeView / 用户气泡 chip;拍板版 label=预览) ---- */
+/* ---- 元素内容预览 chip(共享:输入框徽章 NodeView / 用户气泡 chip,label=预览) ---- */
 .element-chip {
   display: inline-flex;
   align-items: center;

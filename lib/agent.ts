@@ -15,11 +15,11 @@ import { normalizeBaseUrl } from './providers';
 import type { RefTab } from './pageContext';
 import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
 import { getTools } from './tools/registry';
-import { collectPageRefs, PAGE_REFS_TAG, parsePageRefs } from './pageRefs';
+import { collectPageRefs, ELEMENT_PREVIEW_LIMIT, PAGE_REFS_TAG, parsePageRefs } from './pageRefs';
 
 export type { AgentEvent } from '@earendil-works/pi-agent-core';
 
-// ── 请求时元素内容内嵌(拍板协议;存储仍为 [element:N] 标记 + refs 块)─────────────────
+// ── 请求时元素内容内嵌:存储仍为 [element:N] 标记 + refs 块,LLM 请求副本原位展开 ──────────────────
 
 const ELEMENT_MARKER_TEST_RE = /\[(?:element|元素):\d+\]/;
 const ELEMENT_MARKER_GLOBAL_RE = /\[(?:element|元素):(\d+)\]/g;
@@ -28,9 +28,9 @@ type RefElement = PageRefs['elements'][number];
 
 /**
  * user 消息文本段 → LLM 请求文本:元素标记([element:N],兼容旧 [元素:N])用该消息
- * 自身 refs 块中对应元素**原位展开**为 <picked-element> 块(content 优先,缺省降级 preview);
- * 无对应 id 的伪造/悬空标记剥除。只处理 <page-refs> 之前的文本段,
- * refs JSON 原样保留(元数据 + 工具白名单语义),不触碰块内页面内容。
+ * 自身 refs 块中对应元素**原位展开**为 <picked-element> 块,展开体 = preview(发送时
+ * 采集的 300 字 excerpt,达上限追加 [...truncated]);无对应 id 的伪造/悬空标记剥除。
+ * 只处理 <page-refs> 之前的文本段,refs JSON 原样保留(元数据 + 工具白名单语义)。
  */
 function toLlmUserText(content: string): string {
   if (!ELEMENT_MARKER_TEST_RE.test(content)) return content;
@@ -44,9 +44,12 @@ function toLlmUserText(content: string): string {
   const expanded = textPart.replace(ELEMENT_MARKER_GLOBAL_RE, (marker, idStr: string) => {
     const el = elementsById.get(parseInt(idStr, 10));
     if (!el) return ''; // 伪造/悬空标记:剥除
-    const body = el.content ?? el.preview ?? '';
+    const preview = el.preview ?? '';
     // 属性转义:防病态 selector/tagName 中的引号破坏 picked-element 标签结构
     const esc = (v: string) => v.replace(/"/g, '&quot;');
+    const body = preview
+      ? `${preview}${preview.length >= ELEMENT_PREVIEW_LIMIT ? '\n[...truncated]' : ''}`
+      : '';
     return `<picked-element tabId="${el.tabId}" selector="${esc(el.selector)}" tagName="${esc(el.tagName)}">\n${body}\n</picked-element>`;
   });
   return expanded + blockPart;
@@ -102,11 +105,8 @@ export function buildProvider(p: ProviderConfig) {
 }
 
 /**
- * 组装 system prompt:身份/语言 + <page-refs> 块协议的常量使用规则。
- * 定稿方案:引用清单不再进 system prompt(零中间层)——块随 user 消息 content 原样抵达 LLM,
- * 这里只解释协议;实时内容一律经 read_page / read_element 工具获取。
- * Model-facing 文本一律英文(硬约束);注释是给开发者看的,保持中文。
- * 回复语言动态注入:sidepanel 上下文直读 navigator.language,异常时省略该行。
+ * 组装 system prompt:身份 + <page-refs> 块协议的常量使用规则(压缩版,省 token)。
+ * Model-facing 文本一律英文;注释是给开发者看的,保持中文。
  */
 export function buildSystemPrompt(): string {
   const now = new Date();
@@ -115,25 +115,13 @@ export function buildSystemPrompt(): string {
     // 不带时刻(精确时刻由 read_time 工具覆盖):system prompt 保持跨轮稳定,前缀缓存不失效
     `Today is ${weekdayName(now)}, ${localDate(now)} (${utcOffsetLabel(now)}).`,
   ];
-  try {
-    const lang = navigator.language;
-    if (lang) {
-      parts.push(
-        `The user's browser language is ${lang}; if the user's message language is unclear, prefer it.`,
-      );
-    }
-  } catch {
-    // navigator.language 不可用:省略该行
-  }
   parts.push(
     '',
     'User messages may carry a <page-refs> block — the browser context referenced at send time:',
-    '- `tabs` lists the referenced tabs; `tabId` is the read handle. The `focused` flag marks the tab the user was viewing when sending — useful background, but NOT by itself the referent of a question.',
-    "- `elements` lists the elements the user picked (metadata only; each element's content is embedded inline in the message text as a <picked-element> block).",
-    "- Some user messages embed picked element content inline inside <picked-element> blocks at the exact point of reference (attributes carry tabId/selector/tagName for re-reads). Answer questions about that content directly from the block; call read_element with the block's tabId+selector only when you need to re-read fresh content (the page may have changed).",
-    '- Inline tokens like [url: example.com] are URLs the user pasted as references — they are self-describing; treat them as plain links, not element markers.',
-    '- When you need the actual content of a referenced tab, call the read_page tool; tool results are live and win over the block metadata when they conflict.',
-    '- A tool result saying unreadable / element not found usually means the tab was closed or has navigated away; respond accordingly and never retry with the exact same arguments.',
+    '- tabs lists referenced tabs; tabId is the read handle; focused = the tab the user was viewing (context, not the referent).',
+    "- <picked-element …> blocks in message text embed a picked element's preview at the point of reference; attributes (tabId/selector) are the re-read handle via read_element. Previews are excerpts; full-page content is read via read_page.",
+    '- Inline tokens like [url: example.com] are URLs the user pasted as references — self-describing; treat them as plain links, not element markers.',
+    '- Tool results are live and win over the block metadata when they conflict.',
   );
   return parts.join('\n');
 }

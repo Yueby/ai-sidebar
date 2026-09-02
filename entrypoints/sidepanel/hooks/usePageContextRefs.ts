@@ -235,8 +235,8 @@ export function usePageContextRefs(params: {
           return;
         }
         // 「引用页面 + 元素 chip」一次性写入当前会话草稿(原子,避免两次 commit)。
-        // B-1 编号单源:elementId 由草稿数据侧分配 —— 先按数组序补齐存量(旧数据兼容,
-        // 顺手持久化补齐值),再取 max+1 单调递增;存 draft 即随草稿持久化,页面刷新后继续递增
+        // elementId 由草稿数据侧分配:先按数组序补齐存量(旧数据兼容,顺手持久化补齐值),
+        // 再取 max+1 单调递增;存 draft 即随草稿持久化,页面刷新后继续递增
         patchActiveDraft((d) => {
           const refTabs = d.refTabs.some((t) => t.id === tabId)
             ? d.refTabs

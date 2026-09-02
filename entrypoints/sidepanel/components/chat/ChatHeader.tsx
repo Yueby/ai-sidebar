@@ -204,7 +204,7 @@ export function ChatHeader({
                           value={editTitleValue}
                           onChange={(e) => setEditTitleValue(e.target.value)}
                           onKeyDown={(e) => {
-                            // S-2:Radix DropdownMenuContent 会捕获 ArrowUp/Down 劫持光标移动,
+                            // Radix DropdownMenuContent 会捕获 ArrowUp/Down 劫持光标移动,
                             // 阻断冒泡让行内编辑框保有原生输入键位(Enter/Esc 处理保留在后)
                             e.stopPropagation();
                             if (e.key === 'Enter') {

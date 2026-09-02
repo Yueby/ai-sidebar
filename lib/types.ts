@@ -104,8 +104,6 @@ export interface RefElementMeta {
   selector: string;
   tagName: string;
   preview: string;
-  /** 发送时刻解析的元素 outerHTML(content.ts 截 12000,与 read_element 同源);解析失败不设,请求展开时降级 preview */
-  content?: string;
 }
 
 export interface PageRefs {

@@ -174,7 +174,7 @@ export function ChatInput({
 
   const editor = useEditor({
     extensions: [
-      // 最小化 StarterKit:纯文本 + 硬换行语义(照 sanshu,关闭全部块级/标记扩展)
+      // 最小化 StarterKit:纯文本 + 硬换行语义(关闭全部块级/标记扩展)
       StarterKit.configure({
         heading: false,
         blockquote: false,
@@ -243,7 +243,7 @@ export function ChatInput({
       handlePaste: (view, event) => {
         const clipboardText = event.clipboardData?.getData('text/plain');
         if (!clipboardText) return false;
-        // 单一 URL 粘贴 → url 徽章(照 sanshu tryParsePasteAsReference;多行/含空格走普通文本);
+        // 单一 URL 粘贴 → url 徽章(多行/含空格走普通文本);
         // serialized = [url: label] 随 onUpdate 进草稿,模型侧自描述,不进 refs.elements
         if (isSingleUrlText(clipboardText)) {
           const badgeNode = view.state.schema.nodes.inlineBadge?.create(buildUrlBadgeAttrs(clipboardText.trim()));
@@ -283,8 +283,8 @@ export function ChatInput({
     }
   }, [pickedElements, editor]);
 
-  // 草稿恢复双载(照 sanshu updateData):setContent 纯文本(剥离新旧标记原文)+ 仅重插文本中
-  // 标记号命中的徽章(S-1:nonce 重挂载注入预设问题时,不凭空多出草稿元素的徽章);
+  // 草稿恢复双载:setContent 纯文本(剥离新旧标记原文)+ 仅重插文本中
+  // 标记号命中的徽章(nonce 重挂载注入预设问题时,不凭空多出草稿元素的徽章);
   // 徽章 serialized 序列化回 [element:N](新协议英文化;旧草稿 [元素:N] 兼容剥离),
   // 协议零变化。key=sessionId 重挂载保证会话切换重建。
   useEffect(() => {

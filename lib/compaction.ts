@@ -21,7 +21,7 @@ import { estimateContextTokens, estimateTokens } from './contextTokens';
 /** 压缩请求用的 provider 实例(agent.ts buildProvider 的产物) */
 export type ProviderInstance = Provider<KnownApi>;
 
-/** 保守切点预算:自后向前累计到该值即停,预算内消息原样保留(对齐冻结契约 12000) */
+/** 保守切点预算:自后向前累计到该值即停,预算内消息原样保留(与 read_element 截断同值) */
 const KEEP_RECENT_TOKENS = 12000;
 /** 摘要生成预算基数(pi DEFAULT_COMPACTION_SETTINGS.reserveTokens) */
 const RESERVE_TOKENS = 16384;

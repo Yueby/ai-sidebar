@@ -7,13 +7,20 @@ import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { resolveElement, getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
+import { ELEMENT_PREVIEW_LIMIT } from '@/lib/pageRefs';
 import { normalizePickedElements } from '@/lib/types';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 
+/** html → 纯文本:DOM 解析取 textContent,空白折叠(元素实时预览采集用) */
+function htmlToPlainText(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
 /**
  * 对话轮次域 hook(编排层):handleSendMessage(唯一发送入口)/handleStopGeneration。
- * turnSeqRef(R-1 身份守卫)/abortControllerRef/compactRequestedRef 留本 hook;
+ * turnSeqRef(turn 身份守卫)/abortControllerRef/compactRequestedRef 留本 hook;
  * 流式状态/in-flight 在 store/chatSlice,门控与错误在 store 直读,会话经 getState() 取最新值。
  *
  * 域服务边界:store=共享状态唯一家(流式态/in-flight 在 chatSlice,activeGate 在 gateSlice);
@@ -42,7 +49,7 @@ export function useChatTurn(params: {
   const abortControllerRef = useRef<AbortController | null>(null);
   // 发送解析窗口守卫:resolveElement 期间(非流式)防双击双发
   const sendInFlightRef = useRef(false);
-  // AI 自主压缩标记:compact_context 工具(A 道注册,safe)execute 只置位;轮末由本 hook 消费
+  // AI 自主压缩标记:compact_context 工具 execute 只置位;轮末由本 hook 消费
   const compactRequestedRef = useRef(false);
 
   // AI Chat & Agent Loop
@@ -77,12 +84,12 @@ export function useChatTurn(params: {
       }
 
       const isFirstMessage = session.messages.length === 0 || session.title === '新会话';
-      // 规则 3(定稿):发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。
+      // 发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。
       // 逐 tab 刷新元信息(getTabMeta 失败回退草稿值,绝不丢引用);focused 仅标注
       // 「发送时刻活动且在该引用列表内」的 tab;无引用则消息与朴素文本逐字节一致。
       const draftAtSend = session.draft ?? EMPTY_DRAFT;
       const snapTabs = store.settings.includePageContext ? draftAtSend.refTabs : [];
-      // B-1:存量草稿兼容(无 elementId 按数组序补齐),编号单源于数据侧
+      // 存量草稿兼容(无 elementId 按数组序补齐),编号单源于数据侧
       const snapElements = store.settings.includePageContext
         ? normalizePickedElements(draftAtSend.pickedElements)
         : [];
@@ -99,25 +106,25 @@ export function useChatTurn(params: {
           url: t.url,
           ...(t.id === focusedTabId ? { focused: true } : {}),
         }));
-        // B-1:id = 数据侧 elementId(与 ChatInput 插入的 [element:N] 标记永久对齐)。
-        // 请求时内容内嵌:并行解析每个元素的当前 outerHTML(resolveElement 与 read_element
-        // 同源,content.ts 截 12000);失败 → 不设 content(请求展开时降级 preview),不阻塞发送。
+        // id = 数据侧 elementId(与 ChatInput 插入的 [element:N] 标记永久对齐)。
+        // 发送时采集元素实时预览(resolveElement 与 read_element 同源):html 剥标签取
+        // textContent 截 ELEMENT_PREVIEW_LIMIT 字;失败沿用框选时的存量 preview,不阻塞发送。
         // 解析窗口置位守卫,完成后立即复位(此后由 isStreaming 接管)
         sendInFlightRef.current = true;
         const resolved = await Promise.all(
           snapElements.map(async (e) => {
             const el = await resolveElement(e.tabId, e.selector).catch(() => null);
-            return { element: e, content: el?.html };
+            const text = el ? htmlToPlainText(el.html) : '';
+            return { element: e, preview: text.slice(0, ELEMENT_PREVIEW_LIMIT) || e.preview };
           }),
         );
         sendInFlightRef.current = false;
-        const elements = resolved.map(({ element, content }) => ({
+        const elements = resolved.map(({ element, preview }) => ({
           id: element.elementId,
           tabId: element.tabId,
           selector: element.selector,
           tagName: element.tagName,
-          preview: element.preview,
-          ...(content ? { content } : {}),
+          preview,
         }));
         pageRefs = { tabs, elements };
       }
@@ -171,7 +178,7 @@ export function useChatTurn(params: {
         const result = await runAgentTurn({
           provider: active.provider,
           modelId: active.model.id,
-          // B-1:发送消费「生效历史」(压缩过 = [摘要]+之后),否则压缩对对话零效果;
+          // 发送消费「生效历史」(压缩过 = [摘要]+之后),否则压缩对对话零效果;
           // messagesWithUser 预落盘保持全量(非破坏契约,见 finalize)
           history: effectiveMessages(session.messages, session.compaction),
           userMessage,
@@ -182,13 +189,13 @@ export function useChatTurn(params: {
           thinkingLevel: resolveReasoningLevel(active.model, useAppStore.getState().settings.reasoningLevel),
           sessionId: session.id,
           signal: abortCtrl.signal,
-          // compact_context 工具(A 道注册,safe)execute 只置标记;轮末由本 hook 消费
+          // compact_context 工具 execute 只置标记;轮末由本 hook 消费
           onCompactContext: () => {
             compactRequestedRef.current = true;
           },
           onEvent: (event) => {
             if (event.type === 'message_update' && event.message.role === 'assistant') {
-              // S-1:打断重发后,旧 turn 的 aborted partial 事件流必须静默——
+              // 打断重发后,旧 turn 的 aborted partial 事件流必须静默——
               // 同会话守卫拦不住跨 turn,ghost 半截回答会悬空 + finalize 索引回移重挂载
               if (seq !== turnSeqRef.current) return;
               const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
@@ -203,7 +210,7 @@ export function useChatTurn(params: {
               setStreamText(text);
               setStreamThink(thinking);
             } else if (event.type === 'message_end' && event.message.role === 'assistant') {
-              // S-1:同上,旧 turn 的 message_end 不得进新 turn 的 in-flight
+              // 同上,旧 turn 的 message_end 不得进新 turn 的 in-flight
               if (seq !== turnSeqRef.current) return;
               // 一条 assistant 完成:整体进 in-flight(思考/toolCall/正文齐全),
               // 同一批 setState 里重置 live 流式态,准备承载下一 turn —— 交接无闪烁
@@ -229,8 +236,8 @@ export function useChatTurn(params: {
         // 用完整转录落盘(含 assistant/toolResult,回放零转换;user 消息带 refSnapshot)。
         // 基于该会话的「最新」内存副本:流式期间用户可能已在草稿中添加新引用,不能覆盖。
         // 若会话已被删除(流式中途删掉当前会话),不复活,丢弃本轮转录。
-        // R-1:已被新 turn 接管(打断重发)时,旧转录不落盘、不清理新 turn 的 in-flight;
-        // S-3:被打断轮的压缩请求标记作废,不得在下一轮末触发付费压缩
+        // 已被新 turn 接管(打断重发)时,旧转录不落盘、不清理新 turn 的 in-flight;
+        // 被打断轮的压缩请求标记作废,不得在下一轮末触发付费压缩
         if (seq !== turnSeqRef.current) {
           compactRequestedRef.current = false;
           return;
@@ -240,7 +247,7 @@ export function useChatTurn(params: {
         compactRequestedRef.current = false;
         const latest = useAppStore.getState().sessions.find((s) => s.id === session!.id);
         if (latest) {
-          // B-1:非破坏落盘 = 全量历史 + 本轮新增(newMessages 基于「生效历史」,
+          // 非破坏落盘 = 全量历史 + 本轮新增(newMessages 基于「生效历史」,
           // 直接落 result.messages 会丢被压缩截断的前缀消息)
           const finalizedSession: Session = {
             ...latest,
@@ -272,8 +279,8 @@ export function useChatTurn(params: {
           setErrorMessage(result.errorMessage);
         }
       } catch (err: unknown) {
-        // R-1:旧 turn 已被接管时不清理新 turn 的 in-flight;
-        // S-3:出错轮的压缩请求标记作废
+        // 旧 turn 已被接管时不清理新 turn 的 in-flight;
+        // 出错轮的压缩请求标记作废
         if (seq !== turnSeqRef.current) {
           compactRequestedRef.current = false;
           return;
@@ -287,7 +294,7 @@ export function useChatTurn(params: {
           setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置');
         }
       } finally {
-        // R-1:仅当前 turn 的所有者才能拆卸 streaming/abort 状态(不弄坏新 turn 的停止按钮)
+        // 仅当前 turn 的所有者才能拆卸 streaming/abort 状态(不弄坏新 turn 的停止按钮)
         if (seq === turnSeqRef.current) {
           const teardown = useAppStore.getState();
           teardown.setIsStreaming(false);

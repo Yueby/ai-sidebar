@@ -1,7 +1,7 @@
 import type { PickedElement, RefElementMeta } from './types';
 
 /**
- * 元素徽章 label 构造(拍板版):徽章/气泡/引用列表统一显示内容预览,"元素 N"字样
+ * 元素徽章 label 构造:徽章/气泡/引用列表统一显示内容预览,"元素 N"字样
  * 从人类可见界面消失;编号只保留在引用列表行首前缀与 tooltip(#{N} · selector)。
  */
 

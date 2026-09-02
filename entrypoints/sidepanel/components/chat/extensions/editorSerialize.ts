@@ -5,12 +5,12 @@ import { elementChipLabel } from '@/lib/elementLabel';
 import type { InlineBadgeAttrs } from './InlineBadge';
 
 /**
- * TipTap 编辑器状态序列化(照抄 sanshu extractFromNode/extractEditorState,单遍遍历):
+ * TipTap 编辑器状态序列化(单遍遍历):
  * 徽章 → computeBadgeTag 文本(协议 = [元素:N],与 useChatTurn refs.elements 组装、
  * ELEMENT_MARKER_RE 消费完全一致);hardBreak → \n;段落尾追加 \n。
  */
 
-/** 徽章 → 文本标记:sanshu 同形 —— element 输出 [元素:N](协议冻结),url 输出 [url: {label}](模型侧自描述) */
+/** 徽章 → 文本标记:element 输出 [element:N],url 输出 [url: {label}](模型侧自描述) */
 export function computeBadgeTag(attrs: { badgeType: string; label: string; elementId?: number }): string {
   if (attrs.badgeType === 'url') return `[url: ${attrs.label}]`;
   return makeElementMarker(attrs.elementId ?? 0);

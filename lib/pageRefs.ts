@@ -9,6 +9,9 @@ export const PAGE_REFS_TAG = 'page-refs';
 
 const BLOCK_RE = /<page-refs>\n([\s\S]*?)\n<\/page-refs>/;
 
+/** 元素预览字符上限(refs 块随消息持久化,展开体按此判 [...truncated]) */
+export const ELEMENT_PREVIEW_LIMIT = 300;
+
 /** 渲染为可直接追加到消息文本尾部的块(前导空行);JSON 单行紧凑 */
 export function renderPageRefsBlock(refs: PageRefs): string {
   const tabs = refs.tabs.map((t) => ({
@@ -19,14 +22,12 @@ export function renderPageRefsBlock(refs: PageRefs): string {
     ...(t.focused === true ? { focused: true } : {}),
   }));
   const elements = refs.elements.map((e) => ({
-    // id = 元素标记号,与用户消息文本内嵌 [element:N] 标记的 N 一致(冻结契约)
+    // id = 元素标记号,与用户消息文本内嵌 [element:N] 标记的 N 一致
     id: e.id,
     tabId: e.tabId,
     selector: e.selector,
     tagName: e.tagName,
     preview: e.preview,
-    // 请求时内容内嵌:发送时刻解析的元素 outerHTML;解析失败不设(展开时降级 preview)
-    ...(e.content ? { content: e.content } : {}),
   }));
   return `\n\n<${PAGE_REFS_TAG}>\n${JSON.stringify({ tabs, elements })}\n</${PAGE_REFS_TAG}>`;
 }

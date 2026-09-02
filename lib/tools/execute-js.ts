@@ -30,7 +30,7 @@ export function createExecuteJsToolDefinition(
     label: toolLabel('execute_js'),
     risk: 'confirm',
     description:
-      'Execute JavaScript in a user-referenced tab and return the result — use it to read or compute page data that read_page / read_element cannot provide (e.g. state defined by the page itself, computed values), or to manipulate page state when the user asks for it. This tool runs arbitrary code in the page and can be destructive: every run requires explicit user approval via a confirmation card showing your code, so keep the code minimal and explain your intent before calling. Prefer read_page / read_element for plain content extraction; use this tool only when they are insufficient. Worlds: `user_script` (default) is isolated — it has DOM access but cannot see JavaScript globals defined by the page; `main` runs in the main world and can access page-defined JS state, but is more privileged.',
+      'Execute JavaScript in a user-referenced tab and return the result — use it to read or compute page data that read_page / read_element cannot provide (e.g. state defined by the page itself, computed values), or to manipulate page state when the user asks for it. This tool runs arbitrary code in the page and can be destructive: every run requires explicit user approval via a confirmation card showing your code, so explain your intent before calling. Prefer read_page / read_element for plain content extraction; use this tool only when they are insufficient.',
     parameters: EXECUTE_JS_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;

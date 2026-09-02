@@ -17,7 +17,7 @@ export function createCompactContextToolDefinition(
     label: toolLabel('compact_context'),
     risk: 'safe',
     description:
-      'Schedule a context compaction for this conversation. Call it when the conversation has grown long, earlier details are no longer needed, or the user asks to compact/clear context. The compaction runs after this turn finishes: older history is replaced with a structured summary, so do not call it to preserve details — instead mention in your reply that earlier details will be summarized.',
+      'Schedule a context compaction for this conversation. Call it when the conversation has grown long, earlier details are no longer needed, or the user asks to compact/clear context. The compaction runs after this turn finishes: older history is replaced with a structured summary — instead mention in your reply that earlier details will be summarized.',
     parameters: COMPACT_CONTEXT_PARAMS,
     execute: async () => {
       onRequest();

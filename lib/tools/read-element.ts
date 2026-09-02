@@ -32,7 +32,7 @@ export function createReadElementToolDefinition(
     label: toolLabel('read_element'),
     risk: 'safe',
     description:
-      "Re-read the fresh content of a previously picked/referenced element — the initial content of picked elements is already embedded in <picked-element> blocks in the user message, so call this only when you need up-to-date content (the page may have changed since the message was sent). Returns the element matching a CSS selector inside a user-referenced tab as outerHTML (raw HTML with tags, attributes and structure — useful for understanding interactive elements; image blocks are attached when the element contains images and the model supports them). tabId must come from the <page-refs> block in the user message; selector can be any valid CSS selector — elements in <page-refs> are user-picked highlights, but you may also explore other elements on the page. For a full-page overview use read_page.",
+      "Re-read the fresh content of a picked element. Its preview is embedded in <picked-element> blocks at the point of reference in the user message; use the block's tabId and selector here when the current content is needed (the page may have changed). Any CSS selector on a referenced tab may be explored. Returns the element's outerHTML; image blocks are attached when the element contains images and the model supports them. For full-page content use read_page. An unreadable result usually means the tab was closed or navigated — do not retry the same arguments.",
     parameters: READ_ELEMENT_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;

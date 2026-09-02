@@ -3,7 +3,7 @@ import { NodeViewWrapper } from '@tiptap/react';
 import { Link, SquareMousePointer, X } from 'lucide-react';
 
 /**
- * inlineBadge 节点的 React NodeView(1:1 移植 sanshu BadgeNodeView.vue):
+ * inlineBadge 节点的 React NodeView:
  * NodeViewWrapper as="span" 内联渲染;叉号 = 整块删除并连带尾随空格(deleteBadgeWithSpace);
  * url 徽章用 Link 图标、element 徽章用框选图标;handleUnlink/URL 菜单按移植清单省略。
  */

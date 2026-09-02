@@ -683,7 +683,7 @@ export function MessageItem({
           )}
 
           {/* 无气泡段但有 live 思考/状态(纯 thinking 阶段、纯工具卡报错等):气泡壳兜底。
-              Bug 3 修复:仅 thinking 时此前整列无气泡壳 → 气泡"消失"空档;此处保证壳连续 */}
+              仅 thinking 时此前整列无气泡壳 → 气泡"消失"空档;此处保证壳连续 */}
           {!hasBubble && (hasStatus || liveThinking) && (
             <div className="relative min-w-0 w-fit max-w-full rounded-lg border bg-card p-2.5 text-card-foreground overflow-hidden">
               {liveThinking && (
