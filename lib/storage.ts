@@ -136,7 +136,8 @@ function sanitizeMessage(v: unknown): ChatMessage | null {
   return null;
 }
 
-/** 草稿宽松校验:结构不符/缺省返回 undefined(旧数据无 draft 字段,不炸) */function sanitizeDraft(v: unknown): SessionDraft | undefined {
+/** 草稿宽松校验:结构不符/缺省返回 undefined(旧数据无 draft 字段,不炸) */
+function sanitizeDraft(v: unknown): SessionDraft | undefined {
   if (!v || typeof v !== 'object') return undefined;
   const d = v as Record<string, unknown>;
   const refTabs = Array.isArray(d.refTabs)

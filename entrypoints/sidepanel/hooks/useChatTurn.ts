@@ -5,6 +5,7 @@ import { saveSession } from '@/lib/sessionStore';
 import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
 import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
+import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
 import { EMPTY_DRAFT } from './useSessionManager';
 
@@ -27,6 +28,8 @@ export function useChatTurn(params: {
   dismissPendingGates: () => void;
   resetResolvedGateCount: () => void;
   setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
+  /** 上下文压缩进行中(压缩/发送互斥) */
+  isCompacting: boolean;
   /** AI 自主压缩标记:compact_context 工具执行时置位(App 持有),turn finalize 后消费 */
   compactRequestedRef: React.RefObject<boolean>;
   /** 轮末自主压缩触发(互斥守卫在 useCompact) */
@@ -44,6 +47,7 @@ export function useChatTurn(params: {
     dismissPendingGates,
     resetResolvedGateCount,
     setErrorMessage,
+    isCompacting,
     compactRequestedRef,
     onAutoCompact,
   } = params;
@@ -69,8 +73,8 @@ export function useChatTurn(params: {
   // AI Chat & Agent Loop
   const handleSendMessage = useCallback(
     async (userText: string) => {
-      // 若当前正在流式或有 pending 门控，按发送视为用户打断当前轮次
-      if (isStreaming || pendingGateActive) {
+      // 若当前正在流式/有 pending 门控/压缩中，按发送视为用户打断当前轮次
+      if (isStreaming || pendingGateActive || isCompacting) {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
         }
@@ -164,7 +168,9 @@ export function useChatTurn(params: {
         const result = await runAgentTurn({
           provider: active.provider,
           modelId: active.model.id,
-          history: session.messages,
+          // B-1:发送消费「生效历史」(压缩过 = [摘要]+之后),否则压缩对对话零效果;
+          // messagesWithUser 预落盘保持全量(非破坏契约,见 finalize)
+          history: effectiveMessages(session.messages, session.compaction),
           userMessage,
           // 实时引用(含 tabId)供本轮 read_page/read_element 工具用;
           // agent 侧再并入历史块,追问旧页面时句柄不丢
@@ -215,14 +221,24 @@ export function useChatTurn(params: {
         // 用完整转录落盘(含 assistant/toolResult,回放零转换;user 消息带 refSnapshot)。
         // 基于该会话的「最新」内存副本:流式期间用户可能已在草稿中添加新引用,不能覆盖。
         // 若会话已被删除(流式中途删掉当前会话),不复活,丢弃本轮转录。
-        // R-1:已被新 turn 接管(打断重发)时,旧转录不落盘、不清理新 turn 的 in-flight
-        if (seq !== turnSeqRef.current) return;
+        // R-1:已被新 turn 接管(打断重发)时,旧转录不落盘、不清理新 turn 的 in-flight;
+        // S-3:被打断轮的压缩请求标记作废,不得在下一轮末触发付费压缩
+        if (seq !== turnSeqRef.current) {
+          compactRequestedRef.current = false;
+          return;
+        }
         // AI 自主压缩标记:本 turn 置位的消费归属本 turn(新 turn 的标记留给新 turn)
         autoCompactPending = compactRequestedRef.current;
         compactRequestedRef.current = false;
         const latest = sessionsRef.current.find((s) => s.id === session!.id);
         if (latest) {
-          const finalizedSession: Session = { ...latest, messages: result.messages, updatedAt: Date.now() };
+          // B-1:非破坏落盘 = 全量历史 + 本轮新增(newMessages 基于「生效历史」,
+          // 直接落 result.messages 会丢被压缩截断的前缀消息)
+          const finalizedSession: Session = {
+            ...latest,
+            messages: [...session.messages, ...result.newMessages],
+            updatedAt: Date.now(),
+          };
           pendingDraftSavesRef.current.delete(finalizedSession.id);
           sessionsRef.current = sessionsRef.current.map((s) =>
             s.id === finalizedSession.id ? finalizedSession : s
@@ -240,8 +256,13 @@ export function useChatTurn(params: {
           setErrorMessage(result.errorMessage);
         }
       } catch (err: unknown) {
-        // R-1:旧 turn 已被接管时不清理新 turn 的 in-flight
-        if (seq !== turnSeqRef.current) return;
+        // R-1:旧 turn 已被接管时不清理新 turn 的 in-flight;
+        // S-3:出错轮的压缩请求标记作废
+        if (seq !== turnSeqRef.current) {
+          compactRequestedRef.current = false;
+          return;
+        }
+        autoCompactPending = false;
         // 异常路径不落盘转录,in-flight 无处可归 → 清空避免残留悬空气泡
         setInFlight(null);
         if (abortCtrl.signal.aborted) {
@@ -266,6 +287,7 @@ export function useChatTurn(params: {
     [
       isStreaming,
       pendingGateActive,
+      isCompacting,
       currentSession,
       settingsRef,
       sessionsRef,

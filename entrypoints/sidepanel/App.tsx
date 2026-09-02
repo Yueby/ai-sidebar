@@ -3,8 +3,9 @@ import { AlertTriangle, Loader2, X } from 'lucide-react';
 import type { Settings, ProviderConfig, ReasoningLevel, ChatMessage } from '@/lib/types';
 import { settingsItem } from '@/lib/storage';
 import { DEFAULT_SETTINGS, findActiveModel } from '@/lib/providers';
-import { effectiveMessages, estimateContextTokens, shouldCompact } from '@/lib/contextTokens';
+import { effectiveMessages, estimateContextTokens, estimateTokens, shouldCompact } from '@/lib/contextTokens';
 import { SLASH_COMMANDS } from '@/lib/slashCommands';
+import { EMPTY_USAGE } from '@/lib/storage';
 
 import { useGate } from './hooks/useGate';
 import { useSessionManager } from './hooks/useSessionManager';
@@ -97,13 +98,26 @@ export default function App() {
     [settings, updateSettings]
   );
 
-  // ── 对话轮次域 ──────────────────────────────────────────────────
-  // AI 自主压缩:compact_context 工具置位标记(App 持有),turn finalize 后触发
-  // handleCompact;经 ref 间接层解决 chat→compact 的声明顺序依赖
+  // ── 上下文压缩域(先于对话轮次域:isCompacting 作为 boolean 传入发送互斥)─────────
+  // isStreamingRef:对话域 state 的镜像(下方渲染体同步),互斥守卫取用时读实时值
+  const isStreamingRef = useRef(false);
+  // AI 自主压缩:compact_context 工具置位标记(App 持有),turn finalize 后触发 handleCompact
   const compactRequestedRef = useRef(false);
-  const autoCompactFnRef = useRef<() => void>(() => {});
-  const onAutoCompact = useCallback(() => autoCompactFnRef.current(), []);
+  const compact = useCompact({
+    settingsRef,
+    currentSession: session.currentSession,
+    sessionsRef: session.sessionsRef,
+    setSessions: session.setSessions,
+    pendingDraftSavesRef: session.pendingDraftSavesRef,
+    pendingGateActive: gate.activeGate !== null,
+    isStreamingRef,
+    setErrorMessage,
+  });
+  const onAutoCompact = useCallback(() => {
+    void compact.handleCompact();
+  }, [compact.handleCompact]);
 
+  // ── 对话轮次域 ──────────────────────────────────────────────────
   const chat = useChatTurn({
     settingsRef,
     currentSession: session.currentSession,
@@ -116,9 +130,12 @@ export default function App() {
     dismissPendingGates: gate.dismissPendingGates,
     resetResolvedGateCount: gate.resetResolvedGateCount,
     setErrorMessage,
+    isCompacting: compact.isCompacting,
     compactRequestedRef,
     onAutoCompact,
   });
+  // 流式状态镜像(互斥守卫取实时值)
+  isStreamingRef.current = chat.isStreaming;
 
   // ── 页面引用域 ──────────────────────────────────────────────────
   const pageRefs = usePageContextRefs({
@@ -131,22 +148,6 @@ export default function App() {
     sessionsRef: session.sessionsRef,
     setErrorMessage,
   });
-
-  // ── 上下文压缩域 ────────────────────────────────────────────────
-  const compact = useCompact({
-    settingsRef,
-    currentSession: session.currentSession,
-    sessionsRef: session.sessionsRef,
-    setSessions: session.setSessions,
-    pendingDraftSavesRef: session.pendingDraftSavesRef,
-    pendingGateActive: gate.activeGate !== null,
-    isStreaming: chat.isStreaming,
-    setErrorMessage,
-  });
-  // latest 模式:轮末自主压缩触发最新的 handleCompact(声明顺序依赖的桥)
-  autoCompactFnRef.current = () => {
-    void compact.handleCompact();
-  };
 
   // 斜杠命令分发:/compact(可附补充重点)→ 压缩;/clear → 复用新建会话;/help → 浮层列命令
   const [slashHelpOpen, setSlashHelpOpen] = useState(false);
@@ -263,29 +264,40 @@ export default function App() {
     return { step: currentStep, total: totalCount };
   }, [gate.activeGate, chat.inFlight, chat.activeToolNames, gate.resolvedGateCount]);
 
-  // 上下文占用派生:有效历史(压缩过 = [摘要]+之后)× 当前模型窗口 + 三角色本地估算
+  // 上下文占用派生:有效历史(压缩过 = [摘要]+之后)× 当前模型窗口 + 三角色占比(lib estimateTokens 统一口径)。
+  // S-5:in-flight 消息与流式 live 文本一并计入尾部,环随流式增长
   const contextData = useMemo(() => {
     const model = activeModelInfo?.model;
     if (!model) return null;
-    const messages = session.currentSession?.messages ?? [];
-    const effective = effectiveMessages(messages, session.currentSession?.compaction);
+    const liveInFlight =
+      chat.inFlight && chat.inFlight.sessionId === session.currentSession?.id
+        ? chat.inFlight.messages
+        : [];
+    const all = [...(session.currentSession?.messages ?? []), ...liveInFlight];
+    const effective = effectiveMessages(all, session.currentSession?.compaction);
+    // 流式中的 live 文本(尚未 message_end 物化)计入尾部
+    if (chat.isStreaming && chat.streamingContent) {
+      effective.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: chat.streamingContent }],
+        api: 'openai-completions',
+        provider: '',
+        model: '',
+        stopReason: 'stop',
+        usage: EMPTY_USAGE,
+        timestamp: 0,
+      } as ChatMessage);
+    }
     const usage = estimateContextTokens(effective, model.contextWindow ?? 128000);
-    const estimate = (m: ChatMessage) => {
-      try {
-        return Math.ceil((JSON.stringify(m.content)?.length ?? 0) / 4);
-      } catch {
-        return 0;
-      }
-    };
     const roleShares = { user: 0, assistant: 0, toolResult: 0 };
     for (const m of effective) {
-      const t = estimate(m);
+      const t = estimateTokens(m);
       if (m.role === 'user') roleShares.user += t;
       else if (m.role === 'assistant') roleShares.assistant += t;
       else if (m.role === 'toolResult') roleShares.toolResult += t;
     }
     return { usage, roleShares };
-  }, [activeModelInfo, session.currentSession]);
+  }, [activeModelInfo, session.currentSession, chat.inFlight, chat.isStreaming, chat.streamingContent]);
 
   // 模型切换溢出建议:当前上下文超出新模型窗口(shouldCompact)→ 建议压缩,不自动执行
   // 用户可手动关闭本次提示(切会话或会话更新后若依然超出可再次自然产生或关闭)
@@ -470,7 +482,8 @@ export default function App() {
             onStartPickElement={pageRefs.handleStartPickElement}
             onRemovePickedElement={pageRefs.handleRemovePickedElement}
             onOpenSettings={handleOpenSettings}
-            disabled={!activeModelInfo}
+            disabled={!activeModelInfo || compact.isCompacting}
+            placeholder={compact.isCompacting ? '正在压缩上下文…' : undefined}
             initialInput={session.draft.input}
             onInputChange={handleDraftInput}
             contextUsage={contextData?.usage ?? null}

@@ -26,7 +26,8 @@ const API_IMPLEMENTATIONS = {
 };
 
 /** 把本地 ModelConfig 映射成 pi-ai 的 Model(缺失参数用保守默认值) */
-export function toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi> {  return {
+export function toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi> {
+  return {
     id: m.id,
     name: m.displayName?.trim() || m.id,
     api: p.api,

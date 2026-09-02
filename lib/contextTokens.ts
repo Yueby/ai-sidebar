@@ -9,12 +9,15 @@ import type { AssistantMessage, ChatMessage, SessionCompaction } from './types';
 /** 图片块按 pi 惯例估 4800 字符(≈1200 token) */
 const IMAGE_ESTIMATE_CHARS = 4800;
 
-/** 视为 1 token/字的 CJK 码位范围(汉字 + 假名 + 全角符号;单次 charCodeAt 扫描,无需正则) */
+/** 视为 1 token/字的 CJK 码位范围(汉字 + 假名 + 谚文 + 全角符号;单次 charCodeAt 扫描,无需正则) */
 const CJK_RANGES: readonly (readonly [number, number])[] = [
   [0x3000, 0x303f], // CJK 符号与标点(全角)
   [0x3040, 0x30ff], // 平假名/片假名
+  [0x1100, 0x11ff], // 谚文字母(Hangul Jamo)
+  [0x3130, 0x318f], // 谚文兼容字母(Compatibility Jamo)
   [0x3400, 0x4dbf], // CJK 扩展 A
   [0x4e00, 0x9fff], // CJK 统一表意文字
+  [0xac00, 0xd7ff], // 谚文音节(Hangul Syllables)
   [0xf900, 0xfaff], // CJK 兼容表意文字
   [0xff00, 0xffef], // 全角形式
 ];

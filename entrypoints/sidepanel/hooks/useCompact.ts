@@ -23,7 +23,8 @@ export function useCompact(params: {
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   pendingDraftSavesRef: React.RefObject<Map<string, Session>>;
   pendingGateActive: boolean;
-  isStreaming: boolean;
+  /** 流式状态 ref(声明顺序:本 hook 先于 useChatTurn,经 ref 读实时值,回调取用时判定) */
+  isStreamingRef: React.RefObject<boolean>;
   setErrorMessage: React.Dispatch<React.SetStateAction<string | null>>;
 }) {
   const {
@@ -33,7 +34,7 @@ export function useCompact(params: {
     setSessions,
     pendingDraftSavesRef,
     pendingGateActive,
-    isStreaming,
+    isStreamingRef,
     setErrorMessage,
   } = params;
 
@@ -43,8 +44,10 @@ export function useCompact(params: {
   const handleCompact = useCallback(
     async ({ customInstructions }: { customInstructions?: string } = {}): Promise<boolean> => {
       // 互斥守卫:流式/挂起门控/压缩中任一 true 则拒绝
-      if (isStreaming || pendingGateActive || isCompacting) return false;
-      const session = currentSession;
+      if (isStreamingRef.current || pendingGateActive || isCompacting) return false;
+      // S-1:按 ref 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
+      const session =
+        sessionsRef.current.find((s) => s.id === currentSession?.id) ?? currentSession;
       if (!session || session.messages.length === 0) return false;
       const active = findActiveModel(settingsRef.current);
       if (!active) {
@@ -66,6 +69,11 @@ export function useCompact(params: {
           signal: abortCtrl.signal,
           customInstructions,
         });
+
+        // S-6:压缩期间会话可能已被删除——不复活,静默丢弃(对照 useChatTurn finalize 的 latest 守卫)
+        if (!sessionsRef.current.some((s) => s.id === session.id)) {
+          return false;
+        }
 
         // 摘要 user 消息拼装(调用方职责):<context-summary> 块 + 被压缩范围 page-refs
         // 并集块 —— 并集让后续轮 collectPageRefs 仍能拿到被截历史的 tab 句柄(read_page 等)
@@ -102,7 +110,7 @@ export function useCompact(params: {
       }
     },
     [
-      isStreaming,
+      isStreamingRef,
       pendingGateActive,
       isCompacting,
       currentSession,
