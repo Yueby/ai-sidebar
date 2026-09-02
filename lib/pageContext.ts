@@ -1,7 +1,5 @@
-import { Type } from '@earendil-works/pi-ai';
-import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { PageContext } from './types';
-import { EXTRACT_PAGE_MESSAGE, toolLabel, type ToolRisk } from './types';
+import { EXTRACT_PAGE_MESSAGE } from './types';
 
 /**
  * content 侧提取应答:PageContext + 截断标记。
@@ -96,57 +94,6 @@ export function renderPageContext(page: ExtractedPage): string {
     lines.push('', '(Note: the page content above was truncated due to length and may be incomplete. Adjust your answer accordingly.)');
   }
   return lines.join('\n');
-}
-
-const READ_PAGE_PARAMS = Type.Object({
-  tabId: Type.Number({ description: 'Id of the tab to read (referenced tabs are annotated with tabId in the <page-refs> block of user messages)' }),
-});
-
-/** read_page 工具:AI 按需读取某个被引用标签页的当前正文 */
-export function createReadPageTool(
-  refTabs: RefTab[],
-): AgentTool<typeof READ_PAGE_PARAMS> & { risk: ToolRisk } {
-  const validIds = refTabs.map((t) => t.id);
-  return {
-    name: 'read_page',
-    label: toolLabel('read_page'),
-    risk: 'safe',
-    description:
-      "Read the title, URL and main text content of a user-referenced browser tab. Call this with the corresponding tabId when the user's question may relate to a referenced page or needs its content.",
-    parameters: READ_PAGE_PARAMS,
-    execute: async (_toolCallId, args) => {
-      const tabId = args?.tabId;
-      if (typeof tabId !== 'number' || !validIds.includes(tabId)) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Invalid tabId: ${JSON.stringify(tabId ?? null)}. Readable tabs: ${
-                validIds.map((id) => `#${id}`).join(', ') || '(none)'
-              }.`,
-            },
-          ],
-          details: null,
-        };
-      }
-      const page = await extractFromTab(tabId);
-      if (!page) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Failed to read tab #${tabId}: it may have been closed, may not be a regular web page (e.g. a browser settings page), may still be loading, or its content may not be extractable. Adjust your answer accordingly.`,
-            },
-          ],
-          details: null,
-        };
-      }
-      return {
-        content: [{ type: 'text', text: renderPageContext(page) }],
-        details: { title: page.title, url: page.url },
-      };
-    },
-  };
 }
 
 /** 元素选择消息协议:action 'start' 进入选择模式,'resolve' 按 selector 读取元素 */

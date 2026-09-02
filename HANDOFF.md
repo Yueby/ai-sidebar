@@ -66,17 +66,18 @@ lib 层 + sidepanel 全部 UI 已完成(含 page-refs 引用架构、read_elemen
 | `lib/storage.ts` | ✅ 完成 | `settingsItem`/`activeSessionIdItem` + `sanitizeSettings`/`sanitizeSessions`(旧扁平消息结构按 pi 形状迁移)+ `uid/createSession(含 draft)/createUserMessage(text, refs?)/messageText/titleFromText/EMPTY_USAGE` |
 | `lib/sessionStore.ts` | ✅ 完成 | 会话历史唯一读写层(IndexedDB,`idb` 封装):`listSessions`(按 updatedAt 降序)/`saveSession`/`deleteSession`/`migrateLegacySessions`(旧 `local:sessions` 一次性迁移后删除旧 key);草稿随 Session 一起存 |
 | `lib/pageRefs.ts` | ✅ 完成 | `<page-refs>` 块纯函数:`renderPageRefsBlock`(序列化拼进 user content)/`parsePageRefs`(UI 解析渲染)/`stripPageRefs`(展示时剥块)/`collectPageRefs`(聚合历史块引用,做工具白名单) |
-| `lib/agent.ts` | ✅ 完成 | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;常驻 read_time/ask_user,tabs 非空注入 read_page/execute_js,有可读 tab 注入 read_element)、`toPiModel`、`buildSystemPrompt()`(身份/语言 + 本地日期时间行 + navigator.language + `<page-refs>` 协议常量规则,不注入引用目录)、`createReadElementTool`(tab 级白名单 + vision 门控取图)、`createExecuteJsTool`(confirm 型,tab 级白名单,确认卡动态预览代码) |
+| `lib/agent.ts` | ✅ 完成(224 行) | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;工具数组经 `tools/registry.ts` 的 `getTools` 组装)、`toPiModel`、`buildSystemPrompt()`(身份/语言 + 本地日期时间行 + navigator.language + `<page-refs>` 协议常量规则,不注入引用目录);工具工厂已全部移至 `lib/tools/` |
 | `lib/models.ts` | ✅ 完成 | `fetchProviderModels`(openai 兼容 Bearer / anthropic x-api-key+version,路径 openai=`/models`、anthropic=`/v1/models`)、`fetchModelsDevMeta`、`applyModelMeta`、`syncModelsWithModelsDev`(「同步」按钮:为已有模型补全参数)、`testConnection` |
-| `lib/pageContext.ts` | ✅ 完成 | tab 级读取原语:`getActiveTabMeta`/`getTabMeta`/`listCandidateTabs`/`extractFromTab`/`renderPageContext`(content.ts 截 12000 字,本层透传)/`createReadPageTool`;框选与元素解析:`startPickElement`(`ai-sidebar/pick-element`)、`resolveElement`(复用 `ai-sidebar/pick-element` + `action:'resolve'`,返回 outerHTML+truncated+preview+images+dpr) |
+| `lib/pageContext.ts` | ✅ 完成 | tab 级读取原语(仅读取,不含工具工厂):`getActiveTabMeta`/`getTabMeta`/`listCandidateTabs`/`extractFromTab`/`renderPageContext`(content.ts 截 12000 字,本层透传);框选与元素解析:`startPickElement`(`ai-sidebar/pick-element`)、`resolveElement`(复用 `ai-sidebar/pick-element` + `action:'resolve'`,返回 outerHTML+truncated+preview+images+dpr) |
 | `lib/imageFetch.ts` | ✅ 完成 | read_element 取图管道:`fetchImageForModel`(fetch 主取)→ `captureCropForModel`(captureVisibleTab 按 rect×DPR 裁剪兜底,防盗链/403);canvas 降采样对齐 pi 上游:≤2000×2000、JPEG q0.8 起逐级降质、PNG/JPEG 取小、base64 ≤4.5MB |
 | `lib/gate.ts` | ✅ 完成 | 工具门控契约:`GateRequest`(confirm/ask)/`GateResponse`、`setGateHandler`(未注册=快速 deny/cancelled,安全默认)、`flushPendingGates`(停止/中止冲销 pending)、`requestGate`(handler 异常按 deny)、`createGatedTool`(confirm 包装,detail 支持按参数动态生成,denied 英文拒绝文本;execute_js 已用) |
 | `lib/pageScripting.ts` | ✅ 完成 | execute_js 注入原语:`isUserScriptsAvailable`(userScripts 存在 + getScripts() 探测不 throw)、`executePageScript(tabId, code, world)`(userScripts.execute 主路线 → scripting.executeScript MAIN world func 包装兜底,JSON.stringify 后 8000 字符截断,降级在返回文本注明,一切错误转英文不 throw) |
-| `lib/tools.ts` | ✅ 完成 | 轻量通用工具:`read_time`(设备本地时间英文块 date/weekday/time/timezone/iso,免弹卡)、`ask_user`(经 gate ask 路径,答复来自选项时附 "(chosen from options)";cancelled → "User dismissed the question (no answer).")+ 时间助手 `localDate`/`localTime`/`utcOffsetLabel`(原 agent.ts 内部函数上移) |
+| `lib/tools/` | ✅ 完成 | 工具注册表(pi 一工具一文件 + 集合函数):`registry.ts` = 唯一组装点 `getTools(GetToolsOptions{refTabs,pickedElements,canUseImage})`,组装序 utility→read_page→read_element→execute_js;`read-page`/`read-element`/`execute-js`/`read-time`/`ask-user` 各导出 `createXxxToolDefinition`(旧 createReadPageTool 等工厂名已废);`time.ts` = 本地时间助手 `localDate`/`localTime`/`utcOffsetLabel`/`weekdayName` |
 | `lib/utils.ts` | ✅ 完成 | cn() |
 | `entrypoints/content.ts` | ✅ 完成 | 结构化提取(article/main/[role=main] 优先,截 12000 字)+ 框选元素模式(@medv/finder 生成唯一 selector,结果经 `ai-sidebar/pick-element-result` 广播)+ 元素解析应答(`pick-element` 消息 `action:'resolve'`) |
 | `entrypoints/background.ts` | ✅ 完成 | 点击图标打开侧边栏 |
-| `entrypoints/sidepanel/App.tsx` | ✅ 完成 | ChatView ⇄ Settings 视图切换、runAgentTurn 编排、会话/草稿持久化(IndexedDB 防抖 400ms)、新会话自动引用、空会话回收、in-flight 消息列表 |
+| `entrypoints/sidepanel/App.tsx` | ✅ 完成(340 行,组合层) | 四域 hook 组装(useGate/useSessionManager/useChatTurn/usePageContextRefs)+ ChatView ⇄ Settings 视图骨架 + gatePagination/quietTailCount 派生;无业务逻辑 |
+| `entrypoints/sidepanel/hooks/` | ✅ 完成 | `useGate`(91 行:activeGate/4 应答回调/注册 effect/dismissPendingGates/resetGates)、`useSessionManager`(293 行:sessions/activeSessionId/loaded、原子 init+storage watch、IndexedDB 持久化、草稿持久化核心 commitSessions/patchActiveDraft/防抖、会话增删切)、`useChatTurn`(283 行:流式状态/in-flight/turnSeqRef R-1 守卫/abortControllerRef/handleSendMessage/handleStopGeneration)、`usePageContextRefs`(279 行:refTabs/pickedElements 读写、tabs.onUpdated/onRemoved 同步、框选 startPickElement+pendingPick、runtime.onMessage 框选结果回传);跨域归属备案:草稿核归 useSessionManager,gatePagination/quietTailCount 留 App 组合层,runtime.onMessage 框选监听归 usePageContextRefs;无 Context/无状态库 |
 | `entrypoints/sidepanel/components/chat/` | ✅ 完成 | ChatHeader(模型/历史 DropdownMenu/设置入口)、MessageList(ResizeObserver 自动跟底)、MessageItem(引用 chip 解析渲染 `parsePageRefs`、ToolCallCard 四态+参数/结果展开、思考折叠区默认折叠+最新3行预览+思考中动画、token 脚注)、MarkdownView、ChatInput(Composer `[+ ▾]` 框选/引用入口、tab chip 带元素 DropdownMenu、模型+思考等级切换) |
 | `entrypoints/sidepanel/components/settings/` | ✅ 完成 | SettingsMainView(提供商列表/关于)、ProviderDialog(增改提供商 + 内联拉取勾选导入 + 「同步」按钮)、ModelConfigDialog |
 | `entrypoints/sidepanel/style.css` | ✅ 完成 | 主题 token + markdown 排版(`.md-*`)+ hljs 主题 + 6px 细滚动条 |
@@ -314,19 +315,24 @@ deleteSession(id: string)                       // delete
 migrateLegacySessions(): Promise<Session[]>     // 旧 local:sessions 非空则清洗写入后删旧 key(只迁一次)
 // 注意:IndexedDB 无跨上下文 watch;sidepanel 是会话历史唯一写方
 
-// lib/agent.ts —— 发消息唯一入口
+// lib/agent.ts —— 发消息唯一入口(224 行;工具组装已移至 lib/tools/registry.ts)
 toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi>   // 缺失参数保守默认(128000/4096)
 buildSystemPrompt(): string                     // 身份/语言 + <page-refs> 协议常量规则(不注入引用目录)
-createReadElementTool(refTabs, pickedElements, canUseImage): AgentTool  // tab 级白名单;vision 门控取图
-createExecuteJsTool(refTabs): AgentTool         // 'execute_js':confirm 型(tabId+code+world),确认卡动态预览 code
 runAgentTurn({ provider; modelId; history: ChatMessage[]; userMessage: UserMessage;  // content 已内嵌 <page-refs> 块
   refTabs?: RefTab[]; pickedElements?: PickedElement[];                              // 当前草稿引用(App 已按开关过滤)
   thinkingLevel: ReasoningLevel; sessionId?; signal?; onEvent?: (e: AgentEvent) => void;
-}): Promise<RunAgentResult>
+}): Promise<RunAgentResult>                     // 对外签名不变;内部经 getTools 拿最终工具数组
 // RunAgentResult { messages(完整转录); newMessages(本轮新增,含 toolResult); errorMessage? }
 // 语义:工具白名单 = 草稿引用 ∪ collectPageRefs(history);tabs 非空注入 read_page + execute_js,
 // 有可读 tab 注入 read_element;内部 new Agent({ streamFn: models.streamSimple, toolExecution:'sequential' });
 // 失败经协议事件编码(stopReason='error');中止时已生成部分保留在转录中;onEvent 透出供 UI 流式渲染
+
+// lib/tools/registry.ts —— 工具注册表(唯一组装点;一工具一文件见同目录)
+interface GetToolsOptions { refTabs?: RefTab[]; pickedElements?: PickedElement[]; canUseImage?: boolean }
+getTools(options): AgentTool[]                  // 组装序:utility(read_time/ask_user)→ read_page → read_element → execute_js
+// createPageReadTools(options) / createGatedTools(options) / createUtilityTools():分组集合函数
+// 各工具文件导出 createXxxToolDefinition(旧 createReadPageTool/createReadElementTool/createExecuteJsTool/
+// createReadTimeTool/createAskUserTool 工厂名已废);新增工具 = 新文件 + 在 registry 登记分组
 
 // lib/models.ts —— 模型列表/预填/同步/测试(全项目唯一手写 fetch 的地方)
 fetchProviderModels({ api, baseUrl, apiKey }, signal?): Promise<string[]>  // anthropic:x-api-key 头 + /v1/models
@@ -335,12 +341,11 @@ applyModelMeta(m: ModelConfig, meta?: ModelMeta): ModelConfig  // 不覆盖手�
 syncModelsWithModelsDev(models, signal?): Promise<{ models; updatedCount }>  // 「同步」按钮
 testConnection({ api, baseUrl, apiKey }): Promise<string>      // 复用拉取;成功返回提示文案,失败 throw
 
-// lib/pageContext.ts(tab 级读取原语)
+// lib/pageContext.ts(tab 级读取原语,不含工具工厂)
 getActiveTabMeta(): Promise<RefTab | null>; getTabMeta(tabId): Promise<RefTab | null>
 listCandidateTabs(): Promise<RefTab[]>        // 候选引用页(排除扩展自身等)
 extractFromTab(tabId): Promise<ExtractedPage | null>  // sendMessage ai-sidebar/extract-page,失败 null 不阻塞
 renderPageContext(page): string               // read_page 工具回传给模型的正文文本(英文,Model-facing)
-createReadPageTool(refTabs): AgentTool        // 'read_page':tabId 句柄读引用页正文
 startPickElement(tabId): Promise<void>        // 广播 ai-sidebar/pick-element 进框选模式,结果经 pick-element-result 回传
 resolveElement(tabId, selector): Promise<ResolvedElement | null>  // 元素解析(outerHTML+truncated+preview+images+dpr),read_element 底层;复用 pick-element 消息 action:'resolve'
 
@@ -360,10 +365,14 @@ requestGate(req): Promise<GateResponse>                      // 挂起等 UI 应
 createGatedTool(tool, summary, detail?, detailFromArgs?)     // confirm 包装:detailFromArgs(args)=>string 按调用参数动态生成
 // detail(空串回退静态 detail,execute_js 预览 code);approved 才执行原工具,denied 返回英文拒绝文本
 
-// lib/tools.ts(轻量通用工具 + 时间助手)
-localDate(now?): string; localTime(now?): string; utcOffsetLabel(now?): string  // 'YYYY-MM-DD' / 'HH:MM:SS' / 'UTC+8'
-createReadTimeTool(): AgentTool & { risk:'safe' }            // 'read_time':date/weekday/time/timezone/iso(UTC) 英文块,免弹卡
-createAskUserTool(): AgentTool & { risk:'safe' }             // 'ask_user':requestGate ask 路径(≤6 options);cancelled → 'User dismissed the question (no answer).'
+// lib/tools/time.ts(本地时间助手;system prompt 与 read_time 共用)
+localDate(now?): string; localTime(now?): string; utcOffsetLabel(now?): string; weekdayName(now?): string
+// 'YYYY-MM-DD' / 'HH:MM:SS' / 'UTC+8' / 英文星期名
+
+// lib/tools/read-time.ts / ask-user.ts(工具定义;execute 前消费方见 registry)
+createReadTimeToolDefinition(): AgentTool             // 'read_time':date/weekday/time/timezone/iso(UTC) 英文块,免弹卡
+createAskUserToolDefinition(): AgentTool              // 'ask_user':requestGate ask 路径(≤6 options);cancelled → 'User dismissed the question (no answer).'
+// read-page/read-element/execute-js 同模式导出 createXxxToolDefinition(execute-js 经 createGatedTool confirm 包装)
 
 // lib/imageFetch.ts(read_element 取图管道)
 fetchImageForModel(src): Promise<ModelImage | null>            // fetch 主取

@@ -51,8 +51,10 @@
 
 ```
 entrypoints/
-  sidepanel/          # 侧边栏 UI(index.html / main.tsx / theme.ts / App.tsx / style.css)
-    components/chat/      # ChatHeader / MessageList / MessageItem(ToolCallCard/思考折叠)/ MarkdownView / ChatInput
+  sidepanel/          # 侧边栏 UI(index.html / main.tsx / theme.ts / style.css)
+    App.tsx             # 组合层:四域 hook 组装 + 视图骨架(1077→340 行,无业务逻辑)
+    hooks/              # useGate(门控)/ useSessionManager(会话+草稿持久化核心)/ useChatTurn(对话轮次+turnSeq 守卫)/ usePageContextRefs(引用+框选)
+    components/chat/      # ChatHeader / MessageList / MessageItem(ToolCallCard/思考折叠)/ MarkdownView / ChatInput / ApprovalSection(审批槽位)
     components/settings/  # SettingsMainView / ProviderDialog / ModelConfigDialog
   background.ts       # 点击工具栏图标打开侧边栏
   content.ts          # 结构化提取 + 框选元素(@medv/finder 生成唯一 selector)+ 元素解析
@@ -61,14 +63,14 @@ lib/
   storage.ts          # settingsItem/activeSessionIdItem + sanitizeSettings/sanitizeSessions 迁移 + createUserMessage(带 refs)/messageText/EMPTY_USAGE
   sessionStore.ts     # 会话历史唯一读写层(IndexedDB,idb 封装):listSessions/saveSession/deleteSession/migrateLegacySessions
   providers.ts        # API_TYPE_OPTIONS(三协议+默认 baseUrl)、normalizeBaseUrl(anthropic 剥尾 /v1)、getModelReasoningLevels/resolveReasoningLevel
-  agent.ts            # pi-agent-core 桥接:runAgentTurn(唯一发送入口)、toPiModel、buildSystemPrompt(<page-refs> 协议规则)、createReadElementTool
+  agent.ts            # pi-agent-core 桥接(224 行):runAgentTurn(唯一发送入口)/toPiModel/buildSystemPrompt;工具组装移至 tools/registry.ts
   models.ts           # fetchProviderModels/fetchModelsDevMeta/applyModelMeta/syncModelsWithModelsDev/testConnection
   pageRefs.ts         # renderPageRefsBlock/parsePageRefs/stripPageRefs/collectPageRefs(纯函数,<page-refs> 块)
-  pageContext.ts      # tab 级读取原语(getActiveTabMeta/extractFromTab/createReadPageTool)+ startPickElement/resolveElement
+  pageContext.ts      # tab 级读取原语(getActiveTabMeta/getTabMeta/listCandidateTabs/extractFromTab/renderPageContext)+ startPickElement/resolveElement(框选/元素解析)
   pageScripting.ts    # execute_js 注入原语:isUserScriptsAvailable/executePageScript(userScripts.execute 主路线 + scripting MAIN world 兜底,8000 截断)
   imageFetch.ts       # fetchImageForModel/captureCropForModel(≤2000²、JPEG q80 逐级降质、base64 ≤4.5MB)
   gate.ts             # 工具门控契约:GateRequest(confirm/ask)/setGateHandler/flushPendingGates/requestGate/createGatedTool
-  tools.ts            # 轻量通用工具(read_time/ask_user)+ 本地时间助手(localDate/localTime/utcOffsetLabel)
+  tools/              # 工具注册表(pi 一工具一文件 + 集合函数模式):registry.ts = 唯一组装点 getTools(GetToolsOptions{refTabs,pickedElements,canUseImage},组装序 utility→read_page→read_element→execute_js);read-page/read-element/execute-js/read-time/ask-user 各导出 createXxxToolDefinition;time.ts = 本地时间助手(localDate/localTime/utcOffsetLabel/weekdayName)
   utils.ts            # cn()
 components/ui/        # shadcn 组件(保持官方原样)
 ```
@@ -78,7 +80,7 @@ components/ui/        # shadcn 组件(保持官方原样)
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome):重点 = 普通对话、read_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移
 2. websearch / fetch_url 工具(读链接目标内容)
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)
-4. 三期页面操作:screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;browser-use/Stagehand/LaVague 服务端形态不可用;execute_js 已完成:lib/pageScripting.ts + lib/agent.ts createExecuteJsTool)
+4. 三期页面操作:screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;browser-use/Stagehand/LaVague 服务端形态不可用;execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
 5. 发布:图标 + `wxt zip`
 
 > 已完成(2026-09-02):`err: any` → `unknown`(getErrorMessage helper);dev 可观测性(未知 `ai-sidebar/` 消息 console.warn);execute_js 工具(userScripts.execute 主路线 + scripting MAIN world 兜底,confirm 门控动态预览代码,Chrome 135+ / Allow User Scripts 开关引导)。用户拍板不做:highlight.js 语言包裁剪(本地加载,941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
