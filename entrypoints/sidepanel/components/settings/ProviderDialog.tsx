@@ -57,6 +57,11 @@ interface ProviderDialogProps {
   onSave: (provider: ProviderConfig) => void;
 }
 
+/** 名称自然序比较(大小写不敏感 + 数字数值序):已添加列表与拉取候选共用同一排序规则 */
+function compareByName(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true });
+}
+
 interface FetchedCandidate {
   id: string;
   meta?: ModelMeta;
@@ -302,10 +307,7 @@ export function ProviderDialog({
   const sortedModels = useMemo(
     () =>
       [...draft.models].sort((a, b) =>
-        (a.displayName || a.id).localeCompare(b.displayName || b.id, undefined, {
-          sensitivity: 'base',
-          numeric: true,
-        }),
+        compareByName(a.displayName || a.id, b.displayName || b.id),
       ),
     [draft.models],
   );
@@ -324,8 +326,12 @@ export function ProviderDialog({
   const filteredCandidates = useMemo(() => {
     if (!candidates) return [];
     const q = candidateSearch.trim().toLowerCase();
-    if (!q) return candidates;
-    return candidates.filter(
+    // 与已添加列表同一自然序(先排序后过滤,保序;候选显示名 = models.dev meta.name ?? id)
+    const sorted = [...candidates].sort((a, b) =>
+      compareByName(a.meta?.name || a.id, b.meta?.name || b.id)
+    );
+    if (!q) return sorted;
+    return sorted.filter(
       (c) =>
         c.id.toLowerCase().includes(q) ||
         (c.meta?.name && c.meta.name.toLowerCase().includes(q))
