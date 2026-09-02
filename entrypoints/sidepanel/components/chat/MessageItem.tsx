@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, PageRefs, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
-import { toolLabel } from '@/lib/types';
+import { toolLabel, ELEMENT_MARKER_RE } from '@/lib/types';
 import { messageText } from '@/lib/storage';
 import { parsePageRefs } from '@/lib/pageRefs';
 import { MarkdownView } from './MarkdownView';
@@ -53,6 +53,36 @@ function formatTokens(count: number): string {
     return `${k}k`;
   }
   return `${count}`;
+}
+
+function renderUserMessageText(text: string) {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const regex = new RegExp(ELEMENT_MARKER_RE.source, ELEMENT_MARKER_RE.flags);
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const elemId = match[1];
+    parts.push(
+      <span
+        key={`elem-${match.index}`}
+        className="inline-flex items-center gap-1 rounded bg-accent text-accent-foreground px-1.5 py-0.5 text-xs font-medium border border-border/60 align-baseline mx-0.5 select-all"
+      >
+        <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
+        <span>元素 {elemId}</span>
+      </span>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
 }
 
 function UserRefSnapshot({ refs }: { refs: PageRefs }) {
@@ -479,8 +509,10 @@ export function MessageItem({
       <div className="group flex justify-end px-3 py-1 animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none">
         <div className="flex max-w-[85%] flex-col items-end gap-0.5">
           <div className="w-fit max-w-full rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-sm shadow-xs">
-            {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON */}
-            <p className="whitespace-pre-wrap break-all leading-relaxed">{rawText}</p>
+            {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON; [元素:N] 渲染为内联高亮标记 */}
+            <p className="whitespace-pre-wrap break-all leading-relaxed">
+              {renderUserMessageText(rawText)}
+            </p>
             {pageRefs && <UserRefSnapshot refs={pageRefs} />}
           </div>
           <button

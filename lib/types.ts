@@ -98,6 +98,8 @@ export interface RefTabMeta {
 }
 
 export interface RefElementMeta {
+  /** 元素标记号(1 起整数,按消息内框选顺序;与文本内嵌 [元素:N] 标记的 N 一致;旧消息由解析端按数组序补齐) */
+  id: number;
   tabId: number;
   selector: string;
   tagName: string;
@@ -108,6 +110,15 @@ export interface PageRefs {
   tabs: RefTabMeta[];
   elements: RefElementMeta[];
 }
+
+/**
+ * 元素内嵌标记:`[元素:N]`(N 为 1 起整数,按消息内框选顺序,与 <page-refs> 块 elements[].id 对应)。
+ * 标记出现在用户消息文本原位,模型直接可见,不做剥离/转义(冻结契约,UI 高亮消费同一形状)。
+ */
+export function makeElementMarker(id: number): string {
+  return `[元素:${id}]`;
+}
+export const ELEMENT_MARKER_RE = /\[元素:(\d+)\]/g;
 
 /**
  * 会话消息 = pi-ai 消息联合,直接按 pi 形状持久化。
@@ -164,11 +175,22 @@ export interface PageContext {
 /** 用户在页面上框选的元素引用(selector 由 @medv/finder 生成,保证唯一) */
 export interface PickedElement {
   id: string;
+  /** 元素标记号(1 起单调递增,随草稿持久化,页面刷新后继续递增;与文本内嵌 [元素:N] 标记一致;存量数据读取时按数组序补齐) */
+  elementId: number;
   tabId: number;
   selector: string;
   tagName: string;
   /** 元素可见文本预览(截 100 字) */
   preview: string;
+}
+
+/** 旧草稿存量兼容:无 elementId(或非法)的框选元素按数组序补 1..n(消费入口统一调用) */
+export function normalizePickedElements(picked: PickedElement[]): PickedElement[] {
+  return picked.map((e, i) =>
+    typeof e.elementId === 'number' && Number.isInteger(e.elementId) && e.elementId > 0
+      ? e
+      : { ...e, elementId: i + 1 },
+  );
 }
 
 /** 消息协议常量单一来源(与 entrypoints/content.ts 对应,content.ts 只 import 纯常量) */

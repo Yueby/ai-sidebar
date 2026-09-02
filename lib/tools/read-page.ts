@@ -17,7 +17,7 @@ export function createReadPageToolDefinition(
     label: toolLabel('read_page'),
     risk: 'safe',
     description:
-      "Read the title, URL and main text content of a user-referenced browser tab. Call this with the corresponding tabId when the user's question may relate to a referenced page or needs its content.",
+      "Read the title, URL and main text content of a user-referenced browser tab. Call this with the corresponding tabId when the user's question may relate to a referenced page or needs its content. If the user's message contains an inline element marker or a picked element and the question points at it, prefer read_element.",
     parameters: READ_PAGE_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;

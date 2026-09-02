@@ -7,6 +7,7 @@ import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
+import { normalizePickedElements } from '@/lib/types';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 
@@ -76,8 +77,9 @@ export function useChatTurn(params: {
       // 「发送时刻活动且在该引用列表内」的 tab;无引用则消息与朴素文本逐字节一致。
       const draftAtSend = session.draft ?? EMPTY_DRAFT;
       const snapTabs = store.settings.includePageContext ? draftAtSend.refTabs : [];
+      // B-1:存量草稿兼容(无 elementId 按数组序补齐),编号单源于数据侧
       const snapElements = store.settings.includePageContext
-        ? draftAtSend.pickedElements
+        ? normalizePickedElements(draftAtSend.pickedElements)
         : [];
       let refreshedTabs = snapTabs;
       let pageRefs: PageRefs | undefined;
@@ -92,7 +94,9 @@ export function useChatTurn(params: {
           url: t.url,
           ...(t.id === focusedTabId ? { focused: true } : {}),
         }));
+        // B-1:id = 数据侧 elementId(与 ChatInput 插入的 [元素:N] 标记永久对齐)
         const elements = snapElements.map((e) => ({
+          id: e.elementId,
           tabId: e.tabId,
           selector: e.selector,
           tagName: e.tagName,
@@ -100,7 +104,17 @@ export function useChatTurn(params: {
         }));
         pageRefs = { tabs, elements };
       }
-      const userMessage = createUserMessage(userText, pageRefs);
+      // S-1:悬空标记剥离 —— 文本中 id 不在本次 refs.elements 集合内的标记(如页面刷新
+      // 隐式清空后),发送前从 userText 剥离(连带前导空格),避免 prompt 承诺落空
+      let sendText = userText;
+      if (pageRefs) {
+        const validIds = new Set(pageRefs.elements.map((e) => e.id));
+        sendText = userText.replace(
+          /\s*\[元素:(\d+)\]/g,
+          (m, num: string) => (validIds.has(parseInt(num, 10)) ? m : ''),
+        );
+      }
+      const userMessage = createUserMessage(sendText, pageRefs);
       const messagesWithUser: ChatMessage[] = [...session.messages, userMessage];
 
       // 先落盘用户消息,长对话中断也不丢;规则 4:发送即清空该会话草稿
@@ -110,7 +124,7 @@ export function useChatTurn(params: {
         session.customTitle
           ? session.title
           : isFirstMessage
-            ? titleFromText(userText)
+            ? titleFromText(sendText)
             : session.title;
 
       const updatedSession: Session = {

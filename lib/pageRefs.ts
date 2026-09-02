@@ -19,6 +19,8 @@ export function renderPageRefsBlock(refs: PageRefs): string {
     ...(t.focused === true ? { focused: true } : {}),
   }));
   const elements = refs.elements.map((e) => ({
+    // id = 元素标记号,与用户消息文本内嵌 [元素:N] 标记的 N 一致(冻结契约)
+    id: e.id,
     tabId: e.tabId,
     selector: e.selector,
     tagName: e.tagName,
@@ -75,19 +77,22 @@ export function parsePageRefs(content: unknown): PageRefs | null {
         }];
       })
     : [];
-  const elements: RefElementMeta[] = Array.isArray(d.elements)
+  const elements: RefElementMeta[] = (Array.isArray(d.elements)
     ? d.elements.flatMap((e): RefElementMeta[] => {
         if (!e || typeof e !== 'object') return [];
         const x = e as Record<string, unknown>;
         if (typeof x.tabId !== 'number' || typeof x.selector !== 'string') return [];
         return [{
+          // 旧消息无 id:置 0 占位,下方按数组序补 1..n(向后兼容)
+          id: typeof x.id === 'number' && Number.isInteger(x.id) && x.id > 0 ? x.id : 0,
           tabId: x.tabId,
           selector: x.selector,
           tagName: typeof x.tagName === 'string' ? x.tagName : '',
           preview: typeof x.preview === 'string' ? x.preview : '',
         }];
       })
-    : [];
+    : []
+  ).map((e, i) => (e.id === 0 ? { ...e, id: i + 1 } : e));
   return { tabs, elements };
 }
 

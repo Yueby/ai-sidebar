@@ -89,10 +89,14 @@ export function buildSystemPrompt(): string {
   parts.push(
     '',
     'User messages may carry a <page-refs> block — the browser context referenced at send time (metadata only):',
-    '- `tabs` lists the referenced tabs; `tabId` is the read handle. The `focused` flag marks the tab the user was viewing when sending; when the user says "this page" or "this one", they mean that tab by default.',
-    '- `elements` lists elements the user picked on a page (read them with tabId + selector); they are hints about what the user cares about. You may also explore other elements yourself with any CSS selector via read_element.',
+    '- `tabs` lists the referenced tabs; `tabId` is the read handle. The `focused` flag marks the tab the user was viewing when sending — useful background, but NOT by itself the referent of a question.',
+    '- `elements` lists elements the user deliberately picked on a page (selector + a short text preview). Picking is the strongest signal of user intent in this block.',
+    '- Inline markers in the user message text like [元素:2] refer to `elements` entries by `id`. Treat a marker as the exact thing the user is pointing at with the words around it.',
+    '- Referent resolution order:',
+    '  1. An inline element marker — read that element (read_element with its tabId + selector) and answer about it. Its `preview` is only a hint; read the element for the real answer.',
+    '  2. Explicit page wording ("this page", "这个页面") — the focused tab.',
+    '  3. Otherwise ambiguous — ask a short clarifying question; do not guess, and do not open with read_page when a marker or a picked element exists.',
     '- When you need the actual content of a page or element, call the read_page / read_element tools; tool results are live and win over the block metadata when they conflict.',
-    '- If the reference is ambiguous (no focused flag, or multiple refs without a clear target), ask a clarifying question first — do not guess or probe with repeated tool calls.',
     '- A tool result saying unreadable / element not found usually means the tab was closed or has navigated away; respond accordingly and never retry with the exact same arguments.',
   );
   return parts.join('\n');
@@ -160,6 +164,7 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
     const key = `${e.tabId}:${e.selector}`;
     elementByKey.set(key, {
       id: key,
+      elementId: e.id,
       tabId: e.tabId,
       selector: e.selector,
       tagName: e.tagName,

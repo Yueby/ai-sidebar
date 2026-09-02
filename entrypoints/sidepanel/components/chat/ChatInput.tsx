@@ -13,8 +13,7 @@ import {
   SquareMousePointer,
 } from 'lucide-react';
 import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
-import { REASONING_LEVEL_LABELS } from '@/lib/types';
-import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
+import { REASONING_LEVEL_LABELS, makeElementMarker } from '@/lib/types';import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { listCandidateTabs, getActiveTabMeta, type RefTab } from '@/lib/pageContext';
@@ -46,7 +45,7 @@ interface ChatInputProps {
   onAddRefTab: (tab: RefTab) => void;
   onRemoveRefTab: (id: number) => void;
   onStartPickElement: (tabId?: number) => void;
-  onRemovePickedElement: (id: string) => void;
+  onRemovePickedElement?: (id: string) => void;
   onOpenSettings: () => void;
   disabled?: boolean;
   placeholder?: string;
@@ -104,6 +103,8 @@ export function ChatInput({
   const [slashIndex, setSlashIndex] = useState(0);
   const isComposingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // 记录上一帧的框选元素列表引用与数量,用于侦测「新框选完成」并向输入框光标处插入 [元素:N]
+  const prevPickedRef = useRef<PickedElement[]>(pickedElements);
 
   const slashOpen = Boolean(onCommand) && !slashClosed && /^\/[^\s]*$/.test(text);
   const slashQuery = text.replace(/^\//, '').toLowerCase();
@@ -122,6 +123,49 @@ export function ChatInput({
     },
     [onInputChange]
   );
+
+  // 侦测框选完成：当 pickedElements 增加时，自动向输入框光标处插入 [元素:N] 标记。
+  // 编号单源于数据侧:使用新增元素的 elementId(草稿持久化,与 refs.elements.id 永久对齐);
+  // 侦测保持 diff(上一帧引用对比,新增段 = 尾部切片,与分配端 append 顺序一致)
+  useEffect(() => {
+    const prev = prevPickedRef.current;
+    prevPickedRef.current = pickedElements;
+
+    // 仅在新增框选元素且增加时触发（排除挂载初态、会话切换等清空情况）
+    if (pickedElements.length > prev.length) {
+      const addedCount = pickedElements.length - prev.length;
+      const newlyAdded = pickedElements.slice(-addedCount);
+
+      const ta = textareaRef.current;
+      const currentVal = ta ? ta.value : text;
+      const start = ta ? ta.selectionStart : currentVal.length;
+      const end = ta ? ta.selectionEnd : currentVal.length;
+
+      // 生成待插入的标记文本（支持一次性处理多个新增，通常为1个）
+      let insertedText = '';
+      for (let i = 0; i < newlyAdded.length; i++) {
+        const marker = makeElementMarker(newlyAdded[i]!.elementId);
+        // 如果前面已有字符且非空白，前置补空格
+        const charBefore = i === 0 ? currentVal.slice(0, start).slice(-1) : insertedText.slice(-1);
+        const prefix = charBefore && !/\s/.test(charBefore) ? ' ' : '';
+        insertedText += `${prefix}${marker}`;
+      }
+
+      const nextVal = currentVal.slice(0, start) + insertedText + currentVal.slice(end);
+      const newCursorPos = start + insertedText.length;
+
+      reportText(nextVal);
+
+      // 保证插入后光标落在标记后面并聚焦
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.selectionStart = newCursorPos;
+          textareaRef.current.selectionEnd = newCursorPos;
+        }
+      });
+    }
+  }, [pickedElements, text, reportText]);
 
   /** 执行斜杠命令:分发 App,清空输入(命令文本不进草稿) */
   const executeCommand = useCallback(
@@ -274,6 +318,19 @@ export function ChatInput({
         <span className="font-medium text-foreground">框选页面元素</span>
       </DropdownMenuItem>
 
+      {/* 1b. Clear picked elements(全清一行入口;仅在有元素时出现) */}
+      {pickedElements.length > 0 && onRemovePickedElement && (
+        <DropdownMenuItem
+          onClick={() => {
+            for (const p of pickedElements) onRemovePickedElement(p.id);
+          }}
+          className="flex items-center gap-2 text-xs cursor-pointer py-1.5 text-muted-foreground hover:text-foreground"
+        >
+          <X className="size-3.5 shrink-0" />
+          <span>清除已选元素 ({pickedElements.length})</span>
+        </DropdownMenuItem>
+      )}
+
       <DropdownMenuSeparator />
 
       {/* 2. Open Tabs List */}
@@ -346,92 +403,33 @@ export function ChatInput({
       {/* Reference Zone: Rendered when there is at least 1 tab reference */}
       {refTabs.length > 0 && (
         <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 min-h-[26px]">
-          {refTabs.map((tab) => {
-            const tabElements = pickedElements.filter((p) => p.tabId === tab.id);
-            const hasElements = tabElements.length > 0;
-
-            return (
+          {refTabs.map((tab) => (
+            <div
+              key={tab.id}
+              className="inline-flex items-center gap-0.5 rounded-md border bg-muted/60 pl-0.5 pr-1 py-0.5 text-xs text-foreground max-w-[240px] shrink-0 animate-in fade-in-0 duration-150 motion-reduce:animate-none transition-colors"
+              title={tab.url}
+            >
               <div
-                key={tab.id}
-                className="inline-flex items-center gap-0.5 rounded-md border bg-muted/60 pl-0.5 pr-1 py-0.5 text-xs text-foreground max-w-[240px] shrink-0 animate-in fade-in-0 duration-150 motion-reduce:animate-none transition-colors"
+                className="flex items-center gap-1 min-w-0 flex-1 px-1 py-0.5 text-left select-none"
                 title={tab.url}
               >
-                {/* Chip Body: only interactive/dropdown if there are picked elements */}
-                {hasElements ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 min-w-0 flex-1 rounded px-1 py-0.5 text-left outline-none transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
-                        title="点击查看已选元素"
-                      >
-                        <Globe className="size-3 text-muted-foreground shrink-0" />
-                        <span className="truncate text-[11px] font-normal">
-                          {tab.title || tab.url}
-                        </span>
-                        <span className="shrink-0 rounded-full bg-secondary px-1 text-[9px] leading-[14px] text-secondary-foreground font-medium flex items-center gap-0.5">
-                          {tabElements.length}
-                          <ChevronDown className="size-2.5 opacity-60" />
-                        </span>
-                      </button>
-                    </DropdownMenuTrigger>
-
-                    <DropdownMenuContent align="start" className="w-64 max-h-72 overflow-y-auto">
-                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                        {tab.title || tab.url} (已选元素)
-                      </DropdownMenuLabel>
-
-                      {tabElements.map((picked) => (
-                        <div
-                          key={picked.id}
-                          className="flex items-center justify-between gap-1.5 px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground rounded-sm transition-colors"
-                          title={picked.selector}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0 pr-1">
-                            <SquareMousePointer className="size-3 text-muted-foreground shrink-0" />
-                            <span className="truncate text-[11px] font-normal">
-                              {picked.preview || `<${picked.tagName}>`}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRemovePickedElement(picked.id);
-                            }}
-                            className="text-muted-foreground hover:text-destructive rounded p-0.5 transition-colors shrink-0"
-                            title="移除该元素"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  <div
-                    className="flex items-center gap-1 min-w-0 flex-1 px-1 py-0.5 text-left select-none"
-                    title={tab.url}
-                  >
-                    <Globe className="size-3 text-muted-foreground shrink-0" />
-                    <span className="truncate text-[11px] font-normal">
-                      {tab.title || tab.url}
-                    </span>
-                  </div>
-                )}
-
-                {/* Remove whole tab reference */}
-                <button
-                  type="button"
-                  onClick={() => onRemoveRefTab(tab.id)}
-                  className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors shrink-0 cursor-pointer"
-                  title="移除该标签页引用"
-                >
-                  <X className="size-3" />
-                </button>
+                <Globe className="size-3 text-muted-foreground shrink-0" />
+                <span className="truncate text-[11px] font-normal">
+                  {tab.title || tab.url}
+                </span>
               </div>
-            );
-          })}
+
+              {/* Remove whole tab reference */}
+              <button
+                type="button"
+                onClick={() => onRemoveRefTab(tab.id)}
+                className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors shrink-0 cursor-pointer"
+                title="移除该标签页引用"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

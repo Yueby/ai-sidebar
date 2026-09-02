@@ -32,7 +32,7 @@ export function createReadElementToolDefinition(
     label: toolLabel('read_element'),
     risk: 'safe',
     description:
-      'Read the element matching a CSS selector inside a user-referenced tab and return its outerHTML (raw HTML with tags, attributes and structure — useful for understanding interactive elements; image blocks are attached when the element contains images and the model supports them). tabId must come from the <page-refs> block in the user message; selector can be any valid CSS selector — elements in <page-refs> are user-picked highlights, but you may also explore other elements on the page. For a full-page overview use read_page.',
+      'Primary tool for resolving inline element markers ([元素:N]) and picked elements from <page-refs> — this is how you answer "what is this" pointing at something on a page. Read the element matching a CSS selector inside a user-referenced tab and return its outerHTML (raw HTML with tags, attributes and structure — useful for understanding interactive elements; image blocks are attached when the element contains images and the model supports them). tabId must come from the <page-refs> block in the user message; selector can be any valid CSS selector — elements in <page-refs> are user-picked highlights, but you may also explore other elements on the page. For a full-page overview use read_page.',
     parameters: READ_ELEMENT_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;
