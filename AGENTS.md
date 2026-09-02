@@ -11,6 +11,7 @@
 - **MVP(已完成,待手动回归)**
   - sidePanel 聊天:流式输出、Markdown/代码高亮、工具调用卡片、思考折叠区、token 脚注、多会话历史管理、会话草稿(输入/引用随会话走)
   - 读取当前网页:页面上下文默认开启,引用以 `<page-refs>` 元数据块内嵌 user 消息,AI 经 `read_page`(tabId 句柄读整页正文)/`read_element`(引用页内任意 CSS selector,返回 outerHTML)工具按需读取;支持框选元素,vision 模型可读框选图片
+  - 通用工具:read_time(设备本地时间,免弹卡)/ ask_user(经 UI 门控向用户提问,未注册 UI 处理器时快速 cancelled)/ execute_js(confirm 型,在引用页执行 JS:主路线 `chrome.userScripts.execute`,降级 scripting MAIN world,`createGatedTool` 确认卡动态预览代码)
   - BYOK 多提供商:三种协议 —— **OpenAI 兼容 · Chat Completions / OpenAI 兼容 · Responses / Anthropic Messages**(OpenAI / DeepSeek / OpenRouter / Kimi / GLM / Ollama / 自定义 baseUrl+key+model)
 - **二期**:划词快捷提问(选中文字弹快捷操作)、多模型快捷切换、会话重命名/导出
 - **三期**:agent 页面操作工具层(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖),暂不做
@@ -33,9 +34,9 @@
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`,manifest 已加 `unlimitedStorage`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,用 `idb`,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;**不引状态库**;消息按 pi 消息联合形状持久化,旧扁平结构由 `sanitizeSessions/sanitizeMessage` 迁移 |
 | 页面提取 | 引用元数据以 `<page-refs>{JSON}</page-refs>` 块内嵌 user 消息 content(唯一事实源,LLM 直读 + UI 解析同源,`lib/pageRefs.ts`);实时内容经 `read_page`(tabId 句柄读整页正文)/`read_element`(任意 CSS selector,返回 outerHTML 12000 字符截断;tab 级白名单=草稿∪历史块)工具按需读取,消息协议 `ai-sidebar/extract-page`、`ai-sidebar/pick-element(-result)` 由 content.ts 应答;图像经 `lib/imageFetch.ts`(fetch 主取 + captureVisibleTab 裁剪兜底 + canvas 降采样) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight(已装) |
-| 权限 | manifest:`storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab`(+ host_permissions http/https) |
+| 权限 | manifest:`storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts`(+ host_permissions http/https);`minimum_chrome_version: "135"`(userScripts.execute 门槛);Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts |
 | 路径别名 | `@/*` → 项目根 |
-| 工具命名 | `<动词>_<域词>`:动词集 {read, search, fetch, click, fill, scroll, screenshot} × 域词集 {page, element, url, web},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key 兼容历史会话) |
+| 工具命名 | `<动词>_<域词>`:动词集 {read, search, fetch, click, fill, scroll, screenshot, execute, ask} × 域词集 {page, element, url, web, js, user, time},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key 兼容历史会话) |
 | 模型可见文本 | **一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支、非 vision 图片描述、system prompt 全文;UI 显示文案(TOOL_LABELS 中文值等)保持中文,以后收敛 i18n |
 
 ## 关键 UI 决策(已实现)
@@ -64,7 +65,10 @@ lib/
   models.ts           # fetchProviderModels/fetchModelsDevMeta/applyModelMeta/syncModelsWithModelsDev/testConnection
   pageRefs.ts         # renderPageRefsBlock/parsePageRefs/stripPageRefs/collectPageRefs(纯函数,<page-refs> 块)
   pageContext.ts      # tab 级读取原语(getActiveTabMeta/extractFromTab/createReadPageTool)+ startPickElement/resolveElement
+  pageScripting.ts    # execute_js 注入原语:isUserScriptsAvailable/executePageScript(userScripts.execute 主路线 + scripting MAIN world 兜底,8000 截断)
   imageFetch.ts       # fetchImageForModel/captureCropForModel(≤2000²、JPEG q80 逐级降质、base64 ≤4.5MB)
+  gate.ts             # 工具门控契约:GateRequest(confirm/ask)/setGateHandler/flushPendingGates/requestGate/createGatedTool
+  tools.ts            # 轻量通用工具(read_time/ask_user)+ 本地时间助手(localDate/localTime/utcOffsetLabel)
   utils.ts            # cn()
 components/ui/        # shadcn 组件(保持官方原样)
 ```
@@ -74,10 +78,10 @@ components/ui/        # shadcn 组件(保持官方原样)
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome):重点 = 普通对话、read_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移
 2. websearch / fetch_url 工具(读链接目标内容)
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)
-4. 三期页面操作:授权门控 `createGatedTool` 先行 → screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;browser-use/Stagehand/LaVague 服务端形态不可用)
+4. 三期页面操作:screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;browser-use/Stagehand/LaVague 服务端形态不可用;execute_js 已完成:lib/pageScripting.ts + lib/agent.ts createExecuteJsTool)
 5. 发布:图标 + `wxt zip`
 
-> 已完成(2026-09-02):`err: any` → `unknown`(getErrorMessage helper);dev 可观测性(未知 `ai-sidebar/` 消息 console.warn)。用户拍板不做:highlight.js 语言包裁剪(本地加载,941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
+> 已完成(2026-09-02):`err: any` → `unknown`(getErrorMessage helper);dev 可观测性(未知 `ai-sidebar/` 消息 console.warn);execute_js 工具(userScripts.execute 主路线 + scripting MAIN world 兜底,confirm 门控动态预览代码,Chrome 135+ / Allow User Scripts 开关引导)。用户拍板不做:highlight.js 语言包裁剪(本地加载,941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
 
 ## 约定
 

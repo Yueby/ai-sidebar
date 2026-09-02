@@ -10,6 +10,7 @@ import {
   Wrench,
   Loader2,
   SquareMousePointer,
+  ShieldAlert,
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, PageRefs, ToolResultMessage } from '@/lib/types';
 import { toolLabel } from '@/lib/types';
@@ -29,6 +30,8 @@ interface MessageItemProps {
   liveToolLabels?: string[];
   /** 按 toolCallId 索引的工具执行结果字典 */
   toolResults?: Map<string, ToolResultMessage>;
+  /** 当前正在等待确认的工具名(用于在对应 in-flight 卡片上显示等待确认态) */
+  pendingGateToolName?: string | null;
 }
 
 function formatTokens(count: number): string {
@@ -169,22 +172,34 @@ interface ToolCallCardProps {
   args?: Record<string, unknown>;
   result?: ToolResultMessage | null;
   isExecuting?: boolean;
+  isWaitingConfirmation?: boolean;
 }
 
-function ToolCallCard({ name, args, result, isExecuting }: ToolCallCardProps) {
+function ToolCallCard({ name, args, result, isExecuting, isWaitingConfirmation }: ToolCallCardProps) {
   const [open, setOpen] = useState(false);
   const label = toolLabel(name);
 
-  const isError = result?.isError === true;
-  const isDone = Boolean(result) && !isExecuting;
+  // 拒绝判定:优先结构化标志(gate.details.denied);旧持久化消息无此标志,保留文本嗅探兜底
+  const isDenied = useMemo(() => {
+    if (!result) return false;
+    if (result.details?.denied === true) return true;
+    if (!result.content) return false;
+    return result.content.some(
+      (c) => c.type === 'text' && c.text.includes('User denied permission')
+    );
+  }, [result]);
+
+  const isError = result?.isError === true || isDenied;
+  const isDone = Boolean(result) && !isExecuting && !isWaitingConfirmation;
 
   // Extract and truncate result text
   const resultText = useMemo(() => {
     if (!result?.content) return '';
+    if (isDenied) return '用户拒绝授权执行该操作';
     return result.content
       .map((c) => (c.type === 'text' ? c.text : ''))
       .join('');
-  }, [result]);
+  }, [result, isDenied]);
 
   const isTruncated = resultText.length > 500;
   const displayResultText = isTruncated ? `${resultText.slice(0, 500)}...` : resultText;
@@ -198,7 +213,9 @@ function ToolCallCard({ name, args, result, isExecuting }: ToolCallCardProps) {
         className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-80 transition-opacity cursor-pointer"
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          {isExecuting ? (
+          {isWaitingConfirmation ? (
+            <ShieldAlert className="size-3.5 shrink-0 text-amber-500" />
+          ) : isExecuting ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
           ) : (
             <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
@@ -210,8 +227,14 @@ function ToolCallCard({ name, args, result, isExecuting }: ToolCallCardProps) {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {isExecuting ? (
+          {isWaitingConfirmation ? (
+            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium animate-pulse">
+              等待确认
+            </span>
+          ) : isExecuting ? (
             <span className="text-[10px] text-muted-foreground">执行中</span>
+          ) : isDenied ? (
+            <span className="text-[10px] text-destructive font-medium">用户拒绝</span>
           ) : isError ? (
             <span className="text-[10px] text-destructive font-medium">失败</span>
           ) : isDone ? (
@@ -252,7 +275,11 @@ function ToolCallCard({ name, args, result, isExecuting }: ToolCallCardProps) {
               )}
             </div>
 
-            {isExecuting ? (
+            {isWaitingConfirmation ? (
+              <div className="text-[10px] text-amber-600 dark:text-amber-400 italic py-0.5">
+                正在等待用户确认授权...
+              </div>
+            ) : isExecuting ? (
               <div className="text-[10px] text-muted-foreground italic py-0.5">
                 等待执行结果...
               </div>
@@ -287,6 +314,7 @@ export function MessageItem({
   liveThinking,
   liveToolLabels,
   toolResults,
+  pendingGateToolName,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
 
@@ -358,21 +386,31 @@ export function MessageItem({
   return (
     <div className="flex flex-col gap-1 px-3 py-1">
       {/* 1. Independent Tool Call Cards (Ordered) */}
-      {toolCallBlocks.map((block, i) => (
-        <ToolCallCard
-          key={block.id || `tool-${i}`}
-          id={block.id}
-          name={block.name}
-          args={block.arguments}
-          result={block.id ? toolResults?.get(block.id) : null}
-        />
-      ))}
+      {toolCallBlocks.map((block, i) => {
+        const result = block.id ? toolResults?.get(block.id) : null;
+        const isWaiting = !result && pendingGateToolName === block.name;
+        return (
+          <ToolCallCard
+            key={block.id || `tool-${i}`}
+            id={block.id}
+            name={block.name}
+            args={block.arguments}
+            result={result}
+            isWaitingConfirmation={isWaiting}
+          />
+        );
+      })}
 
       {/* Live executing tool calls during streaming */}
       {liveToolLabels && liveToolLabels.length > 0 && (
         <div className="space-y-1">
           {liveToolLabels.map((toolName, i) => (
-            <ToolCallCard key={`live-tool-${i}`} name={toolName} isExecuting />
+            <ToolCallCard
+              key={`live-tool-${i}`}
+              name={toolName}
+              isExecuting
+              isWaitingConfirmation={pendingGateToolName === toolName}
+            />
           ))}
         </div>
       )}

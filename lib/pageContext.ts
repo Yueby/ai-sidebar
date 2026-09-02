@@ -1,7 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { PageContext } from './types';
-import { EXTRACT_PAGE_MESSAGE, toolLabel } from './types';
+import { EXTRACT_PAGE_MESSAGE, toolLabel, type ToolRisk } from './types';
 
 /**
  * content 侧提取应答:PageContext + 截断标记。
@@ -103,11 +103,14 @@ const READ_PAGE_PARAMS = Type.Object({
 });
 
 /** read_page 工具:AI 按需读取某个被引用标签页的当前正文 */
-export function createReadPageTool(refTabs: RefTab[]): AgentTool<typeof READ_PAGE_PARAMS> {
+export function createReadPageTool(
+  refTabs: RefTab[],
+): AgentTool<typeof READ_PAGE_PARAMS> & { risk: ToolRisk } {
   const validIds = refTabs.map((t) => t.id);
   return {
     name: 'read_page',
     label: toolLabel('read_page'),
+    risk: 'safe',
     description:
       "Read the title, URL and main text content of a user-referenced browser tab. Call this with the corresponding tabId when the user's question may relate to a referenced page or needs its content.",
     parameters: READ_PAGE_PARAMS,

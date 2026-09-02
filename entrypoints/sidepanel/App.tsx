@@ -19,6 +19,12 @@ import {
   PICK_ELEMENT_RESULT_MESSAGE,
   type RefTab,
 } from '@/lib/pageContext';
+import {
+  type GateRequest,
+  type GateResponse,
+  setGateHandler,
+  flushPendingGates,
+} from './gateAdapter';
 
 // Components
 import { ChatHeader } from './components/chat/ChatHeader';
@@ -67,6 +73,54 @@ export default function App() {
   // 完整 assistant 消息。渲染源 = 会话转录 + 本列表,live 气泡只承载「正在流的那条」,
   // 否则 turn1 完成到 finalize 之间无处渲染 → 气泡闪没/错乱。
   const [inFlight, setInFlight] = useState<{ sessionId: string; messages: ChatMessage[] } | null>(null);
+
+  // 工具门控请求(confirm/ask)
+  const [activeGate, setActiveGate] = useState<{
+    request: GateRequest;
+    resolve: (res: GateResponse) => void;
+  } | null>(null);
+
+  // 门控响应回调封装
+  const handleGateApprove = useCallback(() => {
+    if (activeGate) {
+      activeGate.resolve({ kind: 'confirm', approved: true });
+      setActiveGate(null);
+    }
+  }, [activeGate]);
+
+  const handleGateDeny = useCallback(() => {
+    if (activeGate) {
+      activeGate.resolve({ kind: 'confirm', approved: false });
+      setActiveGate(null);
+    }
+  }, [activeGate]);
+
+  const handleGateAnswer = useCallback((answer: string) => {
+    if (activeGate) {
+      activeGate.resolve({ kind: 'ask', answer });
+      setActiveGate(null);
+    }
+  }, [activeGate]);
+
+  const handleGateCancel = useCallback(() => {
+    if (activeGate) {
+      activeGate.resolve({ kind: 'ask', answer: '', cancelled: true });
+      setActiveGate(null);
+    }
+  }, [activeGate]);
+
+  // 挂载时向 gateAdapter 注册 UI 处理函数
+  useEffect(() => {
+    setGateHandler((req: GateRequest) => {
+      return new Promise<GateResponse>((resolve) => {
+        setActiveGate({ request: req, resolve });
+      });
+    });
+    return () => {
+      setGateHandler(null);
+      flushPendingGates();
+    };
+  }, []);
 
   // 每会话草稿:输入文本 / 引用标签页 / 框选元素不再是全局 state,
   // 一律派生自当前会话的 Session.draft(唯一事实来源,IndexedDB 持久化)。
@@ -510,6 +564,9 @@ export default function App() {
     async (id: string) => {
       const leavingId = activeSessionIdRef.current;
       if (leavingId === id) return;
+      // 切换会话冲销所有 pending 门控(安全拒绝)
+      flushPendingGates();
+      setActiveGate(null);
       const leaving = leavingId
         ? sessionsRef.current.find((s) => s.id === leavingId) ?? null
         : null;
@@ -540,6 +597,9 @@ export default function App() {
       setErrorMessage(null);
       return;
     }
+    // 新建会话冲销所有 pending 门控
+    flushPendingGates();
+    setActiveGate(null);
     flushDraftSaves();
     // 规则 1:新会话草稿预填当前活动页
     const newSess = createSession(
@@ -557,6 +617,11 @@ export default function App() {
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
+      // 若删除当前会话，冲销 pending 门控
+      if (activeSessionIdRef.current === id) {
+        flushPendingGates();
+        setActiveGate(null);
+      }
       // 防止被删会话的待发草稿在 flush 时复活它;删除是自然 flush 边界
       pendingDraftSavesRef.current.delete(id);
       flushDraftSaves();
@@ -589,6 +654,9 @@ export default function App() {
 
   // Navigation & Provider Dialog Handlers
   const handleOpenSettings = useCallback(() => {
+    // 离开聊天视图时冲销挂起门控(与停止生成同款处理;deny 后模型收到拒绝文本收尾,无需恢复)
+    flushPendingGates();
+    setActiveGate(null);
     setCurrentView('settings');
   }, []);
 
@@ -644,7 +712,7 @@ export default function App() {
   // AI Chat & Agent Loop
   const handleSendMessage = useCallback(
     async (userText: string) => {
-      if (isStreaming) return;
+      if (isStreaming || activeGate !== null) return;
 
       const active = findActiveModel(settingsRef.current);
       if (!active) {
@@ -808,14 +876,16 @@ export default function App() {
         abortControllerRef.current = null;
       }
     },
-    [isStreaming, currentSession]
+    [isStreaming, activeGate, currentSession]
   );
 
-  // Stop generation
+  // Stop generation: 中止流式请求并冲销 pending 门控
   const handleStopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    flushPendingGates();
+    setActiveGate(null);
   }, []);
 
   // Quick prompt chip click:预设问题并入 draft.input(规则 5)。
@@ -874,6 +944,11 @@ export default function App() {
             streamingContent={streamingContent}
             streamingThinking={streamingThinking}
             activeToolLabels={activeToolNames}
+            gateRequest={activeGate?.request ?? null}
+            onGateApprove={handleGateApprove}
+            onGateDeny={handleGateDeny}
+            onGateAnswer={handleGateAnswer}
+            onGateCancel={handleGateCancel}
             isCancelled={isCancelled}
             errorMessage={errorMessage}
             onDismissError={() => setErrorMessage(null)}
@@ -903,7 +978,7 @@ export default function App() {
             onStartPickElement={handleStartPickElement}
             onRemovePickedElement={handleRemovePickedElement}
             onOpenSettings={handleOpenSettings}
-            disabled={!activeModelInfo}
+            disabled={!activeModelInfo || activeGate !== null}
             initialInput={draft.input}
             onInputChange={handleDraftInput}
           />

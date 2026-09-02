@@ -61,12 +61,18 @@ export const TOOL_LABELS: Record<string, string> = {
   // 旧名,兼容历史会话 ToolCallCard(旧持久化消息 toolCall.name 仍是 extract_page)
   extract_page: '读取网页内容',
   read_element: '读取页面元素',
+  read_time: '读取设备时间',
+  ask_user: '询问用户',
+  execute_js: '执行页面脚本',
 };
 
 /** 取工具展示文案:未知工具名原样返回 */
 export function toolLabel(name: string): string {
   return TOOL_LABELS[name] ?? name;
 }
+
+/** Agent 工具风险元数据:safe=直接执行;confirm=执行前需经 lib/gate.ts 发 UI 确认(如 execute_js) */
+export type ToolRisk = 'safe' | 'confirm';
 
 export interface Settings {
   providers: ProviderConfig[];

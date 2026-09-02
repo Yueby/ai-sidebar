@@ -27,7 +27,7 @@
 | AI 请求 | **`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(见 §6/§7),sidepanel 直连,BYOK |
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,`idb` 封装,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;不引状态库;消息按 pi 消息联合形状持久化 |
 | 页面引用 | 引用元数据 = user 消息 content 内嵌 `<page-refs>{JSON}</page-refs>` 块(唯一事实源:LLM 直读 + UI 解析同源,`lib/pageRefs.ts`);实时内容经 `read_page`(tabId 句柄读整页正文)/`read_element`(引用页内任意 CSS selector,返回 outerHTML)工具按需读取 |
-| manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab`(+ host_permissions http/https) |
+| manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts`(+ host_permissions http/https);`minimum_chrome_version: "135"`(userScripts.execute 门槛;Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight + highlight.js(样式已在 style.css 引入) |
 | 路径别名 | `@/*` → 项目根 |
 | Shell | Git Bash;**context-mode 工具(ctx_batch_execute)实际跑 PowerShell,POSIX 语法会炸,多命令一律用 `bash` 工具** |
@@ -50,8 +50,10 @@
 12. **引用架构定稿 = `<page-refs>` 块**:引用元数据发送时序列化进 user 消息 content,此后永不改变;无 refSnapshot 字段、无 convertToLlm、system prompt 不注入引用目录(只放协议常量规则);`ChatMessage` 回归纯 pi 联合,零自定义字段。
 13. **会话草稿**:`Session.draft { input, refTabs, pickedElements }` 随会话持久化(IndexedDB 防抖落盘);新会话自动引用当前页;空会话离开即回收;发送即清空草稿。
 14. **工具安全边界 = tab 级白名单**(tabId ∈ 草稿引用 ∪ 历史 `<page-refs>` 块);selector 不设白名单(框选元素是提示,AI 可在引用页内自行探索);vision 门控:`model.input` 含 image 才产 ImageContent 块;工具中文文案单一来源 `TOOL_LABELS`(读取网页内容/读取页面元素)。
-15. **工具命名规范 = `<动词>_<域词>`**:动词集 {read, search, fetch, click, fill, scroll, screenshot} × 域词集 {page, element, url, web},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key extract_page 兼容历史会话 ToolCallCard)。内部消息协议字符串(`ai-sidebar/extract-page` 等)与工具名解耦,不随改名漂移。
+15. **工具命名规范 = `<动词>_<域词>`**:动词集 {read, search, fetch, click, fill, scroll, screenshot, execute, ask} × 域词集 {page, element, url, web, js, user, time},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key extract_page 兼容历史会话 ToolCallCard)。内部消息协议字符串(`ai-sidebar/extract-page` 等)与工具名解耦,不随改名漂移。
 16. **模型可见文本一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支文本、非 vision 图片描述、system prompt 全文;UI 显示文案保持中文(TOOL_LABELS 中文值、ToolCallCard 等),以后收敛 i18n。
+17. **工具门控契约 = `lib/gate.ts`**:`GateRequest`(confirm 弹卡 / ask 提问)+ `setGateHandler`(App 注册 UI 处理器;**未注册时门控请求快速 deny/cancelled,安全默认**)、`flushPendingGates`(停止/中止生成时冲销 pending)、`requestGate`(handler 抛异常按 deny);`createGatedTool(tool, summary, detail?, detailFromArgs?)` 为 confirm 路径包装,detail 支持按调用参数动态生成(`detailFromArgs(args): string`,空串回退静态 detail,execute_js 用它预览待执行代码),denied 返回英文 "User denied permission to run this tool."(正常 tool result,模型可继续);ask_user 走 ask 路径,挂起阻塞工具循环属预期(无超时)。
+18. **execute_js = userScripts.execute 主路线 + scripting MAIN world 兜底**(`lib/pageScripting.ts`):Chrome 135+ 才有 `chrome.userScripts.execute`(manifest 已设 `minimum_chrome_version: "135"`);Chrome 138+ 需用户在扩展详情页开启 **Allow User Scripts**(未开时命名空间缺失或 getScripts() throw);userScripts 不可用时降级 `scripting.executeScript` MAIN world(func 包装 eval,严格 CSP 站点会失败),降级在返回文本里注明、全链失败返回可行动英文错误文本;结果 JSON.stringify 后截断 8000 字符;一切错误转英文文本不 throw。
 
 ## 4. 当前代码状态
 
@@ -64,10 +66,13 @@ lib 层 + sidepanel 全部 UI 已完成(含 page-refs 引用架构、read_elemen
 | `lib/storage.ts` | ✅ 完成 | `settingsItem`/`activeSessionIdItem` + `sanitizeSettings`/`sanitizeSessions`(旧扁平消息结构按 pi 形状迁移)+ `uid/createSession(含 draft)/createUserMessage(text, refs?)/messageText/titleFromText/EMPTY_USAGE` |
 | `lib/sessionStore.ts` | ✅ 完成 | 会话历史唯一读写层(IndexedDB,`idb` 封装):`listSessions`(按 updatedAt 降序)/`saveSession`/`deleteSession`/`migrateLegacySessions`(旧 `local:sessions` 一次性迁移后删除旧 key);草稿随 Session 一起存 |
 | `lib/pageRefs.ts` | ✅ 完成 | `<page-refs>` 块纯函数:`renderPageRefsBlock`(序列化拼进 user content)/`parsePageRefs`(UI 解析渲染)/`stripPageRefs`(展示时剥块)/`collectPageRefs`(聚合历史块引用,做工具白名单) |
-| `lib/agent.ts` | ✅ 完成 | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;tabs 非空注入 read_page,有可读 tab 注入 read_element)、`toPiModel`、`buildSystemPrompt()`(身份/语言 + `<page-refs>` 协议常量规则,不注入引用目录)、`createReadElementTool`(tab 级白名单 + vision 门控取图) |
+| `lib/agent.ts` | ✅ 完成 | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;常驻 read_time/ask_user,tabs 非空注入 read_page/execute_js,有可读 tab 注入 read_element)、`toPiModel`、`buildSystemPrompt()`(身份/语言 + 本地日期时间行 + navigator.language + `<page-refs>` 协议常量规则,不注入引用目录)、`createReadElementTool`(tab 级白名单 + vision 门控取图)、`createExecuteJsTool`(confirm 型,tab 级白名单,确认卡动态预览代码) |
 | `lib/models.ts` | ✅ 完成 | `fetchProviderModels`(openai 兼容 Bearer / anthropic x-api-key+version,路径 openai=`/models`、anthropic=`/v1/models`)、`fetchModelsDevMeta`、`applyModelMeta`、`syncModelsWithModelsDev`(「同步」按钮:为已有模型补全参数)、`testConnection` |
 | `lib/pageContext.ts` | ✅ 完成 | tab 级读取原语:`getActiveTabMeta`/`getTabMeta`/`listCandidateTabs`/`extractFromTab`/`renderPageContext`(content.ts 截 12000 字,本层透传)/`createReadPageTool`;框选与元素解析:`startPickElement`(`ai-sidebar/pick-element`)、`resolveElement`(复用 `ai-sidebar/pick-element` + `action:'resolve'`,返回 outerHTML+truncated+preview+images+dpr) |
 | `lib/imageFetch.ts` | ✅ 完成 | read_element 取图管道:`fetchImageForModel`(fetch 主取)→ `captureCropForModel`(captureVisibleTab 按 rect×DPR 裁剪兜底,防盗链/403);canvas 降采样对齐 pi 上游:≤2000×2000、JPEG q0.8 起逐级降质、PNG/JPEG 取小、base64 ≤4.5MB |
+| `lib/gate.ts` | ✅ 完成 | 工具门控契约:`GateRequest`(confirm/ask)/`GateResponse`、`setGateHandler`(未注册=快速 deny/cancelled,安全默认)、`flushPendingGates`(停止/中止冲销 pending)、`requestGate`(handler 异常按 deny)、`createGatedTool`(confirm 包装,detail 支持按参数动态生成,denied 英文拒绝文本;execute_js 已用) |
+| `lib/pageScripting.ts` | ✅ 完成 | execute_js 注入原语:`isUserScriptsAvailable`(userScripts 存在 + getScripts() 探测不 throw)、`executePageScript(tabId, code, world)`(userScripts.execute 主路线 → scripting.executeScript MAIN world func 包装兜底,JSON.stringify 后 8000 字符截断,降级在返回文本注明,一切错误转英文不 throw) |
+| `lib/tools.ts` | ✅ 完成 | 轻量通用工具:`read_time`(设备本地时间英文块 date/weekday/time/timezone/iso,免弹卡)、`ask_user`(经 gate ask 路径,答复来自选项时附 "(chosen from options)";cancelled → "User dismissed the question (no answer).")+ 时间助手 `localDate`/`localTime`/`utcOffsetLabel`(原 agent.ts 内部函数上移) |
 | `lib/utils.ts` | ✅ 完成 | cn() |
 | `entrypoints/content.ts` | ✅ 完成 | 结构化提取(article/main/[role=main] 优先,截 12000 字)+ 框选元素模式(@medv/finder 生成唯一 selector,结果经 `ai-sidebar/pick-element-result` 广播)+ 元素解析应答(`pick-element` 消息 `action:'resolve'`) |
 | `entrypoints/background.ts` | ✅ 完成 | 点击图标打开侧边栏 |
@@ -313,12 +318,13 @@ migrateLegacySessions(): Promise<Session[]>     // 旧 local:sessions 非空则�
 toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi>   // 缺失参数保守默认(128000/4096)
 buildSystemPrompt(): string                     // 身份/语言 + <page-refs> 协议常量规则(不注入引用目录)
 createReadElementTool(refTabs, pickedElements, canUseImage): AgentTool  // tab 级白名单;vision 门控取图
+createExecuteJsTool(refTabs): AgentTool         // 'execute_js':confirm 型(tabId+code+world),确认卡动态预览 code
 runAgentTurn({ provider; modelId; history: ChatMessage[]; userMessage: UserMessage;  // content 已内嵌 <page-refs> 块
   refTabs?: RefTab[]; pickedElements?: PickedElement[];                              // 当前草稿引用(App 已按开关过滤)
   thinkingLevel: ReasoningLevel; sessionId?; signal?; onEvent?: (e: AgentEvent) => void;
 }): Promise<RunAgentResult>
 // RunAgentResult { messages(完整转录); newMessages(本轮新增,含 toolResult); errorMessage? }
-// 语义:工具白名单 = 草稿引用 ∪ collectPageRefs(history);tabs 非空注入 read_page,
+// 语义:工具白名单 = 草稿引用 ∪ collectPageRefs(history);tabs 非空注入 read_page + execute_js,
 // 有可读 tab 注入 read_element;内部 new Agent({ streamFn: models.streamSimple, toolExecution:'sequential' });
 // 失败经协议事件编码(stopReason='error');中止时已生成部分保留在转录中;onEvent 透出供 UI 流式渲染
 
@@ -337,6 +343,27 @@ renderPageContext(page): string               // read_page 工具回传给模型
 createReadPageTool(refTabs): AgentTool        // 'read_page':tabId 句柄读引用页正文
 startPickElement(tabId): Promise<void>        // 广播 ai-sidebar/pick-element 进框选模式,结果经 pick-element-result 回传
 resolveElement(tabId, selector): Promise<ResolvedElement | null>  // 元素解析(outerHTML+truncated+preview+images+dpr),read_element 底层;复用 pick-element 消息 action:'resolve'
+
+// lib/pageScripting.ts(execute_js 注入原语;userScripts 类型未在 @wxt-dev/browser 声明,内部已 cast)
+isUserScriptsAvailable(): boolean               // chrome.userScripts 存在 + getScripts() 探测不 throw(138+ 开关探测)
+executePageScript(tabId, code, world): Promise<{ok:true;result:string}|{ok:false;error:string}>
+// world: 'user_script'(默认,USER_SCRIPT 隔离豁免页面 CSP)| 'main'(页面主世界,可访问页面 JS 状态)
+// 主路线 chrome.userScripts.execute(135+);不可用降级 scripting.executeScript MAIN world(func 包装 eval,
+// 严格 CSP 站点失败),降级在结果文本注明;全链失败返回可行动英文错误文本(Allow User Scripts / 120-137 开发者模式)
+// 结果 JSON.stringify 后截断 8000 字符;一切错误转英文文本不 throw
+
+// lib/gate.ts(工具门控契约;UI 车道经 setGateHandler 注册处理器)
+type GateRequest  = { kind:'confirm'; toolName; label; summary; detail? } | { kind:'ask'; question; options? };
+type GateResponse = { kind:'confirm'; approved } | { kind:'ask'; answer; cancelled? }
+setGateHandler(h: GateHandler | null); flushPendingGates()   // 未注册=快速 deny/cancelled(安全默认);flush 供停止/中止冲销
+requestGate(req): Promise<GateResponse>                      // 挂起等 UI 应答(无超时);handler 异常按 deny
+createGatedTool(tool, summary, detail?, detailFromArgs?)     // confirm 包装:detailFromArgs(args)=>string 按调用参数动态生成
+// detail(空串回退静态 detail,execute_js 预览 code);approved 才执行原工具,denied 返回英文拒绝文本
+
+// lib/tools.ts(轻量通用工具 + 时间助手)
+localDate(now?): string; localTime(now?): string; utcOffsetLabel(now?): string  // 'YYYY-MM-DD' / 'HH:MM:SS' / 'UTC+8'
+createReadTimeTool(): AgentTool & { risk:'safe' }            // 'read_time':date/weekday/time/timezone/iso(UTC) 英文块,免弹卡
+createAskUserTool(): AgentTool & { risk:'safe' }             // 'ask_user':requestGate ask 路径(≤6 options);cancelled → 'User dismissed the question (no answer).'
 
 // lib/imageFetch.ts(read_element 取图管道)
 fetchImageForModel(src): Promise<ModelImage | null>            // fetch 主取
@@ -359,7 +386,7 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome 加载扩展):重点 = 普通对话、read_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移;另过一遍设置页全流程(添加提供商→测试→拉模型→同步→改参数→设为当前→聊天)。
 2. websearch / fetch_url 工具(读链接目标内容)。
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)。
-4. 三期页面操作:授权门控 `createGatedTool` 先行 → screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖)。
+4. 三期页面操作:screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;execute_js 已完成)。
 5. 发布:图标 + `wxt zip`。
 
 > 已完成(2026-09-02):`err: any` → `unknown`(lib/utils.ts `getErrorMessage` helper,App/SettingsMainView/ProviderDialog 5 处收窄);dev 可观测性(content.ts 对未知 `ai-sidebar/` 消息 DEV 下 console.warn)。用户拍板不做:highlight.js 语言包裁剪(本地加载 941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。

@@ -12,9 +12,12 @@ import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messag
 import { Type } from '@earendil-works/pi-ai';
 import type { AssistantMessage, ImageContent, TextContent, UserMessage } from '@earendil-works/pi-ai';
 import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement } from './types';
-import { toolLabel } from './types';
+import { toolLabel, type ToolRisk } from './types';
 import { normalizeBaseUrl } from './providers';
 import { createReadPageTool, resolveElement, type RefTab } from './pageContext';
+import { executePageScript, isUserScriptsAvailable, type PageScriptWorld } from './pageScripting';
+import { createGatedTool } from './gate';
+import { createReadTimeTool, createAskUserTool, localDate, utcOffsetLabel } from './tools';
 import { collectPageRefs } from './pageRefs';
 import { fetchImageForModel, captureCropForModel } from './imageFetch';
 
@@ -70,19 +73,13 @@ function buildProvider(p: ProviderConfig) {
  * Model-facing 文本一律英文(硬约束);注释是给开发者看的,保持中文。
  * 回复语言动态注入:sidepanel 上下文直读 navigator.language,异常时省略该行。
  */
-/** 本地日期 + UTC 偏移标签(如 `UTC+8`、`UTC+5:30`),供系统提示动态注入 */
-function utcOffsetLabel(): string {
-  const mins = -new Date().getTimezoneOffset();
-  const sign = mins >= 0 ? '+' : '-';
-  const h = Math.floor(Math.abs(mins) / 60);
-  const m = Math.abs(mins) % 60;
-  return `UTC${sign}${h}${m ? `:${String(m).padStart(2, '0')}` : ''}`;
-}
-
 export function buildSystemPrompt(): string {
+  const now = new Date();
+  const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
   const parts = [
     "You are an AI assistant living in the user's browser sidebar. Respond in the same language the user writes in.",
-    `Today is ${new Date().toLocaleDateString('en-CA')} (${utcOffsetLabel()}).`,
+    // 不带时刻(精确时刻由 read_time 工具覆盖):system prompt 保持跨轮稳定,前缀缓存不失效
+    `Today is ${weekday}, ${localDate(now)} (${utcOffsetLabel(now)}).`,
   ];
   try {
     const lang = navigator.language;
@@ -150,7 +147,7 @@ export function createReadElementTool(
   refTabs: RefTab[],
   pickedElements: PickedElement[],
   canUseImage: boolean,
-): AgentTool<typeof READ_ELEMENT_PARAMS> {
+): AgentTool<typeof READ_ELEMENT_PARAMS> & { risk: ToolRisk } {
   // tab 级白名单 = 引用标签页 ∪ 框选元素所在标签页(历史上引用过元素的 tab 必可读)
   const validTabIds = new Set<number>([
     ...refTabs.map((t) => t.id),
@@ -159,6 +156,7 @@ export function createReadElementTool(
   return {
     name: 'read_element',
     label: toolLabel('read_element'),
+    risk: 'safe',
     description:
       'Read the element matching a CSS selector inside a user-referenced tab and return its outerHTML (raw HTML with tags, attributes and structure — useful for understanding interactive elements; image blocks are attached when the element contains images and the model supports them). tabId must come from the <page-refs> block in the user message; selector can be any valid CSS selector — elements in <page-refs> are user-picked highlights, but you may also explore other elements on the page. For a full-page overview use read_page.',
     parameters: READ_ELEMENT_PARAMS,
@@ -250,6 +248,84 @@ export function createReadElementTool(
   };
 }
 
+const EXECUTE_JS_PARAMS = Type.Object({
+  tabId: Type.Number({ description: 'Id of the tab to run the script in (referenced tabs are annotated with tabId in the <page-refs> block of user messages)' }),
+  code: Type.String({ description: 'JavaScript source code to execute in the page. The completion value of the last statement is returned as JSON — end with a small expression (e.g. `({title: document.title, count: results.length})`) instead of relying on console output.' }),
+  world: Type.Optional(
+    Type.Union([Type.Literal('user_script'), Type.Literal('main')], {
+      description: "Execution world. 'user_script' (default) runs in an isolated user-script world with full DOM access but without JavaScript globals defined by the page; 'main' runs in the page's main world and can access page-defined JS state, which is more privileged — use it only when the page's own state is needed.",
+    }),
+  ),
+});
+
+/**
+ * execute_js 工具:在用户引用的标签页执行任意 JS,confirm 型(经 createGatedTool
+ * 包装,确认卡动态预览待执行代码)。安全边界 = tab 级白名单(与 read_page 一致)。
+ * 底层经 lib/pageScripting.ts:主路线 chrome.userScripts.execute,不可用时降级
+ * scripting.executeScript MAIN world。
+ */
+export function createExecuteJsTool(
+  refTabs: RefTab[],
+): AgentTool<typeof EXECUTE_JS_PARAMS> & { risk: ToolRisk } {
+  const validTabIds = new Set<number>(refTabs.map((t) => t.id));
+  const base: AgentTool<typeof EXECUTE_JS_PARAMS> & { risk: ToolRisk } = {
+    name: 'execute_js',
+    label: toolLabel('execute_js'),
+    risk: 'confirm',
+    description:
+      'Execute JavaScript in a user-referenced tab and return the result — use it to read or compute page data that read_page / read_element cannot provide (e.g. state defined by the page itself, computed values), or to manipulate page state when the user asks for it. This tool runs arbitrary code in the page and can be destructive: every run requires explicit user approval via a confirmation card showing your code, so keep the code minimal and explain your intent before calling. Prefer read_page / read_element for plain content extraction; use this tool only when they are insufficient. Worlds: `user_script` (default) is isolated — it has DOM access but cannot see JavaScript globals defined by the page; `main` runs in the main world and can access page-defined JS state, but is more privileged.',
+    parameters: EXECUTE_JS_PARAMS,
+    execute: async (_toolCallId, args) => {
+      const tabId = args?.tabId;
+      if (typeof tabId !== 'number' || !validTabIds.has(tabId)) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Invalid tabId: ${JSON.stringify(tabId ?? null)}. Executable tabs: ${
+                [...validTabIds].map((id) => `#${id}`).join(', ') || '(none)'
+              }.`,
+            },
+          ],
+          details: null,
+        };
+      }
+      const code = typeof args?.code === 'string' ? args.code : '';
+      if (!code.trim()) {
+        return {
+          content: [
+            { type: 'text', text: 'Invalid code: a non-empty JavaScript source string is required.' },
+          ],
+          details: null,
+        };
+      }
+      const world: PageScriptWorld = args?.world === 'main' ? 'main' : 'user_script';
+      const res = await executePageScript(tabId, code, world);
+      return {
+        content: [{ type: 'text', text: res.ok ? res.result : res.error }],
+        details: { tabId, world },
+      };
+    },
+  };
+  return createGatedTool(base, '在页面中执行 JavaScript 代码', undefined, (params) => {
+    const p = (params ?? {}) as { code?: unknown; tabId?: unknown };
+    const code = typeof p.code === 'string' ? p.code : '';
+    const tabId = typeof p.tabId === 'number' ? p.tabId : (p.tabId ?? 'unknown');
+    const ref = refTabs.find((t) => t.id === p.tabId);
+    const target = ref
+      ? `Target tab: #${tabId} "${ref.title}" (${ref.url})`
+      : `Target tab: #${tabId}`;
+    return [
+      // 未开 Allow User Scripts 时降级 MAIN world(权限更强),确认卡上提前告知
+      ...(isUserScriptsAvailable()
+        ? []
+        : ["Note: the userScripts API is unavailable — the code will run in the page's MAIN world as a fallback."]),
+      code,
+      target,
+    ].join('\n');
+  });
+}
+
 /**
  * 基于 pi-agent-core 的 Agent 跑一轮对话(可能包含多轮工具调用循环)。
  * 失败经 Agent 协议事件编码(stopReason='error'),取消经 signal 注入;
@@ -294,16 +370,20 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   const pickedElements = [...elementByKey.values()];
 
   const tools: AgentTool[] = [];
-  // tabs 非空注入 read_page;有可读 tab(引用页或框选元素所在页)即注入 read_element
+  // tabs 非空注入 read_page / execute_js;有可读 tab(引用页或框选元素所在页)即注入 read_element
   // (selector 不设白名单,tab 级即安全边界;elements 元数据仅作提示,定稿方案,system prompt 不列清单)。
   // vision 门控在协议层同源:toPiModel 的 input 由 ModelConfig.vision 决定,
   // model.input 含 image 才允许 read_element 产 ImageContent 块(省 token + 非 vision 走文字描述);
   // pi-ai transform-messages 的 downgradeUnsupportedImages 是双保险(不支持时块降为占位文本)。
   const canUseImage = model.input.includes('image');
+  // 安全通用工具常驻:read_time 免弹卡;ask_user 经 gate ask 路径(无 UI 处理器时快速 cancelled)
+  tools.push(createReadTimeTool(), createAskUserTool());
   if (refTabs.length > 0) tools.push(createReadPageTool(refTabs));
   if (refTabs.length > 0 || pickedElements.length > 0) {
     tools.push(createReadElementTool(refTabs, pickedElements, canUseImage));
   }
+  // execute_js:confirm 型(createGatedTool 包装),tab 句柄同 read_page 白名单
+  if (refTabs.length > 0) tools.push(createExecuteJsTool(refTabs));
 
   const agent = new Agent({
     initialState: {

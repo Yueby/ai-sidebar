@@ -11,8 +11,10 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/types';
+import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
+import { GateCard } from './GateCard';
 import { Button } from '@/components/ui/button';
 
 interface MessageListProps {
@@ -23,6 +25,12 @@ interface MessageListProps {
   streamingThinking?: string;
   /** 正在执行的工具标签 */
   activeToolLabels?: string[];
+  /** 当前待处理的门控请求(confirm/ask) */
+  gateRequest?: GateRequest | null;
+  onGateApprove?: () => void;
+  onGateDeny?: () => void;
+  onGateAnswer?: (answer: string) => void;
+  onGateCancel?: () => void;
   isCancelled?: boolean;
   errorMessage?: string | null;
   onDismissError?: () => void;
@@ -66,6 +74,11 @@ export function MessageList({
   streamingContent,
   streamingThinking,
   activeToolLabels,
+  gateRequest,
+  onGateApprove,
+  onGateDeny,
+  onGateAnswer,
+  onGateCancel,
   isCancelled,
   errorMessage,
   onDismissError,
@@ -115,7 +128,7 @@ export function MessageList({
     smoothScrollToBottom();
   }, [smoothScrollToBottom]);
 
-  // 1. ResizeObserver: 监听消息内容容器高度变化 (包含气泡加载动画挂载、工具卡片完成、thinking 展开等全场景)
+  // 1. ResizeObserver: 监听消息内容容器高度变化 (包含气泡加载动画挂载、工具卡片完成、thinking 展开、Gate 出现等全场景)
   useEffect(() => {
     const contentEl = contentRef.current;
     if (!contentEl) return;
@@ -134,7 +147,7 @@ export function MessageList({
     return () => observer.disconnect();
   }, []);
 
-  // 2. 状态依赖监听 (涵盖发送瞬间、isStreaming 切换、内容追加、工具标签变更、轮次提交)
+  // 2. 状态依赖监听 (涵盖发送瞬间、isStreaming 切换、内容追加、工具标签变更、轮次提交、Gate 请求出现)
   useEffect(() => {
     if (userScrolledUpRef.current) return;
 
@@ -165,6 +178,7 @@ export function MessageList({
     streamingContent,
     streamingThinking,
     activeToolLabels,
+    gateRequest,
     smoothScrollToBottom,
   ]);
 
@@ -178,7 +192,8 @@ export function MessageList({
     return map;
   }, [messages]);
 
-  const isEmpty = messages.length === 0 && !streamingContent;
+  const pendingGateToolName = gateRequest?.kind === 'confirm' ? gateRequest.toolName : null;
+  const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
 
   return (
     <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-background">
@@ -188,7 +203,18 @@ export function MessageList({
         aria-hidden="true"
       />
 
-      {/* Error Alert Banner */}
+      {/* Top Gate Confirmation / Ask Card (z-30) */}
+      {gateRequest && onGateApprove && onGateDeny && onGateAnswer && onGateCancel && (
+        <GateCard
+          request={gateRequest}
+          onApprove={onGateApprove}
+          onDeny={onGateDeny}
+          onAnswer={onGateAnswer}
+          onCancel={onGateCancel}
+        />
+      )}
+
+      {/* Error Alert Banner (z-20) */}
       {errorMessage && (
         <div className="sticky top-0 z-20 m-2 flex shrink-0 items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive overflow-hidden animate-in fade-in-0 slide-in-from-top-2 duration-150 motion-reduce:animate-none">
           <AlertCircle className="size-4 shrink-0 mt-0.5" />
@@ -288,6 +314,7 @@ export function MessageList({
                   key={`${msg.timestamp}-${i}`}
                   message={msg}
                   toolResults={toolResultsByCallId}
+                  pendingGateToolName={pendingGateToolName}
                 />
               ))}
             {isStreaming && (
@@ -307,6 +334,7 @@ export function MessageList({
                 liveThinking={streamingThinking}
                 liveToolLabels={activeToolLabels}
                 toolResults={toolResultsByCallId}
+                pendingGateToolName={pendingGateToolName}
               />
             )}
           </div>
