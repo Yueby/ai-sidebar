@@ -1,0 +1,47 @@
+import type { NodeViewProps } from '@tiptap/react';
+import { NodeViewWrapper } from '@tiptap/react';
+import { SquareMousePointer, X } from 'lucide-react';
+
+/**
+ * inlineBadge 节点的 React NodeView(1:1 移植 sanshu BadgeNodeView.vue):
+ * NodeViewWrapper as="span" 内联渲染;叉号 = 整块删除并连带尾随空格(deleteBadgeWithSpace);
+ * handleUnlink/URL 菜单在元素引用场景无意义,按移植清单省略。
+ */
+export function BadgeNodeView({ node, editor, getPos, deleteNode }: NodeViewProps) {
+  const { label, title } = node.attrs as { label: string; title: string };
+
+  /** 整块删除:节点 + 紧随其后的一个空白字符(若为文本且以空白开头) */
+  const deleteBadgeWithSpace = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const pos = getPos();
+    if (typeof pos !== 'number') {
+      deleteNode();
+      return;
+    }
+
+    const nodeEnd = pos + node.nodeSize;
+    const afterNode = editor.state.doc.nodeAt(nodeEnd);
+    const deleteEnd =
+      afterNode?.isText && /^[\s\u00a0]/.test(afterNode.text || '') ? nodeEnd + 1 : nodeEnd;
+
+    editor.chain().focus().deleteRange({ from: pos, to: deleteEnd }).run();
+  };
+
+  return (
+    <NodeViewWrapper as="span" className="composer-badge" title={title}>
+      <button
+        type="button"
+        className="composer-badge-delete"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={deleteBadgeWithSpace}
+        title="移除该元素引用"
+      >
+        <X className="size-2.5" />
+      </button>
+      <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 truncate">{label}</span>
+    </NodeViewWrapper>
+  );
+}

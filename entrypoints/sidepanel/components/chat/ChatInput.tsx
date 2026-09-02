@@ -1,4 +1,6 @@
-import React, { useRef, useEffect, useState, useCallback, type KeyboardEvent } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 import {
   ArrowUp,
   Square,
@@ -13,7 +15,8 @@ import {
   SquareMousePointer,
 } from 'lucide-react';
 import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
-import { REASONING_LEVEL_LABELS, makeElementMarker } from '@/lib/types';import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
+import { REASONING_LEVEL_LABELS } from '@/lib/types';
+import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { listCandidateTabs, getActiveTabMeta, type RefTab } from '@/lib/pageContext';
@@ -29,6 +32,8 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ContextPanel, type RoleShares } from './ContextPanel';
 import { SlashMenu } from './SlashMenu';
+import { InlineBadge } from './extensions/InlineBadge';
+import { buildBadgeAttrs, extractEditorState } from './extensions/editorSerialize';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -49,7 +54,7 @@ interface ChatInputProps {
   onOpenSettings: () => void;
   disabled?: boolean;
   placeholder?: string;
-  /** 会话草稿输入文本(挂载种子):按会话重挂载(key)读取,之后由内部 state 接管 */
+  /** 会话草稿输入文本(挂载种子):按会话重挂载(key)读取,之后由编辑器接管 */
   initialInput?: string;
   /** 输入变化上报 → App 写入当前会话 draft.input(防抖落盘) */
   onInputChange?: (text: string) => void;
@@ -92,19 +97,18 @@ export function ChatInput({
   onCompact,
   onCommand,
 }: ChatInputProps) {
-  // 输入文本内部 state:挂载时用会话草稿 seed(App 以 key=sessionId 重挂载);
-  // 每次变化通过 onInputChange 上报给 App 写入 draft(防抖持久化),不回传 value,
-  // 避免逐键受控重渲染打断输入法/光标。
+  // 提取文本内部 state:由编辑器 onUpdate 驱动(序列化含 [元素:N] 原文),
+  // 挂载时用会话草稿 seed(App 以 key=sessionId 重挂载),变化经 onInputChange 写回草稿。
   const [text, setText] = useState(initialInput);
   const [activeTabMeta, setActiveTabMeta] = useState<RefTab | null>(null);
   const [otherCandidateTabs, setOtherCandidateTabs] = useState<RefTab[]>([]);
   // 斜杠命令:输入以 '/' 开头且无空白 → 浮层;Esc 手动关;空格自然进参数模式
   const [slashClosed, setSlashClosed] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
-  const isComposingRef = useRef(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // 记录上一帧的框选元素列表引用与数量,用于侦测「新框选完成」并向输入框光标处插入 [元素:N]
+  // 记录上一帧的框选元素列表引用与数量,用于侦测「新框选完成」并在光标处插入徽章节点
   const prevPickedRef = useRef<PickedElement[]>(pickedElements);
+  // 草稿恢复只执行一次(编辑器就绪后)
+  const restoredRef = useRef(false);
 
   const slashOpen = Boolean(onCommand) && !slashClosed && /^\/[^\s]*$/.test(text);
   const slashQuery = text.replace(/^\//, '').toLowerCase();
@@ -124,60 +128,188 @@ export function ChatInput({
     [onInputChange]
   );
 
-  // 侦测框选完成：当 pickedElements 增加时，自动向输入框光标处插入 [元素:N] 标记。
-  // 编号单源于数据侧:使用新增元素的 elementId(草稿持久化,与 refs.elements.id 永久对齐);
-  // 侦测保持 diff(上一帧引用对比,新增段 = 尾部切片,与分配端 append 顺序一致)
-  useEffect(() => {
-    const prev = prevPickedRef.current;
-    prevPickedRef.current = pickedElements;
-
-    // 仅在新增框选元素且增加时触发（排除挂载初态、会话切换等清空情况）
-    if (pickedElements.length > prev.length) {
-      const addedCount = pickedElements.length - prev.length;
-      const newlyAdded = pickedElements.slice(-addedCount);
-
-      const ta = textareaRef.current;
-      const currentVal = ta ? ta.value : text;
-      const start = ta ? ta.selectionStart : currentVal.length;
-      const end = ta ? ta.selectionEnd : currentVal.length;
-
-      // 生成待插入的标记文本（支持一次性处理多个新增，通常为1个）
-      let insertedText = '';
-      for (let i = 0; i < newlyAdded.length; i++) {
-        const marker = makeElementMarker(newlyAdded[i]!.elementId);
-        // 如果前面已有字符且非空白，前置补空格
-        const charBefore = i === 0 ? currentVal.slice(0, start).slice(-1) : insertedText.slice(-1);
-        const prefix = charBefore && !/\s/.test(charBefore) ? ' ' : '';
-        insertedText += `${prefix}${marker}`;
-      }
-
-      const nextVal = currentVal.slice(0, start) + insertedText + currentVal.slice(end);
-      const newCursorPos = start + insertedText.length;
-
-      reportText(nextVal);
-
-      // 保证插入后光标落在标记后面并聚焦
-      requestAnimationFrame(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-          textareaRef.current.selectionStart = newCursorPos;
-          textareaRef.current.selectionEnd = newCursorPos;
-        }
-      });
-    }
-  }, [pickedElements, text, reportText]);
-
-  /** 执行斜杠命令:分发 App,清空输入(命令文本不进草稿) */
+  /** 执行斜杠命令:分发 App,清空编辑器与文本(命令文本不进草稿) */
   const executeCommand = useCallback(
     (name: string, args: string) => {
       onCommand?.(name, args);
       setSlashClosed(false);
       setSlashIndex(0);
-      setText('');
-      onInputChange?.('');
+      editorRef.current?.commands.clearContent();
+      reportText('');
     },
-    [onCommand, onInputChange]
+    [onCommand, reportText]
   );
+
+  /** 斜杠命令识别:参数模式(浮层已关)与直接提交共用;/未知命令按普通文本发送 */
+  const dispatchSlashCommand = (trimmed: string): boolean => {
+    const m = /^\/([a-zA-Z]+)(?:\s+([\s\S]*))?$/.exec(trimmed);
+    if (!m || !SLASH_COMMANDS.some((c) => c.name === m[1])) return false;
+    executeCommand(m[1]!, (m[2] ?? '').trim());
+    return true;
+  };
+
+  const handleSend = useCallback(() => {
+    const trimmed = text.trim();
+    if (!trimmed || isStreaming || disabled) return;
+    if (dispatchSlashCommand(trimmed)) return;
+    onSend(trimmed);
+    // 规则 4:发送后草稿清空(编辑器清空 + 上报 App 清 draft)
+    editorRef.current?.commands.clearContent();
+    reportText('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatchSlashCommand 为组件内纯函数
+  }, [text, isStreaming, disabled, onSend, reportText, onCommand, onInputChange]);
+
+  // ── 编辑器回调经 ref 间接(useEditor options 只捕获稳定引用,回调取实时值)─────────
+  const editorRef = useRef<Editor | null>(null);
+  const sendRef = useRef<() => void>(() => {});
+  const executeCommandRef = useRef<(name: string, args: string) => void>(() => {});
+  const slashStateRef = useRef<{ open: boolean; commands: SlashCommand[]; activeIndex: number }>({
+    open: false,
+    commands: [],
+    activeIndex: 0,
+  });
+  sendRef.current = handleSend;
+  executeCommandRef.current = executeCommand;
+  slashStateRef.current = { open: slashOpen, commands: filteredCommands, activeIndex: slashActiveIndex };
+
+  const editor = useEditor({
+    extensions: [
+      // 最小化 StarterKit:纯文本 + 硬换行语义(照 sanshu,关闭全部块级/标记扩展)
+      StarterKit.configure({
+        heading: false,
+        blockquote: false,
+        codeBlock: false,
+        bulletList: false,
+        orderedList: false,
+        listItem: false,
+        horizontalRule: false,
+        bold: false,
+        italic: false,
+        strike: false,
+        code: false,
+      }),
+      InlineBadge,
+    ],
+    content: '',
+    editable: !disabled,
+    editorProps: {
+      attributes: {
+        class: 'composer-editor',
+      },
+      handleKeyDown: (_view, event) => {
+        // 斜杠命令浮层键盘导航(优先于常规快捷键)
+        const s = slashStateRef.current;
+        if (s.open && s.commands.length > 0) {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setSlashIndex((i) => (i + 1) % s.commands.length);
+            return true;
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setSlashIndex((i) => (i - 1 + s.commands.length) % s.commands.length);
+            return true;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setSlashClosed(true);
+            return true;
+          }
+          if (event.key === 'Enter' && !event.isComposing) {
+            event.preventDefault();
+            const cmd = s.commands[s.activeIndex];
+            if (cmd) executeCommandRef.current(cmd.name, '');
+            return true;
+          }
+          if (event.key === 'Tab') {
+            // Tab = 自动补全:填入高亮命令文本(尾随空格进参数模式,浮层自然关闭)
+            event.preventDefault();
+            const cmd = s.commands[s.activeIndex];
+            if (cmd) editorRef.current?.commands.setContent(`/${cmd.name} `);
+            return true;
+          }
+          // 空格:不拦截,自然进参数模式
+        }
+
+        if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+          // Enter / Ctrl+Enter / Cmd+Enter → 发送;Shift+Enter 换行(默认 hardBreak);
+          // isComposing 守卫:中文 IME 选字确认的 Enter 不发送(旧 textarea isComposingRef 守卫的迁移等价物)
+          event.preventDefault();
+          sendRef.current();
+          return true;
+        }
+        return false;
+      },
+      handlePaste: (view, event) => {
+        // 纯文本粘贴:屏蔽富文本/HTML,统一 insertText
+        const text = event.clipboardData?.getData('text/plain');
+        if (text) {
+          view.dispatch(view.state.tr.insertText(text));
+          return true;
+        }
+        return false;
+      },
+    },
+    onUpdate: ({ editor: ed }) => {
+      // 序列化文本含 [元素:N] 原文 → reportText 同步 state + 草稿链
+      reportText(extractEditorState(ed).text);
+    },
+    // 中文 IME:ProseMirror 原生处理 composition,无需任何自定义代码
+  });
+
+  editorRef.current = editor;
+
+  // 侦测框选完成:新元素在光标处插入徽章节点 + 尾随空格(替代旧文本标记插入;
+  // onUpdate 自动把 serialized [元素:N] 同步进 text/草稿,协议不变)
+  useEffect(() => {
+    const prev = prevPickedRef.current;
+    prevPickedRef.current = pickedElements;
+
+    if (!editor || pickedElements.length <= prev.length) return;
+    const addedCount = pickedElements.length - prev.length;
+    const newlyAdded = pickedElements.slice(-addedCount);
+    for (const element of newlyAdded) {
+      editor.chain().focus().insertContent([
+        { type: 'inlineBadge', attrs: buildBadgeAttrs(element) },
+        { type: 'text', text: ' ' },
+      ]).run();
+    }
+  }, [pickedElements, editor]);
+
+  // 草稿恢复双载(照 sanshu updateData):setContent 纯文本(剥离标记原文)+ 仅重插文本中
+  // 标记号命中的徽章(S-1:nonce 重挂载注入预设问题时,不凭空多出草稿元素的徽章);
+  // 徽章 serialized 序列化回 [元素:N],协议零变化。key=sessionId 重挂载保证会话切换重建。
+  useEffect(() => {
+    if (!editor || restoredRef.current) return;
+    restoredRef.current = true;
+    const markerIds = new Set<number>();
+    const markerRe = /\[元素:(\d+)\]/g;
+    let m: RegExpExecArray | null;
+    while ((m = markerRe.exec(initialInput)) !== null) {
+      const id = parseInt(m[1]!, 10);
+      if (Number.isFinite(id)) markerIds.add(id);
+    }
+    const stripped = initialInput.replace(/\s*\[元素:\d+\]/g, '');
+    if (stripped.trim()) {
+      editor.commands.setContent(stripped);
+    }
+    for (const element of pickedElements) {
+      if (!markerIds.has(element.elementId)) continue;
+      editor.chain().focus('end').insertContent([
+        { type: 'inlineBadge', attrs: buildBadgeAttrs(element) },
+        { type: 'text', text: ' ' },
+      ]).run();
+    }
+    if (initialInput) {
+      editor.commands.focus('end');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时执行(key 重挂载)
+  }, [editor]);
+
+  // disabled(未配置模型/压缩中)→ 编辑器只读
+  useEffect(() => {
+    editor?.setEditable(!disabled);
+  }, [disabled, editor]);
 
   // Load candidate tabs when dropdown menu opens
   const handleDropdownOpenChange = useCallback(async (open: boolean) => {
@@ -203,88 +335,6 @@ export function ChatInput({
       setOtherCandidateTabs([]);
     }
   }, []);
-
-  // 外部注入文本(预设问题 chip → draft.input → 本组件重挂载):聚焦并把光标放到末尾
-  useEffect(() => {
-    if (!initialInput) return;
-    const ta = textareaRef.current;
-    if (ta) {
-      ta.focus();
-      ta.selectionStart = ta.value.length;
-      ta.selectionEnd = ta.value.length;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅挂载时执行(key 重挂载)
-  }, []);
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (isComposingRef.current || e.nativeEvent.isComposing) {
-      return;
-    }
-
-    // 斜杠命令浮层键盘导航(优先于常规快捷键)
-    if (slashOpen) {
-      if (e.key === 'ArrowDown' && filteredCommands.length > 0) {
-        e.preventDefault();
-        setSlashIndex((i) => (i + 1) % filteredCommands.length);
-        return;
-      }
-      if (e.key === 'ArrowUp' && filteredCommands.length > 0) {
-        e.preventDefault();
-        setSlashIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setSlashClosed(true);
-        return;
-      }
-      if (e.key === 'Enter' && filteredCommands.length > 0) {
-        // Enter = 执行高亮命令(空参数;补充重点用 Tab 补全后追加)
-        e.preventDefault();
-        const cmd = filteredCommands[slashActiveIndex];
-        if (cmd) executeCommand(cmd.name, '');
-        return;
-      }
-      if (e.key === 'Tab' && filteredCommands.length > 0) {
-        // Tab = 自动补全:填入高亮命令文本(尾随空格进入参数模式),光标到末尾;菜单自然关闭
-        e.preventDefault();
-        const cmd = filteredCommands[slashActiveIndex];
-        if (cmd) {
-          reportText(`/${cmd.name} `);
-          requestAnimationFrame(() => {
-            const ta = textareaRef.current;
-            if (ta) {
-              ta.selectionStart = ta.selectionEnd = ta.value.length;
-            }
-          });
-        }
-        return;
-      }
-      // 空格:不拦截,自然进参数模式(含空格后浮层条件失效自动关闭)
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  /** 斜杠命令识别:参数模式(浮层已关)与直接提交共用;/未知命令按普通文本发送 */
-  const dispatchSlashCommand = (trimmed: string): boolean => {
-    const m = /^\/([a-zA-Z]+)(?:\s+([\s\S]*))?$/.exec(trimmed);
-    if (!m || !SLASH_COMMANDS.some((c) => c.name === m[1])) return false;
-    executeCommand(m[1]!, (m[2] ?? '').trim());
-    return true;
-  };
-
-  const handleSubmit = () => {
-    const trimmed = text.trim();
-    if (!trimmed || isStreaming || disabled) return;
-    if (dispatchSlashCommand(trimmed)) return;
-    onSend(trimmed);
-    // 规则 4:发送后草稿清空(input 本地清零 + 上报 App 清 draft)
-    reportText('');
-  };
 
   const handleStop = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -447,25 +497,16 @@ export function ChatInput({
             onHover={setSlashIndex}
           />
         )}
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(e) => {
-            setSlashClosed(false);
-            reportText(e.target.value);
-          }}
-          onKeyDown={handleKeyDown}
-          onCompositionStart={() => {
-            isComposingRef.current = true;
-          }}
-          onCompositionEnd={() => {
-            isComposingRef.current = false;
-          }}
-          disabled={disabled}
-          placeholder={disabled ? '请先配置 AI 提供商与模型...' : placeholder}
-          rows={2}
-          className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed max-h-36 min-h-[52px]"
-        />
+        {/* TipTap 编辑器:inline 徽章原子节点(Backspace/删除由 PM 原生处理);
+            空文档占位用覆盖层(text 状态驱动,无额外依赖) */}
+        <div className="relative w-full">
+          {!text && (editor?.isEmpty ?? true) && (
+            <div className="pointer-events-none absolute left-3 top-2.5 max-w-[calc(100%-24px)] truncate text-sm text-muted-foreground">
+              {disabled ? '请先配置 AI 提供商与模型...' : placeholder}
+            </div>
+          )}
+          <EditorContent editor={editor} />
+        </div>
 
         {/* Toolbar row inside composer */}
         <div className="flex items-center justify-between px-2 pb-2 pt-0.5 gap-1">
@@ -645,7 +686,7 @@ export function ChatInput({
                       type="button"
                       size="icon"
                       disabled={!text.trim() || disabled}
-                      onClick={handleSubmit}
+                      onClick={handleSend}
                       className="size-6"
                     >
                       <ArrowUp className="size-3.5" />

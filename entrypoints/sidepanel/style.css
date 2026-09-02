@@ -268,3 +268,67 @@
     animation: none;
   }
 }
+
+/* ---- 环 tooltip(popover 同族):换底后同步箭头配色(仅作用于 tooltip-popover 作用域) ---- */
+.tooltip-popover[data-slot='tooltip-content'] > svg:last-child {
+  background: var(--popover);
+  fill: var(--popover);
+}
+
+/* ---- Composer TipTap 编辑器(替代 textarea+镜像 overlay) ---- */
+.composer-editor {
+  min-height: 52px;
+  max-height: 144px;
+  overflow-y: auto;
+  padding: 0.625rem 0.75rem 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+}
+.composer-editor p {
+  margin: 0;
+}
+.composer-editor p + p {
+  margin-top: 0.25rem;
+}
+/* inline 徽章节点视图(MessageItem 气泡 chip 同族;NodeViewWrapper as="span" 内联渲染) */
+.composer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 200px;
+  margin: 0 2px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in oklch, var(--border) 60%, transparent);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 500;
+  vertical-align: baseline;
+  user-select: none;
+}
+.composer-badge-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -2px;
+  margin-right: 1px;
+  padding: 1px;
+  border-radius: 3px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.composer-badge-delete:hover {
+  color: var(--foreground);
+  background: color-mix(in oklch, var(--muted) 60%, transparent);
+}
+/* 徽章被选区完整覆盖时的装饰(InlineBadge 第二插件) */
+.composer-editor .badge-in-selection {
+  outline: 1px solid color-mix(in oklch, var(--ring) 45%, transparent);
+  border-radius: 4px;
+}

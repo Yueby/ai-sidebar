@@ -1,8 +1,9 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ContextUsage } from '@/lib/contextTokens';
 
-/** token 缩写(146K 风格) */
+/** token 缩写(146K 风格);非有限值(缺字段/坏数据)兜底为 0,杜绝空白数值 */
 export function formatTokensShort(n: number): string {
+  if (!Number.isFinite(n)) return '0';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
   if (n >= 1000) return `${Math.round(n / 1000)}K`;
   return String(n);
@@ -69,27 +70,31 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
         <TooltipTrigger asChild>
           {ringNode}
         </TooltipTrigger>
-        <TooltipContent side="top" align="center" className="max-w-56 space-y-1.5 p-2 text-xs">
+        <TooltipContent
+          side="top"
+          align="center"
+          className="tooltip-popover max-w-56 space-y-1.5 rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-md"
+        >
           <div className="flex items-baseline justify-between gap-2 border-b border-border/50 pb-1">
             <span className="font-semibold text-foreground text-xs font-mono">
-              {formatTokensShort(usage.tokens)}{' '}
+              {formatTokensShort(usage.tokens ?? 0)}{' '}
               <span className="text-[10px] font-normal text-muted-foreground font-sans">
-                / {formatTokensShort(usage.window)}
+                / {formatTokensShort(usage.window ?? 0)}
               </span>
             </span>
             <span className="font-mono text-[10px] font-semibold text-foreground">
-              {usage.pct}%
+              {usage.pct ?? 0}%
             </span>
           </div>
           {usage.hasUsageAnchor ? (
             <div className="space-y-0.5 text-[10px] text-muted-foreground">
               <div className="flex justify-between items-center">
                 <span>精确锚点:</span>
-                <span className="font-mono text-foreground/80">{formatTokensShort(usage.usageTokens)}</span>
+                <span className="font-mono text-foreground/80">{formatTokensShort(usage.usageTokens ?? 0)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span>估算尾部:</span>
-                <span className="font-mono text-foreground/80">{formatTokensShort(usage.trailingTokens)}</span>
+                <span className="font-mono text-foreground/80">{formatTokensShort(usage.trailingTokens ?? 0)}</span>
               </div>
             </div>
           ) : (
