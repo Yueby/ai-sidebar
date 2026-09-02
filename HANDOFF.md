@@ -50,7 +50,7 @@
 12. **引用架构定稿 = `<page-refs>` 块**:引用元数据发送时序列化进 user 消息 content,此后永不改变;无 refSnapshot 字段、无 convertToLlm、system prompt 不注入引用目录(只放协议常量规则);`ChatMessage` 回归纯 pi 联合,零自定义字段。
 13. **会话草稿**:`Session.draft { input, refTabs, pickedElements }` 随会话持久化(IndexedDB 防抖落盘);新会话自动引用当前页;空会话离开即回收;发送即清空草稿。
 14. **工具安全边界 = tab 级白名单**(tabId ∈ 草稿引用 ∪ 历史 `<page-refs>` 块);selector 不设白名单(框选元素是提示,AI 可在引用页内自行探索);vision 门控:`model.input` 含 image 才产 ImageContent 块;工具中文文案单一来源 `TOOL_LABELS`(读取网页内容/读取页面元素)。
-15. **工具命名规范 = `<动词>_<域词>`**:动词集 {read, search, fetch, click, fill, scroll, screenshot, execute, ask} × 域词集 {page, element, url, web, js, user, time},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key extract_page 兼容历史会话 ToolCallCard)。内部消息协议字符串(`ai-sidebar/extract-page` 等)与工具名解耦,不随改名漂移。
+15. **工具命名规范 = `<动词>_<域词>`**:动词集 {read, search, fetch, click, fill, scroll, screenshot, execute, ask} × 域词集 {page, element, url, web, js, user, time},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key extract_page 兼容历史会话 ToolCallCard)。协议字符串已随名同步(`ai-sidebar/read-page` 等,常量单一来源 lib/types.ts,content.ts 只 import 纯常量)。
 16. **模型可见文本一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支文本、非 vision 图片描述、system prompt 全文;UI 显示文案保持中文(TOOL_LABELS 中文值、ToolCallCard 等),以后收敛 i18n。
 17. **工具门控契约 = `lib/gate.ts`**:`GateRequest`(confirm 弹卡 / ask 提问)+ `setGateHandler`(App 注册 UI 处理器;**未注册时门控请求快速 deny/cancelled,安全默认**)、`flushPendingGates`(停止/中止生成时冲销 pending)、`requestGate`(handler 抛异常按 deny);`createGatedTool(tool, summary, detail?, detailFromArgs?)` 为 confirm 路径包装,detail 支持按调用参数动态生成(`detailFromArgs(args): string`,空串回退静态 detail,execute_js 用它预览待执行代码),denied 返回英文 "User denied permission to run this tool."(正常 tool result,模型可继续);ask_user 走 ask 路径,挂起阻塞工具循环属预期(无超时)。
 18. **execute_js = userScripts.execute 主路线 + scripting MAIN world 兜底**(`lib/pageScripting.ts`):Chrome 135+ 才有 `chrome.userScripts.execute`(manifest 已设 `minimum_chrome_version: "135"`);Chrome 138+ 需用户在扩展详情页开启 **Allow User Scripts**(未开时命名空间缺失或 getScripts() throw);userScripts 不可用时降级 `scripting.executeScript` MAIN world(func 包装 eval,严格 CSP 站点会失败),降级在返回文本里注明、全链失败返回可行动英文错误文本;结果 JSON.stringify 后截断 8000 字符;一切错误转英文文本不 throw。
@@ -61,7 +61,7 @@ lib 层 + sidepanel 全部 UI 已完成(含 page-refs 引用架构、read_elemen
 
 | 文件 | 状态 | 说明 |
 |---|---|---|
-| `lib/types.ts` | ✅ 完成 | `ApiType`/`ModelConfig`(含 `reasoningLevels`)/`ReasoningLevel`(`REASONING_LEVELS`/`REASONING_LEVEL_LABELS`)/`TOOL_LABELS`+`toolLabel`(中文单一来源)/`Settings`(含 `reasoningLevel`)/`RefTabMeta`/`RefElementMeta`/`PageRefs`/`ChatMessage`(纯 pi 联合)/`SessionDraft`/`Session`(含 draft)/`PickedElement`/`EXTRACT_PAGE_MESSAGE` |
+| `lib/types.ts` | ✅ 完成 | `ApiType`/`ModelConfig`(含 `reasoningLevels`)/`ReasoningLevel`(`REASONING_LEVELS`/`REASONING_LEVEL_LABELS`)/`TOOL_LABELS`+`toolLabel`(中文单一来源)/`Settings`(含 `reasoningLevel`)/`RefTabMeta`/`RefElementMeta`/`PageRefs`/`ChatMessage`(纯 pi 联合)/`SessionDraft`/`Session`(含 draft)/`PickedElement`/`READ_PAGE_MESSAGE`+`PICK_ELEMENT_MESSAGE`+`PICK_ELEMENT_RESULT_MESSAGE`(消息协议常量单一来源) |
 | `lib/providers.ts` | ✅ 完成 | `API_TYPE_OPTIONS`(三协议+默认 baseUrl)、`normalizeBaseUrl`(anthropic 剥尾 /v1)、`apiTypeLabel`、`createProviderDraft`、`findActiveModel`、`getModelReasoningLevels`(空回退 low/medium/high)、`resolveReasoningLevel` |
 | `lib/storage.ts` | ✅ 完成 | `settingsItem`/`activeSessionIdItem` + `sanitizeSettings`/`sanitizeSessions`(旧扁平消息结构按 pi 形状迁移)+ `uid/createSession(含 draft)/createUserMessage(text, refs?)/messageText/titleFromText/EMPTY_USAGE` |
 | `lib/sessionStore.ts` | ✅ 完成 | 会话历史唯一读写层(IndexedDB,`idb` 封装):`listSessions`(按 updatedAt 降序)/`saveSession`/`deleteSession`/`migrateLegacySessions`(旧 `local:sessions` 一次性迁移后删除旧 key);草稿随 Session 一起存 |
@@ -344,7 +344,7 @@ testConnection({ api, baseUrl, apiKey }): Promise<string>      // 复用拉取;�
 // lib/pageContext.ts(tab 级读取原语,不含工具工厂)
 getActiveTabMeta(): Promise<RefTab | null>; getTabMeta(tabId): Promise<RefTab | null>
 listCandidateTabs(): Promise<RefTab[]>        // 候选引用页(排除扩展自身等)
-extractFromTab(tabId): Promise<ExtractedPage | null>  // sendMessage ai-sidebar/extract-page,失败 null 不阻塞
+extractFromTab(tabId): Promise<ExtractedPage | null>  // sendMessage READ_PAGE_MESSAGE('ai-sidebar/read-page'),失败 null 不阻塞
 renderPageContext(page): string               // read_page 工具回传给模型的正文文本(英文,Model-facing)
 startPickElement(tabId): Promise<void>        // 广播 ai-sidebar/pick-element 进框选模式,结果经 pick-element-result 回传
 resolveElement(tabId, selector): Promise<ResolvedElement | null>  // 元素解析(outerHTML+truncated+preview+images+dpr),read_element 底层;复用 pick-element 消息 action:'resolve'

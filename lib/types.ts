@@ -151,5 +151,10 @@ export interface PickedElement {
   preview: string;
 }
 
-/** 消息协议(与 entrypoints/content.ts 对应) */
-export const EXTRACT_PAGE_MESSAGE = 'ai-sidebar/extract-page' as const;
+/** 消息协议常量单一来源(与 entrypoints/content.ts 对应,content.ts 只 import 纯常量) */
+/** 页面正文提取应答 */
+export const READ_PAGE_MESSAGE = 'ai-sidebar/read-page' as const;
+/** 元素选择消息协议:action 'start' 进入选择模式,'resolve' 按 selector 读取元素 */
+export const PICK_ELEMENT_MESSAGE = 'ai-sidebar/pick-element' as const;
+/** content script 框选完成后的结果广播(经 runtime.sendMessage 发给 sidepanel) */
+export const PICK_ELEMENT_RESULT_MESSAGE = 'ai-sidebar/pick-element-result' as const;

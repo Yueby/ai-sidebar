@@ -1,3 +1,9 @@
+import {
+  PICK_ELEMENT_MESSAGE,
+  PICK_ELEMENT_RESULT_MESSAGE,
+  READ_PAGE_MESSAGE,
+} from '@/lib/types';
+
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
   main() {
@@ -409,7 +415,7 @@ export default defineContentScript({
     async function reportPick(el: Element, finder: (input: Element) => string): Promise<void> {
       try {
         await browser.runtime.sendMessage({
-          type: 'ai-sidebar/pick-element-result',
+          type: PICK_ELEMENT_RESULT_MESSAGE,
           selector: finder(el),
           tagName: el.tagName.toLowerCase(),
           snippet: el.outerHTML.slice(0, 500),
@@ -507,7 +513,7 @@ export default defineContentScript({
     }
 
     browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-      if (message?.type === 'ai-sidebar/pick-element') {
+      if (message?.type === PICK_ELEMENT_MESSAGE) {
         if (message.action === 'start') {
           void enterPickMode();
         } else if (message.action === 'resolve' && typeof message.selector === 'string') {
@@ -515,7 +521,7 @@ export default defineContentScript({
         }
         return;
       }
-      if (message?.type !== 'ai-sidebar/extract-page') {
+      if (message?.type !== READ_PAGE_MESSAGE) {
         // dev 可观测性:未知协议消息告警,便于排查协议漂移(生产零开销)
         if (import.meta.env.DEV) {
           const type: unknown = message?.type;

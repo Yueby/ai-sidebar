@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Settings, Session, SessionDraft } from '@/lib/types';
+import { PICK_ELEMENT_RESULT_MESSAGE } from '@/lib/types';
 import {
   getActiveTabMeta,
   getTabMeta,
   startPickElement,
-  PICK_ELEMENT_RESULT_MESSAGE,
   type RefTab,
 } from '@/lib/pageContext';
 

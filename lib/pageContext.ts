@@ -1,5 +1,5 @@
 import type { PageContext } from './types';
-import { EXTRACT_PAGE_MESSAGE } from './types';
+import { PICK_ELEMENT_MESSAGE, READ_PAGE_MESSAGE } from './types';
 
 /**
  * content 侧提取应答:PageContext + 截断标记。
@@ -65,7 +65,7 @@ export async function extractFromTab(tabId: number): Promise<ExtractedPage | nul
   }
   try {
     const res = (await browser.tabs.sendMessage(tabId, {
-      type: EXTRACT_PAGE_MESSAGE,
+      type: READ_PAGE_MESSAGE,
     })) as Partial<ExtractedPage> | undefined;
     if (!res || (!res.title && !res.text)) return null;
     return {
@@ -95,11 +95,6 @@ export function renderPageContext(page: ExtractedPage): string {
   }
   return lines.join('\n');
 }
-
-/** 元素选择消息协议:action 'start' 进入选择模式,'resolve' 按 selector 读取元素 */
-export const PICK_ELEMENT_MESSAGE = 'ai-sidebar/pick-element' as const;
-/** content script 框选完成后的结果广播(经 runtime.sendMessage 发给 sidepanel) */
-export const PICK_ELEMENT_RESULT_MESSAGE = 'ai-sidebar/pick-element-result' as const;
 
 /**
  * 程序化注入 content script。
