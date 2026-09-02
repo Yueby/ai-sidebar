@@ -7,6 +7,9 @@ import { useAppStore } from '../store';
  * - 4 个应答回调 = store action 薄层(签名与重构前一致,App/ApprovalSection 零改动);
  * - dismissPendingGates/resetGates/resetResolvedGateCount 直通 store;
  * - handler 注册已模块化(store/index.ts 模块级 setGateHandler),本 hook 无 effect。
+ *
+ * 域服务边界:store=共享状态唯一家(activeGate/resolvedGateCount 在 gateSlice);
+ * 编排 hook=纯 selector/薄回调,无异步流程;派生值=消费点就地 useMemo(如 App.gatePagination)。
  */
 export function useGate() {
   const activeGate = useAppStore((s) => s.activeGate);

@@ -13,6 +13,9 @@ import { useAppStore, selectCurrentSession } from '../store';
  * 页面引用域 hook(编排层):refTabs/pickedElements 读写(经 store patchActiveDraft)、
  * tabs.onUpdated/onRemoved 实时同步、元素框选(startPickElement + pendingPick 兜底)、
  * runtime.onMessage 框选结果回传。会话/草稿状态在 store,getState() 取最新值。
+ *
+ * 域服务边界:store=共享状态唯一家(草稿经 sessionSlice.patchActiveDraft 写入);
+ * 编排 hook=异步流程(框选/同步时序)+ ephemeral ref(pendingPickRef);派生值=消费点就地 useMemo。
  */
 export function usePageContextRefs(params: {
   handleTogglePageContext: (enabled: boolean) => Promise<void>;

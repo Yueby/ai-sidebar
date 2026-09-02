@@ -31,7 +31,7 @@
 | 样式 | Tailwind v4(`@tailwindcss/vite`)+ shadcn/ui,token 在 `sidepanel/style.css` |
 | 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`(components.json 已配好,已装 button/input/textarea/dialog/dropdown-menu/scroll-area/select/separator/switch/tooltip/badge/label/checkbox) |
 | AI 请求 | **`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(同版本 ^0.84.4),严禁手写 SSE/协议适配;`lib/agent.ts` 的 `runAgentTurn()` 是唯一发送入口(工具调用循环/abort/事件透出);唯一例外是"拉模型列表"两个 GET(在 `lib/models.ts`) |
-| 存储 | 设置/API Key → chrome.storage.local(`local:settings`,manifest 已加 `unlimitedStorage`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,用 `idb`,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;**不引状态库**;消息按 pi 消息联合形状持久化,旧扁平结构由 `sanitizeSessions/sanitizeMessage` 迁移 |
+| 存储 | 设置/API Key → chrome.storage.local(`local:settings`,manifest 已加 `unlimitedStorage`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,用 `idb`,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化,旧扁平结构由 `sanitizeSessions/sanitizeMessage` 迁移 |
 | 页面提取 | 引用元数据以 `<page-refs>{JSON}</page-refs>` 块内嵌 user 消息 content(唯一事实源,LLM 直读 + UI 解析同源,`lib/pageRefs.ts`);实时内容经 `read_page`(tabId 句柄读整页正文)/`read_element`(任意 CSS selector,返回 outerHTML 12000 字符截断;tab 级白名单=草稿∪历史块)工具按需读取,消息协议 `ai-sidebar/read-page`、`ai-sidebar/pick-element(-result)` 由 content.ts 应答(常量单一来源 `lib/types.ts`,content.ts 只 import 纯常量);图像经 `lib/imageFetch.ts`(fetch 主取 + captureVisibleTab 裁剪兜底 + canvas 降采样) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight(已装) |
 | 权限 | manifest:`storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts`(+ host_permissions http/https);`minimum_chrome_version: "135"`(userScripts.execute 门槛);Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts |
@@ -52,8 +52,9 @@
 ```
 entrypoints/
   sidepanel/          # 侧边栏 UI(index.html / main.tsx / theme.ts / style.css)
-    App.tsx             # 组合层:四域 hook 组装 + 视图骨架(1077→340 行,无业务逻辑)
-    hooks/              # useGate(门控)/ useSessionManager(会话+草稿持久化核心)/ useChatTurn(对话轮次+turnSeq 守卫)/ usePageContextRefs(引用+框选)
+    App.tsx             # 组合层:store selector 订阅 + 五域编排 hook 组装 + 视图骨架(476 行,无业务逻辑)
+    store/              # zustand v5 单 store 五切片:gateSlice/errorSlice/sessionSlice(含草稿防抖队列模块级)/settingsSlice/chatSlice;devtools 仅 DEV 构建
+    hooks/              # 编排层(状态在 store):useGate(切片消费)/ useSessionManager(增删切+AI 命名+原子 init)/ useChatTurn(发送/停止+turnSeq 守卫)/ usePageContextRefs(引用+框选)/ useCompact(压缩)
     components/chat/      # ChatHeader / MessageList / MessageItem(ToolCallCard/思考折叠)/ MarkdownView / ChatInput / ApprovalSection(审批槽位)
     components/settings/  # SettingsMainView / ProviderDialog / ModelConfigDialog
   background.ts       # 点击工具栏图标打开侧边栏

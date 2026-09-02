@@ -17,6 +17,10 @@ import { dropPendingDraftSave } from '../store/sessionSlice';
  * (content = <context-summary> 块 + 被压缩范围 page-refs 并集块,拼装为调用方职责,
  * 契约见 lib/types.ts SessionCompaction);Session.compaction.summaryTimestamp 指向摘要消息,
  * 生效历史 = effectiveMessages() = [摘要] + 之后。错误走 errorMessage 横幅不落盘。
+ *
+ * 域服务边界:store=共享状态唯一家(读 chatSlice.isStreaming/gateSlice.activeGate/sessionSlice);
+ * 编排 hook=异步流程(runCompact/saveSession 时序)+ ephemeral ref(compactAbortRef);
+ * 派生值=消费点就地 useMemo。
  */
 export function useCompact() {
   const [isCompacting, setIsCompacting] = useState(false);

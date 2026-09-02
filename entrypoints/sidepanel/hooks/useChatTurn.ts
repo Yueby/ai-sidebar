@@ -14,6 +14,10 @@ import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
  * 对话轮次域 hook(编排层):handleSendMessage(唯一发送入口)/handleStopGeneration。
  * turnSeqRef(R-1 身份守卫)/abortControllerRef/compactRequestedRef 留本 hook;
  * 流式状态/in-flight 在 store/chatSlice,门控与错误在 store 直读,会话经 getState() 取最新值。
+ *
+ * 域服务边界:store=共享状态唯一家(流式态/in-flight 在 chatSlice,activeGate 在 gateSlice);
+ * 编排 hook=异步流程(runAgentTurn/saveSession 时序)+ ephemeral ref(turnSeqRef/abortControllerRef/
+ * compactRequestedRef);派生值=消费点就地 useMemo。
  */
 export function useChatTurn(params: {
   /** 上下文压缩进行中(压缩/发送互斥) */

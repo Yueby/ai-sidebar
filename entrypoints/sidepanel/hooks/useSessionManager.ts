@@ -94,6 +94,10 @@ async function buildInitialDraft(includePageContext: boolean): Promise<SessionDr
  * 会话域 hook(编排层):会话增删切/AI 命名/重命名 + 原子 init effect
  * (storage 读取+迁移+watch 注册时序原样保留,watch 回调接 store action)。
  * sessions/activeSessionId/loaded 状态与草稿防抖队列在 store/sessionSlice。
+ *
+ * 域服务边界:store=共享状态唯一家(sessions/activeSessionId/loaded 在 sessionSlice,
+ * 防抖队列为模块级变量);编排 hook=异步流程(saveSession/deleteSession 时序)+ ephemeral ref
+ * (titlingSessionIdsRef);派生值=消费点就地 useMemo/selectCurrentSession。
  */
 export function useSessionManager() {
   const resetGates = useAppStore((s) => s.resetGates);

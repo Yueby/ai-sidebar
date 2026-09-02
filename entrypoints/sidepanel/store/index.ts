@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import { create, type StateCreator } from 'zustand';
+import { devtools } from 'zustand/middleware';
 import { setGateHandler, type GateRequest, type GateResponse } from '../gateAdapter';
 import { createGateSlice, type GateSlice } from './gateSlice';
 import { createErrorSlice, type ErrorSlice } from './errorSlice';
@@ -9,17 +10,25 @@ import { createChatSlice, type ChatSlice } from './chatSlice';
 export type AppStore = GateSlice & ErrorSlice & SessionSlice & SettingsSlice & ChatSlice;
 export { selectCurrentSession };
 
-/**
- * sidepanel 全局 store(二期:gate/error/session/settings/chat 五切片)。
- * 切片创建器以 Partial 各域类型读写,组合时获得完整 store 类型。
- */
-export const useAppStore = create<AppStore>()((set, get) => ({
+const createAppSlices: StateCreator<AppStore> = (set, get) => ({
   ...createGateSlice(set, get),
   ...createErrorSlice(set),
   ...createSessionSlice(set, get),
   ...createSettingsSlice(set),
   ...createChatSlice(set),
-}));
+});
+
+/**
+ * sidepanel 全局 store(gate/error/session/settings/chat 五切片)。
+ * devtools 中间件仅 DEV 构建引入(import.meta.env.DEV 守卫,生产分支被静态消除,零引入),
+ * dev 下可在 Redux DevTools 观察五切片状态流转。
+ */
+export const useAppStore = create<AppStore>()(
+  import.meta.env.DEV
+    ? // devtools 分支的 mutator 元组类型与无中间件分支不同,此处收窄为普通 creator
+      (devtools(createAppSlices, { name: 'ai-sidebar' }) as unknown as StateCreator<AppStore>)
+    : createAppSlices,
+);
 
 /**
  * gate handler 模块级注册(去 React 化):
