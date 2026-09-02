@@ -46,7 +46,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 import { ModelConfigDialog } from './ModelConfigDialog';
 
 interface ProviderDialogProps {
@@ -137,10 +137,10 @@ export function ProviderDialog({
         apiKey: draft.apiKey,
       });
       setTestResult({ success: true, message: msg });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err?.message || '连接失败，请检查 Base URL 与 API Key',
+        message: getErrorMessage(err) || '连接失败，请检查 Base URL 与 API Key',
       });
     } finally {
       setTesting(false);
@@ -184,8 +184,8 @@ export function ProviderDialog({
       // Default select all newly discovered models
       const newIds = new Set(candidateList.filter((c) => !c.isExisting).map((c) => c.id));
       setSelectedCandidateIds(newIds);
-    } catch (err: any) {
-      setFetchErrorMsg(err?.message || '拉取模型失败，请检查端点与密钥');
+    } catch (err: unknown) {
+      setFetchErrorMsg(getErrorMessage(err) || '拉取模型失败，请检查端点与密钥');
     } finally {
       setFetchingModels(false);
     }
@@ -255,8 +255,8 @@ export function ProviderDialog({
       } else {
         setFetchResultMsg('所有模型参数已是最新');
       }
-    } catch (err: any) {
-      setFetchErrorMsg(err?.message || '同步 models.dev 参数失败');
+    } catch (err: unknown) {
+      setFetchErrorMsg(getErrorMessage(err) || '同步 models.dev 参数失败');
     } finally {
       setSyncingModels(false);
     }

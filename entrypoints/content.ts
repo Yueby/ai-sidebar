@@ -511,7 +511,16 @@ export default defineContentScript({
         }
         return;
       }
-      if (message?.type !== 'ai-sidebar/extract-page') return;
+      if (message?.type !== 'ai-sidebar/extract-page') {
+        // dev 可观测性:未知协议消息告警,便于排查协议漂移(生产零开销)
+        if (import.meta.env.DEV) {
+          const type: unknown = message?.type;
+          if (typeof type === 'string' && type.startsWith('ai-sidebar/')) {
+            console.warn(`[ai-sidebar] content script 收到未知消息类型: ${type}`);
+          }
+        }
+        return;
+      }
       // 异步提取:返回 true 保持消息通道开放,完成后 sendResponse
       extractStable().then(sendResponse);
       return true;

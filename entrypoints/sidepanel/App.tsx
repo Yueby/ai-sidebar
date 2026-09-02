@@ -11,6 +11,7 @@ import {
 import { migrateLegacySessions, saveSession, deleteSession } from '@/lib/sessionStore';
 import { DEFAULT_SETTINGS, findActiveModel, resolveReasoningLevel } from '@/lib/providers';
 import { runAgentTurn } from '@/lib/agent';
+import { getErrorMessage } from '@/lib/utils';
 import {
   getActiveTabMeta,
   getTabMeta,
@@ -793,13 +794,13 @@ export default function App() {
         } else if (result.errorMessage) {
           setErrorMessage(result.errorMessage);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         // 异常路径不落盘转录,in-flight 无处可归 → 清空避免残留悬空气泡
         setInFlight(null);
         if (abortCtrl.signal.aborted) {
           setIsCancelled(true);
         } else {
-          setErrorMessage(err?.message || '请求失败，请检查网络或提供商配置');
+          setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置');
         }
       } finally {
         setIsStreaming(false);

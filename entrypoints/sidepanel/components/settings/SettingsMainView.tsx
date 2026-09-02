@@ -16,7 +16,7 @@ import { testConnection } from '@/lib/models';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
+import { cn, getErrorMessage } from '@/lib/utils';
 
 interface SettingsMainViewProps {
   settings: Settings;
@@ -86,12 +86,12 @@ export function SettingsMainView({
         ...prev,
         [p.id]: { success: true, message: msg },
       }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResults((prev) => ({
         ...prev,
         [p.id]: {
           success: false,
-          message: err?.message || '连接失败，请检查配置',
+          message: getErrorMessage(err) || '连接失败，请检查配置',
         },
       }));
     } finally {

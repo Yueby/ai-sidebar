@@ -70,11 +70,12 @@ components/ui/        # shadcn 组件(保持官方原样)
 ## 待办(按序)
 
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome):重点 = 普通对话、extract_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移
-2. 剩余 quick wins:`err: any` → `unknown`;highlight.js 语言包裁剪(约 10 语言,主 chunk 941KB → 约 650KB);dev 可观测性(未知 `ai-sidebar/` 消息 console.warn)
-3. websearch / fetch_url 工具(读链接目标内容)
-4. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)
-5. 三期页面操作:授权门控 `createGatedTool` 先行 → screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;browser-use/Stagehand/LaVague 服务端形态不可用)
-6. 发布:图标 + `wxt zip`
+2. websearch / fetch_url 工具(读链接目标内容)
+3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)
+4. 三期页面操作:授权门控 `createGatedTool` 先行 → screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;browser-use/Stagehand/LaVague 服务端形态不可用)
+5. 发布:图标 + `wxt zip`
+
+> 已完成(2026-09-02):`err: any` → `unknown`(getErrorMessage helper);dev 可观测性(未知 `ai-sidebar/` 消息 console.warn)。用户拍板不做:highlight.js 语言包裁剪(本地加载,941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
 
 ## 约定
 
