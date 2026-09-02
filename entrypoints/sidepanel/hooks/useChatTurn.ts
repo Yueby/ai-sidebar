@@ -7,74 +7,41 @@ import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
-import { useAppStore } from '../store';
-import { EMPTY_DRAFT } from './useSessionManager';
+import { useAppStore, selectCurrentSession } from '../store';
+import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 
 /**
- * 对话轮次域 hook:流式状态(streamingContent/streamingThinking/activeToolNames)、
- * in-flight assistant 消息、turnSeqRef 身份守卫(R-1)、abortControllerRef、
- * handleSendMessage(唯一发送入口编排)/handleStopGeneration。
- * 会话与草稿核心由 useSessionManager 持有,经参数注入;门控冲销经参数注入。
+ * 对话轮次域 hook(编排层):handleSendMessage(唯一发送入口)/handleStopGeneration。
+ * turnSeqRef(R-1 身份守卫)/abortControllerRef/compactRequestedRef 留本 hook;
+ * 流式状态/in-flight 在 store/chatSlice,门控与错误在 store 直读,会话经 getState() 取最新值。
  */
 export function useChatTurn(params: {
-  settingsRef: React.RefObject<Settings>;
-  currentSession: Session | null;
-  sessionsRef: React.RefObject<Session[]>;
-  setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
-  setActiveSessionId: (id: string) => void;
-  draftRef: React.RefObject<SessionDraft>;
-  pendingDraftSavesRef: React.RefObject<Map<string, Session>>;
   /** 上下文压缩进行中(压缩/发送互斥) */
   isCompacting: boolean;
-  /** AI 自主压缩标记:compact_context 工具执行时置位(App 持有),turn finalize 后消费 */
-  compactRequestedRef: React.RefObject<boolean>;
   /** 轮末自主压缩触发(互斥守卫在 useCompact) */
   onAutoCompact: () => void;
   /** 首轮对话结束后自动 AI 命名回调(若未手动命名) */
   onAutoAiTitle?: (sessionId: string) => void;
 }) {
-  const {
-    settingsRef,
-    currentSession,
-    sessionsRef,
-    setSessions,
-    setActiveSessionId,
-    draftRef,
-    pendingDraftSavesRef,
-    isCompacting,
-    compactRequestedRef,
-    onAutoCompact,
-    onAutoAiTitle,
-  } = params;
+  const { isCompacting, onAutoCompact, onAutoAiTitle } = params;
 
-  // 门控/错误域:store 直读(一期杀绕环——pendingGateActive/dismissPendingGates/
-  // resetResolvedGateCount/setErrorMessage 参数全部收敛)
+  // 门控/错误域:store 直读(一期收敛);isStreaming 参与守卫判定,需响应式订阅
+  const isStreaming = useAppStore((s) => s.isStreaming);
   const hasPendingGate = useAppStore((s) => s.activeGate !== null);
   const dismissPendingGates = useAppStore((s) => s.dismissPendingGates);
   const resetResolvedGateCount = useAppStore((s) => s.resetResolvedGateCount);
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
-  const [streamingThinking, setStreamingThinking] = useState('');
-  const [activeToolNames, setActiveToolNames] = useState<string[]>([]);
-  const [isCancelled, setIsCancelled] = useState(false);
-  // 多 turn agent 循环的 in-flight 消息:已 message_end 但尚未进转录(finalize 才落)的
-  // 完整 assistant 消息。渲染源 = 会话转录 + 本列表,live 气泡只承载「正在流的那条」,
-  // 否则 turn1 完成到 finalize 之间无处渲染 → 气泡闪没/错乱。
-  const [inFlight, setInFlight] = useState<{ sessionId: string; messages: ChatMessage[] } | null>(
-    null,
-  );
-
-  // Refs for managing streaming abort and latest values
-  const abortControllerRef = useRef<AbortController | null>(null);
   // turn 身份守卫:打断重发后旧 turn 的拆卸链与新 turn 并发,seq 不匹配者不得触碰共享状态
   const turnSeqRef = useRef(0);
-  const streamingContentRef = useRef('');
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // AI 自主压缩标记:compact_context 工具(A 道注册,safe)execute 只置位;轮末由本 hook 消费
+  const compactRequestedRef = useRef(false);
 
   // AI Chat & Agent Loop
   const handleSendMessage = useCallback(
     async (userText: string) => {
+      const store = useAppStore.getState();
       // 若当前正在流式/有 pending 门控/压缩中，按发送视为用户打断当前轮次
       if (isStreaming || hasPendingGate || isCompacting) {
         if (abortControllerRef.current) {
@@ -83,19 +50,19 @@ export function useChatTurn(params: {
         dismissPendingGates();
       }
 
-      const active = findActiveModel(settingsRef.current);
+      const active = findActiveModel(store.settings);
       if (!active) {
         setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
         return;
       }
 
-      let session = currentSession;
-      let allSessions = [...sessionsRef.current];
+      let session = selectCurrentSession(store);
+      let allSessions = [...store.sessions];
 
       if (!session) {
         session = createSession(titleFromText(userText));
         allSessions = [session, ...allSessions];
-        setActiveSessionId(session.id);
+        useAppStore.getState().setActiveSessionId(session.id);
         await activeSessionIdItem.setValue(session.id);
       }
 
@@ -104,8 +71,8 @@ export function useChatTurn(params: {
       // 逐 tab 刷新元信息(getTabMeta 失败回退草稿值,绝不丢引用);focused 仅标注
       // 「发送时刻活动且在该引用列表内」的 tab;无引用则消息与朴素文本逐字节一致。
       const draftAtSend = session.draft ?? EMPTY_DRAFT;
-      const snapTabs = settingsRef.current.includePageContext ? draftAtSend.refTabs : [];
-      const snapElements = settingsRef.current.includePageContext
+      const snapTabs = store.settings.includePageContext ? draftAtSend.refTabs : [];
+      const snapElements = store.settings.includePageContext
         ? draftAtSend.pickedElements
         : [];
       let refreshedTabs = snapTabs;
@@ -150,19 +117,18 @@ export function useChatTurn(params: {
         updatedAt: Date.now(),
       };
       const nextSessions = allSessions.map((s) => (s.id === session!.id ? updatedSession : s));
-      sessionsRef.current = nextSessions;
-      setSessions(nextSessions);
+      useAppStore.getState().setSessions(nextSessions);
       // 该会话未落盘的草稿编辑已被「清空草稿」取代,丢弃待发项避免旧对象复活引用
-      pendingDraftSavesRef.current.delete(session.id);
+      dropPendingDraftSave(session.id);
       await saveSession(updatedSession);
 
       // turn 身份守卫:自此新 turn 接管,旧 turn 拆卸链的 setInFlight(null)/落盘/finally 全部失效
       const seq = ++turnSeqRef.current;
+      const { setIsStreaming, setStreamingContent, setStreamingThinking, setActiveToolNames, setIsCancelled, setInFlight } = useAppStore.getState();
       setIsStreaming(true);
       setStreamingContent('');
       setStreamingThinking('');
       setActiveToolNames([]);
-      streamingContentRef.current = '';
       setIsCancelled(false);
       setErrorMessage(null);
       resetResolvedGateCount();
@@ -188,7 +154,7 @@ export function useChatTurn(params: {
           // agent 侧再并入历史块,追问旧页面时句柄不丢
           refTabs: refreshedTabs,
           pickedElements: snapElements,
-          thinkingLevel: resolveReasoningLevel(active.model, settingsRef.current.reasoningLevel),
+          thinkingLevel: resolveReasoningLevel(active.model, useAppStore.getState().settings.reasoningLevel),
           sessionId: session.id,
           signal: abortCtrl.signal,
           // compact_context 工具(A 道注册,safe)execute 只置标记;轮末由本 hook 消费
@@ -200,6 +166,7 @@ export function useChatTurn(params: {
               // S-1:打断重发后,旧 turn 的 aborted partial 事件流必须静默——
               // 同会话守卫拦不住跨 turn,ghost 半截回答会悬空 + finalize 索引回移重挂载
               if (seq !== turnSeqRef.current) return;
+              const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
               const text = event.message.content
                 .filter((b) => b.type === 'text')
                 .map((b) => b.text)
@@ -208,29 +175,28 @@ export function useChatTurn(params: {
                 .filter((b) => b.type === 'thinking')
                 .map((b) => b.thinking)
                 .join('');
-              streamingContentRef.current = text;
-              setStreamingContent(text);
-              setStreamingThinking(thinking);
+              setStreamText(text);
+              setStreamThink(thinking);
             } else if (event.type === 'message_end' && event.message.role === 'assistant') {
               // S-1:同上,旧 turn 的 message_end 不得进新 turn 的 in-flight
               if (seq !== turnSeqRef.current) return;
               // 一条 assistant 完成:整体进 in-flight(思考/toolCall/正文齐全),
               // 同一批 setState 里重置 live 流式态,准备承载下一 turn —— 交接无闪烁
               const done = event.message;
-              setInFlight((prev) =>
+              useAppStore.getState().setInFlight((prev) =>
                 prev && prev.sessionId === session!.id
                   ? { ...prev, messages: [...prev.messages, done as ChatMessage] }
                   : prev
               );
-              streamingContentRef.current = '';
-              setStreamingContent('');
-              setStreamingThinking('');
+              const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
+              setStreamText('');
+              setStreamThink('');
             } else if (event.type === 'tool_execution_start') {
-              setActiveToolNames((prev) =>
+              useAppStore.getState().setActiveToolNames((prev) =>
                 prev.includes(event.toolName) ? prev : [...prev, event.toolName]
               );
             } else if (event.type === 'tool_execution_end') {
-              setActiveToolNames((prev) => prev.filter((n) => n !== event.toolName));
+              useAppStore.getState().setActiveToolNames((prev) => prev.filter((n) => n !== event.toolName));
             }
           },
         });
@@ -247,7 +213,7 @@ export function useChatTurn(params: {
         // AI 自主压缩标记:本 turn 置位的消费归属本 turn(新 turn 的标记留给新 turn)
         autoCompactPending = compactRequestedRef.current;
         compactRequestedRef.current = false;
-        const latest = sessionsRef.current.find((s) => s.id === session!.id);
+        const latest = useAppStore.getState().sessions.find((s) => s.id === session!.id);
         if (latest) {
           // B-1:非破坏落盘 = 全量历史 + 本轮新增(newMessages 基于「生效历史」,
           // 直接落 result.messages 会丢被压缩截断的前缀消息)
@@ -256,13 +222,14 @@ export function useChatTurn(params: {
             messages: [...session.messages, ...result.newMessages],
             updatedAt: Date.now(),
           };
-          pendingDraftSavesRef.current.delete(finalizedSession.id);
-          sessionsRef.current = sessionsRef.current.map((s) =>
-            s.id === finalizedSession.id ? finalizedSession : s
+          dropPendingDraftSave(finalizedSession.id);
+          useAppStore.getState().setSessions(
+            useAppStore.getState().sessions.map((s) =>
+              s.id === finalizedSession.id ? finalizedSession : s
+            )
           );
-          setSessions(sessionsRef.current);
           // 完整转录已含 in-flight 各条 assistant → 同批清空 inFlight,避免重复渲染闪烁
-          setInFlight(null);
+          useAppStore.getState().setInFlight(null);
           await saveSession(finalizedSession);
 
           // 首轮对话成功完成:尝试静默自动 AI 命名一次(若失败则保持目前的截断标题)
@@ -272,10 +239,10 @@ export function useChatTurn(params: {
             }, 100);
           }
         } else {
-          setInFlight(null);
+          useAppStore.getState().setInFlight(null);
         }
         if (abortCtrl.signal.aborted) {
-          setIsCancelled(true);
+          useAppStore.getState().setIsCancelled(true);
         } else if (result.errorMessage) {
           setErrorMessage(result.errorMessage);
         }
@@ -288,17 +255,18 @@ export function useChatTurn(params: {
         }
         autoCompactPending = false;
         // 异常路径不落盘转录,in-flight 无处可归 → 清空避免残留悬空气泡
-        setInFlight(null);
+        useAppStore.getState().setInFlight(null);
         if (abortCtrl.signal.aborted) {
-          setIsCancelled(true);
+          useAppStore.getState().setIsCancelled(true);
         } else {
           setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置');
         }
       } finally {
         // R-1:仅当前 turn 的所有者才能拆卸 streaming/abort 状态(不弄坏新 turn 的停止按钮)
         if (seq === turnSeqRef.current) {
-          setIsStreaming(false);
-          setActiveToolNames([]);
+          const teardown = useAppStore.getState();
+          teardown.setIsStreaming(false);
+          teardown.setActiveToolNames([]);
           abortControllerRef.current = null;
           // 轮末自主压缩:finally 清理完成后再触发(isStreaming 已复位,互斥守卫可通过);
           // setTimeout 0 = 完全脱离本链,handleCompact 的守卫与错误处理自洽
@@ -312,17 +280,11 @@ export function useChatTurn(params: {
       isStreaming,
       hasPendingGate,
       isCompacting,
-      currentSession,
-      settingsRef,
-      sessionsRef,
-      setSessions,
-      setActiveSessionId,
-      pendingDraftSavesRef,
       dismissPendingGates,
       resetResolvedGateCount,
       setErrorMessage,
-      compactRequestedRef,
       onAutoCompact,
+      onAutoAiTitle,
     ]
   );
 
@@ -331,16 +293,10 @@ export function useChatTurn(params: {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    dismissPendingGates();
-  }, [dismissPendingGates]);
+    useAppStore.getState().dismissPendingGates();
+  }, []);
 
   return {
-    isStreaming,
-    streamingContent,
-    streamingThinking,
-    activeToolNames,
-    isCancelled,
-    inFlight,
     handleSendMessage,
     handleStopGeneration,
   };

@@ -1,18 +1,17 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
-import type { Settings, ProviderConfig, ReasoningLevel, ChatMessage } from '@/lib/types';
-import { settingsItem } from '@/lib/storage';
+import type { ProviderConfig, ReasoningLevel, ChatMessage } from '@/lib/types';
 import { DEFAULT_SETTINGS, findActiveModel } from '@/lib/providers';
 import { effectiveMessages, estimateContextTokens, estimateTokens, shouldCompact } from '@/lib/contextTokens';
 import { SLASH_COMMANDS } from '@/lib/slashCommands';
-import { EMPTY_USAGE } from '@/lib/storage';
 
 import { useGate } from './hooks/useGate';
 import { useSessionManager } from './hooks/useSessionManager';
 import { useChatTurn } from './hooks/useChatTurn';
 import { usePageContextRefs } from './hooks/usePageContextRefs';
 import { useCompact } from './hooks/useCompact';
-import { useAppStore } from './store';
+import { useAppStore, selectCurrentSession } from './store';
+import { EMPTY_DRAFT } from './store/sessionSlice';
 
 // Components
 import { ChatHeader } from './components/chat/ChatHeader';
@@ -26,162 +25,90 @@ import { Button } from '@/components/ui/button';
 type ViewMode = 'chat' | 'settings';
 
 export default function App() {
-  // ── Settings & View Routing(App 域)─────────────────────────────
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const settingsRef = useRef(settings);
-  settingsRef.current = settings;
+  // ── store 订阅(selector 置顶)──────────────────────────────────
+  const settings = useAppStore((s) => s.settings);
+  const updateSettings = useAppStore((s) => s.updateSettings);
+  const errorMessage = useAppStore((s) => s.errorMessage);
+  const setErrorMessage = useAppStore((s) => s.setErrorMessage);
+  const sessions = useAppStore((s) => s.sessions);
+  const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const loaded = useAppStore((s) => s.loaded);
+  const patchActiveDraft = useAppStore((s) => s.patchActiveDraft);
+  const currentSession = useAppStore(selectCurrentSession);
+  const isStreaming = useAppStore((s) => s.isStreaming);
+  const streamingContent = useAppStore((s) => s.streamingContent);
+  const streamingThinking = useAppStore((s) => s.streamingThinking);
+  const activeToolNames = useAppStore((s) => s.activeToolNames);
+  const isCancelled = useAppStore((s) => s.isCancelled);
+  const inFlight = useAppStore((s) => s.inFlight);
 
+  // ── View Routing(App 域)───────────────────────────────────────
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
   const [selectedProviderForEdit, setSelectedProviderForEdit] = useState<ProviderConfig | null>(null);
   const [isCreatingNewProvider, setIsCreatingNewProvider] = useState(false);
-
-  // errorMessage:errorSlice(会话域切换/新建清空,对话/压缩/框选域写入)
-  const errorMessage = useAppStore((s) => s.errorMessage);
-  const setErrorMessage = useAppStore((s) => s.setErrorMessage);
+  const [slashHelpOpen, setSlashHelpOpen] = useState(false);
+  const [dismissedOverflowSessionId, setDismissedOverflowSessionId] = useState<string | null>(null);
+  // ChatInput 以 key 重挂载读取新 initialInput(nonce 仅在外部注入文本时递增,逐键输入不重挂载)
+  const [composerNonce, setComposerNonce] = useState(0);
 
   // ── 门控域 ──────────────────────────────────────────────────────
   const gate = useGate();
 
-  // ── 会话域(sessions/activeSessionId/loaded/草稿持久化核心/增删切)─────────
-  const session = useSessionManager({
-    setSettings,
-    settingsRef,
-    resetGates: gate.resetGates,
-  });
-
-  // Model & Provider Helpers
-  const activeModelInfo = useMemo(() => {
-    return findActiveModel(settings);
-  }, [settings]);
-
-  // Settings update helper
-  const updateSettings = useCallback(async (newSettings: Settings) => {
-    setSettings(newSettings);
-    await settingsItem.setValue(newSettings);
-  }, []);
-
-  // Quick switch active model
-  const handleSelectModel = useCallback(
-    async (providerId: string, modelId: string) => {
-      const updated: Settings = {
-        ...settings,
-        activeProviderId: providerId,
-        activeModelId: modelId,
-      };
-      await updateSettings(updated);
-    },
-    [settings, updateSettings]
-  );
-
-  // Switch reasoning level
-  const handleChangeReasoningLevel = useCallback(
-    async (level: ReasoningLevel) => {
-      const updated: Settings = {
-        ...settings,
-        reasoningLevel: level,
-      };
-      await updateSettings(updated);
-    },
-    [settings, updateSettings]
-  );
-
-  // Toggle page context
-  const handleTogglePageContext = useCallback(
-    async (enabled: boolean) => {
-      const updated: Settings = {
-        ...settings,
-        includePageContext: enabled,
-      };
-      await updateSettings(updated);
-    },
-    [settings, updateSettings]
-  );
+  // ── 会话域(编排层)─────────────────────────────────────────────
+  const session = useSessionManager();
 
   // ── 上下文压缩域(先于对话轮次域:isCompacting 作为 boolean 传入发送互斥)─────────
-  // isStreamingRef:对话域 state 的镜像(下方渲染体同步),互斥守卫取用时读实时值
-  const isStreamingRef = useRef(false);
-  // AI 自主压缩:compact_context 工具置位标记(App 持有),turn finalize 后触发 handleCompact
-  const compactRequestedRef = useRef(false);
-  const compact = useCompact({
-    settingsRef,
-    currentSession: session.currentSession,
-    sessionsRef: session.sessionsRef,
-    setSessions: session.setSessions,
-    pendingDraftSavesRef: session.pendingDraftSavesRef,
-    isStreamingRef,
-  });
+  const compact = useCompact();
   const onAutoCompact = useCallback(() => {
     void compact.handleCompact();
   }, [compact.handleCompact]);
 
   // ── 对话轮次域 ──────────────────────────────────────────────────
   const chat = useChatTurn({
-    settingsRef,
-    currentSession: session.currentSession,
-    sessionsRef: session.sessionsRef,
-    setSessions: session.setSessions,
-    setActiveSessionId: session.setActiveSessionId,
-    draftRef: session.draftRef,
-    pendingDraftSavesRef: session.pendingDraftSavesRef,
     isCompacting: compact.isCompacting,
-    compactRequestedRef,
     onAutoCompact,
     onAutoAiTitle: (sessionId) => {
       void session.handleAiTitleSession(sessionId, true);
     },
   });
-  // 流式状态镜像(互斥守卫取实时值)
-  isStreamingRef.current = chat.isStreaming;
 
-  // ── 页面引用域 ──────────────────────────────────────────────────
-  const pageRefs = usePageContextRefs({
-    settingsRef,
-    updateSettings,
-    handleTogglePageContext,
-    patchActiveDraft: session.patchActiveDraft,
-    draftRef: session.draftRef,
-    commitSessions: session.commitSessions,
-    sessionsRef: session.sessionsRef,
-  });
+  // ── Settings 处理器 ────────────────────────────────────────────
+  // Model & Provider Helpers
+  const activeModelInfo = useMemo(() => {
+    return findActiveModel(settings);
+  }, [settings]);
 
-  // 斜杠命令分发:/compact(可附补充重点)→ 压缩;/clear → 复用新建会话;/help → 浮层列命令
-  const [slashHelpOpen, setSlashHelpOpen] = useState(false);
-  const handleCommand = useCallback(
-    (name: string, args: string) => {
-      if (name === 'compact') {
-        void compact.handleCompact(args ? { customInstructions: args } : {});
-      } else if (name === 'clear') {
-        void session.handleNewSession();
-      } else if (name === 'help') {
-        setSlashHelpOpen(true);
-      }
+  // Quick switch active model
+  const handleSelectModel = useCallback(
+    async (providerId: string, modelId: string) => {
+      await updateSettings({
+        ...useAppStore.getState().settings,
+        activeProviderId: providerId,
+        activeModelId: modelId,
+      });
     },
-    [compact.handleCompact, session.handleNewSession]
+    [updateSettings]
   );
 
-  // Navigation & Provider Dialog Handlers
-  const handleOpenSettings = useCallback(() => {
-    // 离开聊天视图时冲销挂起门控(与停止生成同款处理;deny 后模型收到拒绝文本收尾,无需恢复)
-    gate.dismissPendingGates();
-    setCurrentView('settings');
-  }, [gate.dismissPendingGates]);
+  // Switch reasoning level
+  const handleChangeReasoningLevel = useCallback(
+    async (level: ReasoningLevel) => {
+      await updateSettings({ ...useAppStore.getState().settings, reasoningLevel: level });
+    },
+    [updateSettings]
+  );
 
-  const handleBackToChat = useCallback(() => {
-    setCurrentView('chat');
-  }, []);
+  // Toggle page context
+  const handleTogglePageContext = useCallback(
+    async (enabled: boolean) => {
+      await updateSettings({ ...useAppStore.getState().settings, includePageContext: enabled });
+    },
+    [updateSettings]
+  );
 
-  const handleAddProvider = useCallback(() => {
-    setSelectedProviderForEdit(null);
-    setIsCreatingNewProvider(true);
-    setProviderDialogOpen(true);
-  }, []);
-
-  const handleEditProvider = useCallback((provider: ProviderConfig) => {
-    setSelectedProviderForEdit(provider);
-    setIsCreatingNewProvider(false);
-    setProviderDialogOpen(true);
-  }, []);
+  // ── 页面引用域 ──────────────────────────────────────────────────
+  const pageRefs = usePageContextRefs({ handleTogglePageContext });
 
   const handleSaveProvider = useCallback(
     async (savedProvider: ProviderConfig) => {
@@ -204,35 +131,69 @@ export default function App() {
         }
       }
 
-      const updated: Settings = {
+      await updateSettings({
         ...settings,
         providers: existing,
         activeProviderId,
         activeModelId,
-      };
-
-      await updateSettings(updated);
+      });
     },
     [settings, updateSettings]
   );
 
-  // Quick prompt chip click:预设问题并入 draft.input(规则 5)。
-  // ChatInput 以 key 重挂载读取新 initialInput(nonce 仅在外部注入文本时递增,逐键输入不重挂载)。
-  const [composerNonce, setComposerNonce] = useState(0);
+  // ── 斜杠命令分发 ────────────────────────────────────────────────
+  const handleCommand = useCallback(
+    (name: string, args: string) => {
+      if (name === 'compact') {
+        void compact.handleCompact(args ? { customInstructions: args } : {});
+      } else if (name === 'clear') {
+        void session.handleNewSession();
+      } else if (name === 'help') {
+        setSlashHelpOpen(true);
+      }
+    },
+    [compact.handleCompact, session.handleNewSession]
+  );
+
+  // ── Navigation & Provider Dialog Handlers ──────────────────────
+  const handleOpenSettings = useCallback(() => {
+    // 离开聊天视图时冲销挂起门控(与停止生成同款处理;deny 后模型收到拒绝文本收尾,无需恢复)
+    gate.dismissPendingGates();
+    setCurrentView('settings');
+  }, [gate.dismissPendingGates]);
+
+  const handleBackToChat = useCallback(() => {
+    setCurrentView('chat');
+  }, []);
+
+  const handleAddProvider = useCallback(() => {
+    setSelectedProviderForEdit(null);
+    setIsCreatingNewProvider(true);
+    setProviderDialogOpen(true);
+  }, []);
+
+  const handleEditProvider = useCallback((provider: ProviderConfig) => {
+    setSelectedProviderForEdit(provider);
+    setIsCreatingNewProvider(false);
+    setProviderDialogOpen(true);
+  }, []);
+
+  // ── Composer 草稿 ──────────────────────────────────────────────
+  const draft = currentSession?.draft ?? EMPTY_DRAFT;
   const handleSelectPrompt = useCallback(
     (promptText: string) => {
-      session.patchActiveDraft((d) => ({ ...d, input: promptText }));
+      patchActiveDraft((d) => ({ ...d, input: promptText }));
       setComposerNonce((n) => n + 1);
     },
-    [session.patchActiveDraft]
+    [patchActiveDraft]
   );
 
   // ChatInput 上报输入变化 → 写入当前会话 draft(会话域防抖落盘,见 commitSessions)
   const handleDraftInput = useCallback(
     (text: string) => {
-      session.patchActiveDraft((d) => (d.input === text ? d : { ...d, input: text }));
+      patchActiveDraft((d) => (d.input === text ? d : { ...d, input: text }));
     },
-    [session.patchActiveDraft]
+    [patchActiveDraft]
   );
 
   // 统计本轮 in-flight / live 消息中需要门控确认的工具调用总数(支持分页 1/N 呈现)
@@ -240,8 +201,8 @@ export default function App() {
     if (!gate.activeGate) return { step: 1, total: 1 };
     let confirmCallCount = 0;
     // 检查 in-flight 消息中的 confirm 工具调用（如 execute_js）
-    if (chat.inFlight && chat.inFlight.messages) {
-      for (const m of chat.inFlight.messages) {
+    if (inFlight && inFlight.messages) {
+      for (const m of inFlight.messages) {
         if (m.role === 'assistant' && Array.isArray(m.content)) {
           for (const block of m.content) {
             if (block.type === 'toolCall' && block.name === 'execute_js') {
@@ -252,35 +213,33 @@ export default function App() {
       }
     }
     // 包含当前活跃工具调用列表中待确认的工具
-    if (chat.activeToolNames.includes('execute_js') && confirmCallCount === 0) {
+    if (activeToolNames.includes('execute_js') && confirmCallCount === 0) {
       confirmCallCount = 1;
     }
     const currentStep = gate.resolvedGateCount + 1;
     const totalCount = Math.max(currentStep, confirmCallCount);
     return { step: currentStep, total: totalCount };
-  }, [gate.activeGate, chat.inFlight, chat.activeToolNames, gate.resolvedGateCount]);
+  }, [gate.activeGate, inFlight, activeToolNames, gate.resolvedGateCount]);
 
   // 上下文占用派生:有效历史(压缩过 = [摘要]+之后)× 当前模型窗口 + 三角色占比(lib estimateTokens 统一口径)。
-  // S-5:in-flight 消息与流式 live 文本一并计入尾部,环随流式增长
+  // in-flight 消息与流式 live 文本一并计入尾部,环随流式增长
   const contextData = useMemo(() => {
     const model = activeModelInfo?.model;
     if (!model) return null;
     const liveInFlight =
-      chat.inFlight && chat.inFlight.sessionId === session.currentSession?.id
-        ? chat.inFlight.messages
-        : [];
-    const all = [...(session.currentSession?.messages ?? []), ...liveInFlight];
-    const effective = effectiveMessages(all, session.currentSession?.compaction);
+      inFlight && inFlight.sessionId === currentSession?.id ? inFlight.messages : [];
+    const all = [...(currentSession?.messages ?? []), ...liveInFlight];
+    const effective = effectiveMessages(all, currentSession?.compaction);
     // 流式中的 live 文本(尚未 message_end 物化)计入尾部
-    if (chat.isStreaming && chat.streamingContent) {
+    if (isStreaming && streamingContent) {
       effective.push({
         role: 'assistant',
-        content: [{ type: 'text', text: chat.streamingContent }],
+        content: [{ type: 'text', text: streamingContent }],
         api: 'openai-completions',
         provider: '',
         model: '',
         stopReason: 'stop',
-        usage: EMPTY_USAGE,
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
         timestamp: 0,
       } as ChatMessage);
     }
@@ -293,12 +252,11 @@ export default function App() {
       else if (m.role === 'toolResult') roleShares.toolResult += t;
     }
     return { usage, roleShares };
-  }, [activeModelInfo, session.currentSession, chat.inFlight, chat.isStreaming, chat.streamingContent]);
+  }, [activeModelInfo, currentSession, inFlight, isStreaming, streamingContent]);
 
   // 模型切换溢出建议:当前上下文超出新模型窗口(shouldCompact)→ 建议压缩,不自动执行
   // 用户可手动关闭本次提示(切会话或会话更新后若依然超出可再次自然产生或关闭)
-  const [dismissedOverflowSessionId, setDismissedOverflowSessionId] = useState<string | null>(null);
-  const isOverflowDismissed = dismissedOverflowSessionId === session.currentSession?.id;
+  const isOverflowDismissed = dismissedOverflowSessionId === currentSession?.id;
 
   const overflowSuggest =
     !isOverflowDismissed &&
@@ -306,7 +264,7 @@ export default function App() {
     !compact.isCompacting &&
     shouldCompact(contextData.usage);
 
-  if (!session.loaded) {
+  if (!loaded) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
         加载中...
@@ -317,14 +275,12 @@ export default function App() {
   // 渲染源 = 会话转录 + 本次运行的 in-flight assistant 消息(仅当归属当前会话;
   // 流式中途切到别的会话时不串显)。live 气泡仍由 MessageList 追加在最后。
   const displayedMessages =
-    chat.inFlight && chat.inFlight.sessionId === session.currentSession?.id && chat.inFlight.messages.length > 0
-      ? [...(session.currentSession?.messages ?? []), ...chat.inFlight.messages]
-      : (session.currentSession?.messages ?? []);
+    inFlight && inFlight.sessionId === currentSession?.id && inFlight.messages.length > 0
+      ? [...(currentSession?.messages ?? []), ...inFlight.messages]
+      : (currentSession?.messages ?? []);
   // 尾部 in-flight 消息刚从 live 流式气泡接管:跳过入场动画,交接不闪
   const quietTailCount =
-    chat.inFlight && chat.inFlight.sessionId === session.currentSession?.id
-      ? chat.inFlight.messages.length
-      : 0;
+    inFlight && inFlight.sessionId === currentSession?.id ? inFlight.messages.length : 0;
 
   return (
     <main className="flex h-dvh w-full flex-col bg-background text-foreground overflow-hidden select-text font-sans antialiased">
@@ -333,8 +289,8 @@ export default function App() {
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden animate-in fade-in-0 duration-150 motion-reduce:animate-none">
           {/* Header with History Dropdown */}
           <ChatHeader
-            sessions={session.sessions}
-            activeSessionId={session.activeSessionId}
+            sessions={sessions}
+            activeSessionId={activeSessionId}
             titlingSessionIds={session.titlingSessionIds}
             onSelectSession={session.handleSelectSession}
             onDeleteSession={session.handleDeleteSession}
@@ -347,22 +303,22 @@ export default function App() {
           {/* Messages */}
           <MessageList
             messages={displayedMessages}
-            isStreaming={chat.isStreaming}
-            streamingContent={chat.streamingContent}
-            streamingThinking={chat.streamingThinking}
-            activeToolLabels={chat.activeToolNames}
+            isStreaming={isStreaming}
+            streamingContent={streamingContent}
+            streamingThinking={streamingThinking}
+            activeToolLabels={activeToolNames}
             gateRequest={gate.activeGate?.request ?? null}
             pendingGateTotal={gatePagination.total}
             quietTailCount={quietTailCount}
             compaction={
-              session.currentSession?.compaction
+              currentSession?.compaction
                 ? {
-                    summaryTimestamp: session.currentSession.compaction.summaryTimestamp,
-                    tokensBefore: session.currentSession.compaction.tokensBefore,
+                    summaryTimestamp: currentSession.compaction.summaryTimestamp,
+                    tokensBefore: currentSession.compaction.tokensBefore,
                   }
                 : null
             }
-            isCancelled={chat.isCancelled}
+            isCancelled={isCancelled}
             errorMessage={errorMessage}
             onDismissError={() => setErrorMessage(null)}
             onSelectPrompt={handleSelectPrompt}
@@ -399,7 +355,7 @@ export default function App() {
                   </Button>
                   <button
                     type="button"
-                    onClick={() => setDismissedOverflowSessionId(session.currentSession?.id ?? 'temp')}
+                    onClick={() => setDismissedOverflowSessionId(currentSession?.id ?? 'temp')}
                     className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     title="忽略建议"
                   >
@@ -466,15 +422,15 @@ export default function App() {
 
           {/* Composer:按会话重挂载(key),草稿输入/引用派生自当前会话 draft */}
           <ChatInput
-            key={`${session.activeSessionId ?? 'none'}#${composerNonce}`}
+            key={`${activeSessionId ?? 'none'}#${composerNonce}`}
             onSend={chat.handleSendMessage}
             onStop={chat.handleStopGeneration}
-            isStreaming={chat.isStreaming}
+            isStreaming={isStreaming}
             settings={settings}
             onSelectModel={handleSelectModel}
             onChangeReasoningLevel={handleChangeReasoningLevel}
-            refTabs={settings.includePageContext ? session.draft.refTabs : []}
-            pickedElements={settings.includePageContext ? session.draft.pickedElements : []}
+            refTabs={settings.includePageContext ? draft.refTabs : []}
+            pickedElements={settings.includePageContext ? draft.pickedElements : []}
             onAddCurrentTab={pageRefs.handleAddCurrentTab}
             onAddRefTab={pageRefs.addRefTab}
             onRemoveRefTab={pageRefs.handleRemoveRefTab}
@@ -483,7 +439,7 @@ export default function App() {
             onOpenSettings={handleOpenSettings}
             disabled={!activeModelInfo || compact.isCompacting}
             placeholder={compact.isCompacting ? '正在压缩上下文…' : undefined}
-            initialInput={session.draft.input}
+            initialInput={draft.input}
             onInputChange={handleDraftInput}
             contextUsage={contextData?.usage ?? null}
             roleShares={contextData?.roleShares ?? null}

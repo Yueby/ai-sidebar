@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createModels, type AssistantMessage, type Context, type SimpleStreamOptions } from '@earendil-works/pi-ai';
 import type { Session, SessionDraft, Settings } from '@/lib/types';
 import { settingsItem, activeSessionIdItem, sanitizeSettings, createSession } from '@/lib/storage';
@@ -7,13 +7,7 @@ import { getActiveTabMeta } from '@/lib/pageContext';
 import { findActiveModel } from '@/lib/providers';
 import { buildProvider } from '@/lib/agent';
 import { useAppStore } from '../store';
-
-/** 空草稿(每次新建对象,避免共享可变引用) */
-export const cloneEmptyDraft = (): SessionDraft => ({ input: '', refTabs: [], pickedElements: [] });
-export const EMPTY_DRAFT: SessionDraft = { input: '', refTabs: [], pickedElements: [] };
-
-/** 草稿持久化防抖窗口(ms):逐键输入只进内存,合并写 IndexedDB */
-const DRAFT_SAVE_DEBOUNCE_MS = 400;
+import { cloneEmptyDraft, flushDraftSaves, dropPendingDraftSave } from '../store/sessionSlice';
 
 /** AI 标题生成 System Prompt (Model-facing 英文规范) */
 const TITLE_GENERATION_SYSTEM_PROMPT = `You are a concise title generator. Generate a very short title (max 20 characters) for a conversation based on the user's initial messages and assistant's response.
@@ -97,32 +91,20 @@ async function buildInitialDraft(includePageContext: boolean): Promise<SessionDr
 }
 
 /**
- * 会话域 hook:sessions/activeSessionId/loaded 状态、原子初始化(storage 读取 + 迁移 +
- * settings 初值/watch 由本 effect 一并完成)、IndexedDB 持久化、会话增删切与命名。
- * 同时持有草稿持久化核心(commitSessions/patchActiveDraft/防抖队列)——草稿即 Session.draft,
- * 存储在会话对象上,故归会话域;其他域经参数消费,不建 Context。
+ * 会话域 hook(编排层):会话增删切/AI 命名/重命名 + 原子 init effect
+ * (storage 读取+迁移+watch 注册时序原样保留,watch 回调接 store action)。
+ * sessions/activeSessionId/loaded 状态与草稿防抖队列在 store/sessionSlice。
  */
-export function useSessionManager(params: {
-  /** init effect 内写入 settings 初值与 watch(App 持有 settings state) */
-  setSettings: (s: Settings) => void;
-  settingsRef: React.RefObject<Settings>;
-  /** 会话切换/新建/删除时冲销门控(门控域提供) */
-  resetGates: () => void;
-}) {
-  const { setSettings, settingsRef, resetGates } = params;
-  // 错误域:store 直读(一期杀绕环——clearErrorMessage 参数收敛)
+export function useSessionManager() {
+  const resetGates = useAppStore((s) => s.resetGates);
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
+  const setSessions = useAppStore((s) => s.setSessions);
+  const setActiveSessionId = useAppStore((s) => s.setActiveSessionId);
+  const setLoaded = useAppStore((s) => s.setLoaded);
+  const setSettings = useAppStore((s) => s.setSettings);
 
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  // 正在进行 AI 命名的会话 ID 集合(防并发重入与 UI loading 态)
+  // 正在进行 AI 命名的会话 ID 集合(防并发重入与 UI loading 态;hook 本地 UI 态)
   const [titlingSessionIds, setTitlingSessionIds] = useState<Set<string>>(new Set());
-
-  const sessionsRef = useRef(sessions);
-  sessionsRef.current = sessions;
-  const activeSessionIdRef = useRef(activeSessionId);
-  activeSessionIdRef.current = activeSessionId;
   const titlingSessionIdsRef = useRef(titlingSessionIds);
   titlingSessionIdsRef.current = titlingSessionIds;
 
@@ -156,7 +138,6 @@ export function useSessionManager(params: {
       }
 
       // 启动时活动会话仍为空(上次没发消息):补引用当前活动页
-      // (替代旧「autoAddedRef 每个开关周期自动加一次」的全局 effect)
       const initialActive = initialSessions.find((s) => s.id === initialActiveId);
       if (
         initialActive &&
@@ -191,84 +172,14 @@ export function useSessionManager(params: {
       unwatchSettings?.();
       unwatchActiveId?.();
     };
-  }, [setSettings]);
-
-  // Active session helper
-  const currentSession = useMemo(() => {
-    return sessions.find((s) => s.id === activeSessionId) || sessions[0] || null;
-  }, [sessions, activeSessionId]);
-
-  // ── 草稿读写:派生值 + 防抖持久化 ─────────────────────────────
-  // 读:draft 派生自 currentSession(渲染期),所有 handler 只读 draftRef/sessionsRef。
-  // 写:patchActiveDraft → sessionsRef 同步更新 + setSessions + pending map,
-  //     400ms 防抖后 saveSession;切换/新建/删除/发送/卸载前 flushDraftSaves() 立即落盘。
-  const draft = currentSession?.draft ?? EMPTY_DRAFT;
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
-
-  const pendingDraftSavesRef = useRef<Map<string, Session>>(new Map());
-  const draftSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const flushDraftSaves = useCallback(() => {
-    if (draftSaveTimerRef.current) {
-      clearTimeout(draftSaveTimerRef.current);
-      draftSaveTimerRef.current = null;
-    }
-    const pending = pendingDraftSavesRef.current;
-    if (pending.size === 0) return;
-    pendingDraftSavesRef.current = new Map();
-    for (const s of pending.values()) {
-      void saveSession(s).catch(() => {});
-    }
-  }, []);
-
-  /** 提交会话数组变更并把涉及会话的最新对象放入防抖写盘队列 */
-  const commitSessions = useCallback(
-    (next: Session[], changedIds: string[]) => {
-      sessionsRef.current = next;
-      setSessions(next);
-      for (const id of changedIds) {
-        const s = next.find((x) => x.id === id);
-        if (s) pendingDraftSavesRef.current.set(id, s);
-      }
-      if (draftSaveTimerRef.current) clearTimeout(draftSaveTimerRef.current);
-      draftSaveTimerRef.current = setTimeout(flushDraftSaves, DRAFT_SAVE_DEBOUNCE_MS);
-    },
-    [flushDraftSaves]
-  );
-
-  const patchDraftOf = useCallback(
-    (sessionId: string, mutator: (d: SessionDraft) => SessionDraft) => {
-      const prev = sessionsRef.current;
-      const idx = prev.findIndex((s) => s.id === sessionId);
-      if (idx < 0) return;
-      const session = prev[idx]!;
-      const nextDraft = mutator(session.draft ?? cloneEmptyDraft());
-      if (nextDraft === session.draft) return; // 无变化:不渲染不落盘
-      const next = [...prev];
-      next[idx] = { ...session, draft: nextDraft };
-      commitSessions(next, [sessionId]);
-    },
-    [commitSessions]
-  );
-
-  const patchActiveDraft = useCallback(
-    (mutator: (d: SessionDraft) => SessionDraft) => {
-      const id = activeSessionIdRef.current;
-      if (id) patchDraftOf(id, mutator);
-    },
-    [patchDraftOf]
-  );
-
-  // 面板关闭(组件卸载)前把未落盘的草稿立即写回
-  useEffect(() => () => flushDraftSaves(), [flushDraftSaves]);
+  }, [setSettings, setSessions, setActiveSessionId, setLoaded]);
 
   /** 手动重命名会话(标记 customTitle: true, 以后绝不被自动/AI 命名覆盖) */
   const handleRenameSession = useCallback(
     async (id: string, newTitle: string) => {
       const trimmed = newTitle.trim();
       if (!trimmed) return;
-      const prev = sessionsRef.current;
+      const prev = useAppStore.getState().sessions;
       const idx = prev.findIndex((s) => s.id === id);
       if (idx < 0) return;
       const session = prev[idx]!;
@@ -282,17 +193,18 @@ export function useSessionManager(params: {
       };
       const next = [...prev];
       next[idx] = updated;
-      sessionsRef.current = next;
       setSessions(next);
       await saveSession(updated);
     },
-    []
+    [setSessions]
   );
 
   /** 手动触发或自动触发 AI 命名 */
   const handleAiTitleSession = useCallback(
     async (id: string, isAuto = false) => {
-      const session = sessionsRef.current.find((s) => s.id === id);
+      void isAuto;
+      const { sessions, settings } = useAppStore.getState();
+      const session = sessions.find((s) => s.id === id);
       if (!session) return;
       // 若已手动命名过，AI 命名不执行
       if (session.customTitle) return;
@@ -306,9 +218,9 @@ export function useSessionManager(params: {
       setTitlingSessionIds((prev) => new Set(prev).add(id));
 
       try {
-        const title = await generateTitleWithAi(settingsRef.current, session.messages);
+        const title = await generateTitleWithAi(settings, session.messages);
         // 生成成功，更新会话标题(不标记 customTitle，方便后续再次 AI 命名，但已脱离默认状态)
-        const currentList = sessionsRef.current;
+        const currentList = useAppStore.getState().sessions;
         const targetIdx = currentList.findIndex((s) => s.id === id);
         if (targetIdx >= 0) {
           const currentTarget = currentList[targetIdx]!;
@@ -322,7 +234,6 @@ export function useSessionManager(params: {
           };
           const next = [...currentList];
           next[targetIdx] = updated;
-          sessionsRef.current = next;
           setSessions(next);
           await saveSession(updated);
         }
@@ -337,27 +248,26 @@ export function useSessionManager(params: {
         });
       }
     },
-    [settingsRef]
+    [setSessions]
   );
 
   // 会话切换时冲销未处理门控请求并重置门控统计
   const handleSelectSession = useCallback(
     async (id: string) => {
-      const leavingId = activeSessionIdRef.current;
+      const { sessions, activeSessionId: leavingId } = useAppStore.getState();
       if (leavingId === id) return;
       // 切换会话冲销所有 pending 门控(安全拒绝)
       resetGates();
       const leaving = leavingId
-        ? sessionsRef.current.find((s) => s.id === leavingId) ?? null
+        ? sessions.find((s) => s.id === leavingId) ?? null
         : null;
       const recycle = !!leaving && leaving.messages.length === 0;
       // 回收前先摘除离开会话的待发草稿,避免 flush 把它写回后与 deleteSession 竞态复活
-      if (recycle) pendingDraftSavesRef.current.delete(leaving!.id);
+      if (recycle) dropPendingDraftSave(leaving!.id);
       // 其余会话的待落盘草稿立即写入(切换是自然 flush 边界)
       flushDraftSaves();
       if (recycle) {
-        const remaining = sessionsRef.current.filter((s) => s.id !== leaving!.id);
-        sessionsRef.current = remaining;
+        const remaining = useAppStore.getState().sessions.filter((s) => s.id !== leaving!.id);
         setSessions(remaining);
         await deleteSession(leaving!.id);
       }
@@ -365,13 +275,14 @@ export function useSessionManager(params: {
       await activeSessionIdItem.setValue(id);
       setErrorMessage(null);
     },
-    [flushDraftSaves, resetGates, setErrorMessage]
+    [resetGates, setErrorMessage, setActiveSessionId, setSessions]
   );
 
   const handleNewSession = useCallback(async () => {
     // 规则 2:当前会话已是空的 → 直接复用不叠加
-    const cur = activeSessionIdRef.current
-      ? sessionsRef.current.find((s) => s.id === activeSessionIdRef.current) ?? null
+    const { sessions, activeSessionId } = useAppStore.getState();
+    const cur = activeSessionId
+      ? sessions.find((s) => s.id === activeSessionId) ?? null
       : null;
     if (cur && cur.messages.length === 0) {
       setErrorMessage(null);
@@ -383,28 +294,27 @@ export function useSessionManager(params: {
     // 规则 1:新会话草稿预填当前活动页
     const newSess = createSession(
       '新会话',
-      await buildInitialDraft(settingsRef.current.includePageContext)
+      await buildInitialDraft(useAppStore.getState().settings.includePageContext)
     );
-    const next = [newSess, ...sessionsRef.current];
-    sessionsRef.current = next;
+    const next = [newSess, ...useAppStore.getState().sessions];
     setSessions(next);
     setActiveSessionId(newSess.id);
     await saveSession(newSess);
     await activeSessionIdItem.setValue(newSess.id);
     setErrorMessage(null);
-  }, [flushDraftSaves, resetGates, setErrorMessage, settingsRef]);
+  }, [resetGates, setErrorMessage, setActiveSessionId, setSessions]);
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
       // 若删除当前会话，冲销 pending 门控
-      if (activeSessionIdRef.current === id) {
+      if (useAppStore.getState().activeSessionId === id) {
         resetGates();
       }
       // 防止被删会话的待发草稿在 flush 时复活它;删除是自然 flush 边界
-      pendingDraftSavesRef.current.delete(id);
+      dropPendingDraftSave(id);
       flushDraftSaves();
-      const remaining = sessionsRef.current.filter((s) => s.id !== id);
-      let nextActiveId = activeSessionIdRef.current;
+      const remaining = useAppStore.getState().sessions.filter((s) => s.id !== id);
+      let nextActiveId = useAppStore.getState().activeSessionId;
 
       if (nextActiveId === id) {
         if (remaining.length > 0) {
@@ -413,7 +323,7 @@ export function useSessionManager(params: {
           // 删空后自动补一个新会话(规则 2),并按规则 1 预填当前活动页
           const fresh = createSession(
             '新会话',
-            await buildInitialDraft(settingsRef.current.includePageContext)
+            await buildInitialDraft(useAppStore.getState().settings.includePageContext)
           );
           remaining.push(fresh);
           nextActiveId = fresh.id;
@@ -421,30 +331,18 @@ export function useSessionManager(params: {
         }
       }
 
-      sessionsRef.current = remaining;
       setSessions(remaining);
       setActiveSessionId(nextActiveId);
       await deleteSession(id);
       await activeSessionIdItem.setValue(nextActiveId);
     },
-    [flushDraftSaves, resetGates, settingsRef]
+    [resetGates, setActiveSessionId, setSessions]
   );
 
+  // 面板卸载(dev HMR/StrictMode)前把未落盘草稿立即写回;生产面板关闭为上下文销毁,此为 dev 数据安全保证
+  useEffect(() => () => flushDraftSaves(), []);
+
   return {
-    loaded,
-    sessions,
-    activeSessionId,
-    setActiveSessionId,
-    setSessions,
-    currentSession,
-    sessionsRef,
-    activeSessionIdRef,
-    draft,
-    draftRef,
-    pendingDraftSavesRef,
-    flushDraftSaves,
-    commitSessions,
-    patchActiveDraft,
     handleSelectSession,
     handleNewSession,
     handleDeleteSession,

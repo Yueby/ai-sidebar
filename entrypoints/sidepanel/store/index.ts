@@ -2,16 +2,23 @@ import { create } from 'zustand';
 import { setGateHandler, type GateRequest, type GateResponse } from '../gateAdapter';
 import { createGateSlice, type GateSlice } from './gateSlice';
 import { createErrorSlice, type ErrorSlice } from './errorSlice';
+import { createSessionSlice, selectCurrentSession, type SessionSlice } from './sessionSlice';
+import { createSettingsSlice, type SettingsSlice } from './settingsSlice';
+import { createChatSlice, type ChatSlice } from './chatSlice';
 
-export type AppStore = GateSlice & ErrorSlice;
+export type AppStore = GateSlice & ErrorSlice & SessionSlice & SettingsSlice & ChatSlice;
+export { selectCurrentSession };
 
 /**
- * sidepanel 全局 store(一期:gate 切片 + error 切片;后续切片按域渐进迁入)。
- * 切片创建器以 Partial<AppStore> 读写,组合时天然获得完整类型。
+ * sidepanel 全局 store(二期:gate/error/session/settings/chat 五切片)。
+ * 切片创建器以 Partial 各域类型读写,组合时获得完整 store 类型。
  */
 export const useAppStore = create<AppStore>()((set, get) => ({
   ...createGateSlice(set, get),
   ...createErrorSlice(set),
+  ...createSessionSlice(set, get),
+  ...createSettingsSlice(set),
+  ...createChatSlice(set),
 }));
 
 /**

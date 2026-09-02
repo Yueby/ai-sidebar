@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import type { Session, SessionCompaction, Settings } from '@/lib/types';
+import type { Session, SessionCompaction } from '@/lib/types';
 import { createUserMessage } from '@/lib/storage';
 import { saveSession } from '@/lib/sessionStore';
 import { findActiveModel } from '@/lib/providers';
@@ -8,48 +8,34 @@ import { effectiveMessages } from '@/lib/contextTokens';
 import { findCutIndex, runCompact } from '@/lib/compaction';
 import { buildProvider } from '@/lib/agent';
 import { collectPageRefs, renderPageRefsBlock } from '@/lib/pageRefs';
-import { useAppStore } from '../store';
+import { useAppStore, selectCurrentSession } from '../store';
+import { dropPendingDraftSave } from '../store/sessionSlice';
 
 /**
- * 上下文压缩域 hook:isCompacting 状态 + handleCompact(互斥守卫 → runCompact → 非破坏性落盘)。
- * 非破坏性存储:Session.messages 全保留,摘要 user 消息追加尾部
+ * 上下文压缩域 hook(编排层):isCompacting 状态 + handleCompact(互斥守卫 → runCompact →
+ * 非破坏性落盘)。非破坏性存储:Session.messages 全保留,摘要 user 消息追加尾部
  * (content = <context-summary> 块 + 被压缩范围 page-refs 并集块,拼装为调用方职责,
  * 契约见 lib/types.ts SessionCompaction);Session.compaction.summaryTimestamp 指向摘要消息,
  * 生效历史 = effectiveMessages() = [摘要] + 之后。错误走 errorMessage 横幅不落盘。
  */
-export function useCompact(params: {
-  settingsRef: React.RefObject<Settings>;
-  currentSession: Session | null;
-  sessionsRef: React.RefObject<Session[]>;
-  setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
-  pendingDraftSavesRef: React.RefObject<Map<string, Session>>;
-  /** 流式状态 ref(声明顺序:本 hook 先于 useChatTurn,经 ref 读实时值,回调取用时判定) */
-  isStreamingRef: React.RefObject<boolean>;
-}) {
-  const {
-    settingsRef,
-    currentSession,
-    sessionsRef,
-    setSessions,
-    pendingDraftSavesRef,
-    isStreamingRef,
-  } = params;
-
+export function useCompact() {
   const [isCompacting, setIsCompacting] = useState(false);
   const compactAbortRef = useRef<AbortController | null>(null);
-  // 门控/错误域:store 直读(一期杀绕环)
+  // 门控/错误域:store 直读(一期收敛)
   const hasPendingGate = useAppStore((s) => s.activeGate !== null);
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
   const handleCompact = useCallback(
     async ({ customInstructions }: { customInstructions?: string } = {}): Promise<boolean> => {
       // 互斥守卫:流式/挂起门控/压缩中任一 true 则拒绝
-      if (isStreamingRef.current || hasPendingGate || isCompacting) return false;
-      // S-1:按 ref 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
-      const session =
-        sessionsRef.current.find((s) => s.id === currentSession?.id) ?? currentSession;
+      const store = useAppStore.getState();
+      if (store.isStreaming || hasPendingGate || isCompacting) return false;
+      // S-1:按 store 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
+      const latestCurrent = selectCurrentSession(store);
+      const session: Session | undefined =
+        store.sessions.find((s) => s.id === latestCurrent?.id) ?? latestCurrent ?? undefined;
       if (!session || session.messages.length === 0) return false;
-      const active = findActiveModel(settingsRef.current);
+      const active = findActiveModel(store.settings);
       if (!active) {
         setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
         return false;
@@ -71,7 +57,7 @@ export function useCompact(params: {
         });
 
         // S-6:压缩期间会话可能已被删除——不复活,静默丢弃(对照 useChatTurn finalize 的 latest 守卫)
-        if (!sessionsRef.current.some((s) => s.id === session.id)) {
+        if (!useAppStore.getState().sessions.some((s) => s.id === session.id)) {
           return false;
         }
 
@@ -95,9 +81,10 @@ export function useCompact(params: {
             compactedAt: Date.now(),
           } satisfies SessionCompaction,
         };
-        sessionsRef.current = sessionsRef.current.map((s) => (s.id === session.id ? updated : s));
-        setSessions(sessionsRef.current);
-        pendingDraftSavesRef.current.delete(session.id);
+        useAppStore.getState().setSessions(
+          useAppStore.getState().sessions.map((s) => (s.id === session.id ? updated : s))
+        );
+        dropPendingDraftSave(session.id);
         await saveSession(updated);
         return true;
       } catch (err: unknown) {
@@ -109,17 +96,7 @@ export function useCompact(params: {
         compactAbortRef.current = null;
       }
     },
-    [
-      isStreamingRef,
-      hasPendingGate,
-      isCompacting,
-      currentSession,
-      settingsRef,
-      sessionsRef,
-      setSessions,
-      pendingDraftSavesRef,
-      setErrorMessage,
-    ]
+    [hasPendingGate, isCompacting, setErrorMessage]
   );
 
   /** 取消进行中的压缩(预留) */

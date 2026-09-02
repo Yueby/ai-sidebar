@@ -7,34 +7,21 @@ import {
   startPickElement,
   type RefTab,
 } from '@/lib/pageContext';
-import { useAppStore } from '../store';
+import { useAppStore, selectCurrentSession } from '../store';
 
 /**
- * 页面引用域 hook:refTabs/pickedElements 读写(写入当前会话草稿)、tabs.onUpdated/onRemoved
- * 实时同步、元素框选(startPickElement + pendingPick 兜底)、runtime.onMessage 框选结果回传。
- * 草稿核心(patchActiveDraft/commitSessions/draftRef)由 useSessionManager 持有,经参数注入。
+ * 页面引用域 hook(编排层):refTabs/pickedElements 读写(经 store patchActiveDraft)、
+ * tabs.onUpdated/onRemoved 实时同步、元素框选(startPickElement + pendingPick 兜底)、
+ * runtime.onMessage 框选结果回传。会话/草稿状态在 store,getState() 取最新值。
  */
 export function usePageContextRefs(params: {
-  settingsRef: React.RefObject<Settings>;
-  /** 框选结果回传时自动开启页面上下文开关 */
-  updateSettings: (s: Settings) => Promise<void>;
   handleTogglePageContext: (enabled: boolean) => Promise<void>;
-  patchActiveDraft: (mutator: (d: SessionDraft) => SessionDraft) => void;
-  draftRef: React.RefObject<SessionDraft>;
-  commitSessions: (next: Session[], changedIds: string[]) => void;
-  sessionsRef: React.RefObject<Session[]>;
 }) {
-  const {
-    settingsRef,
-    updateSettings,
-    handleTogglePageContext,
-    patchActiveDraft,
-    draftRef,
-    commitSessions,
-    sessionsRef,
-  } = params;
-  // 错误域:store 直读(一期杀绕环)
+  const { handleTogglePageContext } = params;
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
+  const patchActiveDraft = useAppStore((s) => s.patchActiveDraft);
+  const commitSessions = useAppStore((s) => s.commitSessions);
+  const updateSettings = useAppStore((s) => s.updateSettings);
 
   // 进行中的框选:结果回传时归属 tab;并保留启动时的页面元信息作兜底
   // (回传时 tabs 实时查询可能失败/URL 不可见,此时仍需能加引用,不能静默丢弃)
@@ -46,7 +33,7 @@ export function usePageContextRefs(params: {
   useEffect(() => {
     if (typeof browser === 'undefined' || !browser.tabs?.onUpdated) return;
     const patchAllDrafts = (mutator: (d: SessionDraft) => SessionDraft | null) => {
-      const prev = sessionsRef.current;
+      const prev = useAppStore.getState().sessions;
       const next: Session[] = [];
       const changedIds: string[] = [];
       for (const s of prev) {
@@ -111,7 +98,7 @@ export function usePageContextRefs(params: {
       browser.tabs.onUpdated.removeListener(onUpdated);
       browser.tabs.onRemoved.removeListener(onRemoved);
     };
-  }, [commitSessions, sessionsRef]);
+  }, [commitSessions]);
 
   // Ref tab management(写入当前会话草稿,addRefTab 语义不变:按 tab id 去重)
   const addRefTab = useCallback(
@@ -124,16 +111,17 @@ export function usePageContextRefs(params: {
   );
 
   const handleAddCurrentTab = useCallback(async () => {
-    if (!settingsRef.current.includePageContext) {
+    if (!useAppStore.getState().settings.includePageContext) {
       await handleTogglePageContext(true);
     }
     const meta = await getActiveTabMeta().catch(() => null);
     if (meta) addRefTab(meta);
-  }, [addRefTab, handleTogglePageContext, settingsRef]);
+  }, [addRefTab, handleTogglePageContext]);
 
   const handleRemoveRefTab = useCallback(
     (id: number) => {
-      const remaining = draftRef.current.refTabs.filter((t) => t.id !== id);
+      const currentSession = selectCurrentSession(useAppStore.getState());
+      const remaining = (currentSession?.draft?.refTabs ?? []).filter((t) => t.id !== id);
       patchActiveDraft((d) => ({
         ...d,
         refTabs: d.refTabs.filter((t) => t.id !== id),
@@ -141,11 +129,11 @@ export function usePageContextRefs(params: {
         pickedElements: d.pickedElements.filter((p) => p.tabId !== id),
       }));
       // 移除最后一个引用时同步关闭总开关,保持「X = 关闭网页引用」的心智
-      if (remaining.length === 0 && settingsRef.current.includePageContext) {
+      if (remaining.length === 0 && useAppStore.getState().settings.includePageContext) {
         handleTogglePageContext(false);
       }
     },
-    [patchActiveDraft, handleTogglePageContext, draftRef, settingsRef]
+    [patchActiveDraft, handleTogglePageContext]
   );
 
   // 元素框选模式:不带 tabId 时作用于当前活动标签页;带 tabId 时先激活该标签页(框选必须可见)
@@ -153,8 +141,9 @@ export function usePageContextRefs(params: {
     async (tabId?: number) => {
       let meta: RefTab | null = null;
       if (typeof tabId === 'number') {
+        const currentSession = selectCurrentSession(useAppStore.getState());
         meta =
-          draftRef.current.refTabs.find((t) => t.id === tabId) ??
+          (currentSession?.draft?.refTabs ?? []).find((t) => t.id === tabId) ??
           (await getTabMeta(tabId).catch(() => null));
         if (!meta) {
           setErrorMessage('无法在该标签页启动元素选择:找不到该标签页');
@@ -184,7 +173,7 @@ export function usePageContextRefs(params: {
         setErrorMessage(err instanceof Error ? err.message : '启动元素选择失败,请重试');
       }
     },
-    [draftRef, setErrorMessage]
+    [setErrorMessage]
   );
 
   const handleRemovePickedElement = useCallback(
@@ -234,8 +223,8 @@ export function usePageContextRefs(params: {
           return;
         }
         try {
-          if (!settingsRef.current.includePageContext) {
-            await updateSettings({ ...settingsRef.current, includePageContext: true });
+          if (!useAppStore.getState().settings.includePageContext) {
+            await updateSettings({ ...useAppStore.getState().settings, includePageContext: true });
           }
         } catch {
           setErrorMessage('添加元素引用失败:写入设置时出错,请重试');
@@ -268,7 +257,7 @@ export function usePageContextRefs(params: {
     };
     browser.runtime.onMessage.addListener(onMessage);
     return () => browser.runtime.onMessage.removeListener(onMessage);
-  }, [patchActiveDraft, updateSettings, settingsRef, setErrorMessage]);
+  }, [patchActiveDraft, updateSettings, setErrorMessage]);
 
   return {
     addRefTab,
