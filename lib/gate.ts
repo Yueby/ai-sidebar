@@ -7,8 +7,20 @@ import { toolLabel, type ToolRisk } from './types';
  * 快速返回(安全默认,工具在无 UI 时可静默降级)。模型可见文本一律英文。
  */
 export type GateRequest =
-  | { kind: 'confirm'; toolName: string; label: string; summary: string; detail?: string }
-  | { kind: 'ask'; question: string; options?: string[] };
+  | {
+      kind: 'confirm';
+      toolName: string;
+      label: string;
+      summary: string;
+      detail?: string;
+      toolCallId?: string;
+    }
+  | {
+      kind: 'ask';
+      question: string;
+      options?: string[];
+      toolCallId?: string;
+    };
 
 export type GateResponse =
   | { kind: 'confirm'; approved: boolean }
@@ -89,6 +101,7 @@ export function createGatedTool<T extends { name: string }>(
         label: toolLabel(base.name),
         summary,
         detail: (detailFromArgs?.(params) ?? detail) || undefined,
+        toolCallId,
       });
       if (!(res.kind === 'confirm' && res.approved)) {
         return {

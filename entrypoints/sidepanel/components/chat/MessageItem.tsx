@@ -11,12 +11,15 @@ import {
   Loader2,
   SquareMousePointer,
   ShieldAlert,
+  HelpCircle,
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, PageRefs, ToolResultMessage } from '@/lib/types';
+import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import { toolLabel } from '@/lib/types';
 import { messageText } from '@/lib/storage';
 import { parsePageRefs } from '@/lib/pageRefs';
 import { MarkdownView } from './MarkdownView';
+import { ApprovalSection } from './ApprovalSection';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -30,8 +33,14 @@ interface MessageItemProps {
   liveToolLabels?: string[];
   /** 按 toolCallId 索引的工具执行结果字典 */
   toolResults?: Map<string, ToolResultMessage>;
-  /** 当前正在等待确认的工具名(用于在对应 in-flight 卡片上显示等待确认态) */
-  pendingGateToolName?: string | null;
+  /** 当前待处理的门控请求(confirm/ask) */
+  activeGateRequest?: GateRequest | null;
+  /** 当前待确认总数 (仅当 >1 时在当前待确认卡标题旁提示) */
+  pendingGateTotal?: number;
+  onGateApprove?: () => void;
+  onGateDeny?: () => void;
+  onGateAnswer?: (answer: string) => void;
+  onGateCancel?: () => void;
 }
 
 function formatTokens(count: number): string {
@@ -173,9 +182,31 @@ interface ToolCallCardProps {
   result?: ToolResultMessage | null;
   isExecuting?: boolean;
   isWaitingConfirmation?: boolean;
+  isQueued?: boolean;
+  /** 当前待处理的门控请求(仅在 isWaitingConfirmation 时传入) */
+  activeGateRequest?: GateRequest | null;
+  /** 待确认总数(>1 时显示轻提示) */
+  pendingGateTotal?: number;
+  onGateApprove?: () => void;
+  onGateDeny?: () => void;
+  onGateAnswer?: (answer: string) => void;
+  onGateCancel?: () => void;
 }
 
-function ToolCallCard({ name, args, result, isExecuting, isWaitingConfirmation }: ToolCallCardProps) {
+function ToolCallCard({
+  name,
+  args,
+  result,
+  isExecuting,
+  isWaitingConfirmation,
+  isQueued,
+  activeGateRequest,
+  pendingGateTotal,
+  onGateApprove,
+  onGateDeny,
+  onGateAnswer,
+  onGateCancel,
+}: ToolCallCardProps) {
   const [open, setOpen] = useState(false);
   const label = toolLabel(name);
 
@@ -190,7 +221,7 @@ function ToolCallCard({ name, args, result, isExecuting, isWaitingConfirmation }
   }, [result]);
 
   const isError = result?.isError === true || isDenied;
-  const isDone = Boolean(result) && !isExecuting && !isWaitingConfirmation;
+  const isDone = Boolean(result) && !isExecuting && !isWaitingConfirmation && !isQueued;
 
   // Extract and truncate result text
   const resultText = useMemo(() => {
@@ -204,8 +235,17 @@ function ToolCallCard({ name, args, result, isExecuting, isWaitingConfirmation }
   const isTruncated = resultText.length > 500;
   const displayResultText = isTruncated ? `${resultText.slice(0, 500)}...` : resultText;
 
+  // 边框和背景调优: 等待确认时用琥珀色/蓝色警示强调
+  const cardBorderClass = isWaitingConfirmation
+    ? activeGateRequest?.kind === 'ask'
+      ? 'border-blue-500/40 bg-blue-500/5'
+      : 'border-amber-500/40 bg-amber-500/5'
+    : 'border-border/60 bg-muted/20';
+
+  const isAskGate = activeGateRequest?.kind === 'ask';
+
   return (
-    <div className="my-1.5 w-full max-w-full rounded-lg border border-border/60 bg-muted/20 p-2 text-xs text-foreground transition-all animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+    <div className={`my-1.5 w-full max-w-full rounded-lg border p-2 text-xs text-foreground transition-all animate-in fade-in-0 duration-150 motion-reduce:animate-none ${cardBorderClass}`}>
       {/* Header row (Click to toggle expand) */}
       <button
         type="button"
@@ -214,7 +254,13 @@ function ToolCallCard({ name, args, result, isExecuting, isWaitingConfirmation }
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {isWaitingConfirmation ? (
-            <ShieldAlert className="size-3.5 shrink-0 text-amber-500" />
+            isAskGate ? (
+              <HelpCircle className="size-3.5 shrink-0 text-blue-500" />
+            ) : (
+              <ShieldAlert className="size-3.5 shrink-0 text-amber-500" />
+            )
+          ) : isQueued ? (
+            <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground/70" />
           ) : isExecuting ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
           ) : (
@@ -224,12 +270,27 @@ function ToolCallCard({ name, args, result, isExecuting, isWaitingConfirmation }
           <span className="text-[10px] text-muted-foreground font-mono truncate">
             ({name})
           </span>
+          {isWaitingConfirmation && pendingGateTotal && pendingGateTotal > 1 ? (
+            <span className="text-[10px] text-muted-foreground font-normal shrink-0">
+              (共 {pendingGateTotal} 个待确认)
+            </span>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
           {isWaitingConfirmation ? (
-            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium animate-pulse">
-              等待确认
+            isAskGate ? (
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium animate-pulse">
+                等待回复
+              </span>
+            ) : (
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium animate-pulse">
+                等待确认
+              </span>
+            )
+          ) : isQueued ? (
+            <span className="text-[10px] text-muted-foreground/80 font-normal">
+              排队中
             </span>
           ) : isExecuting ? (
             <span className="text-[10px] text-muted-foreground">执行中</span>
@@ -251,7 +312,18 @@ function ToolCallCard({ name, args, result, isExecuting, isWaitingConfirmation }
         </div>
       </button>
 
-      {/* Expanded details */}
+      {/* 嵌入式审批区 (Cline 模式:就地展开,无需收折按钮) */}
+      {isWaitingConfirmation && activeGateRequest && onGateApprove && onGateDeny && onGateAnswer && onGateCancel && (
+        <ApprovalSection
+          request={activeGateRequest}
+          onApprove={onGateApprove}
+          onDeny={onGateDeny}
+          onAnswer={onGateAnswer}
+          onCancel={onGateCancel}
+        />
+      )}
+
+      {/* Expanded details (参数与历史结果) */}
       {open && (
         <div className="mt-2 pt-2 border-t border-border/40 space-y-2 text-[11px] animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
           {/* Parameters */}
@@ -278,6 +350,10 @@ function ToolCallCard({ name, args, result, isExecuting, isWaitingConfirmation }
             {isWaitingConfirmation ? (
               <div className="text-[10px] text-amber-600 dark:text-amber-400 italic py-0.5">
                 正在等待用户确认授权...
+              </div>
+            ) : isQueued ? (
+              <div className="text-[10px] text-muted-foreground italic py-0.5">
+                排队等待前序操作确认与执行...
               </div>
             ) : isExecuting ? (
               <div className="text-[10px] text-muted-foreground italic py-0.5">
@@ -314,7 +390,12 @@ export function MessageItem({
   liveThinking,
   liveToolLabels,
   toolResults,
-  pendingGateToolName,
+  activeGateRequest,
+  pendingGateTotal,
+  onGateApprove,
+  onGateDeny,
+  onGateAnswer,
+  onGateCancel,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
 
@@ -377,6 +458,16 @@ export function MessageItem({
       b.type === 'toolCall'
   );
 
+  const pendingGateToolName =
+    activeGateRequest?.kind === 'confirm' ? activeGateRequest.toolName : activeGateRequest?.kind === 'ask' ? 'ask_user' : null;
+  const pendingGateToolCallId = activeGateRequest?.toolCallId ?? null;
+
+  // 门控匹配:首个未出结果的 confirm/ask 工具(当无 toolCallId 时退化匹配首个)
+  const firstUnresolvedConfirmCall = useMemo(() => {
+    if (!pendingGateToolName) return null;
+    return toolCallBlocks.find((b) => b.name === pendingGateToolName && !toolResults?.has(b.id)) ?? null;
+  }, [pendingGateToolName, toolCallBlocks, toolResults]);
+
   const hasVisibleTextOrThinking = textBlocks.length > 0 || thinkingBlocks.length > 0 || Boolean(rawText);
   const hasLiveActivity = Boolean(liveThinking) || (liveToolLabels && liveToolLabels.length > 0);
   const errorMessage = assistantMsg.errorMessage;
@@ -388,7 +479,24 @@ export function MessageItem({
       {/* 1. Independent Tool Call Cards (Ordered) */}
       {toolCallBlocks.map((block, i) => {
         const result = block.id ? toolResults?.get(block.id) : null;
-        const isWaiting = !result && pendingGateToolName === block.name;
+        const hasResult = Boolean(result);
+
+        // 精确匹配 toolCallId;无 toolCallId 时退化为匹配首个未出结果的同名工具
+        const isWaiting =
+          !hasResult &&
+          Boolean(
+            (pendingGateToolCallId && block.id === pendingGateToolCallId) ||
+              (!pendingGateToolCallId &&
+                pendingGateToolName === block.name &&
+                firstUnresolvedConfirmCall?.id === block.id)
+          );
+
+        // 同名或同轮未开始且非当前等待的 confirm 工具标为"排队中"
+        const isQueued =
+          !hasResult &&
+          !isWaiting &&
+          Boolean(pendingGateToolName && (block.name === pendingGateToolName || block.name === 'execute_js'));
+
         return (
           <ToolCallCard
             key={block.id || `tool-${i}`}
@@ -397,6 +505,13 @@ export function MessageItem({
             args={block.arguments}
             result={result}
             isWaitingConfirmation={isWaiting}
+            isQueued={isQueued}
+            activeGateRequest={isWaiting ? activeGateRequest : null}
+            pendingGateTotal={pendingGateTotal}
+            onGateApprove={onGateApprove}
+            onGateDeny={onGateDeny}
+            onGateAnswer={onGateAnswer}
+            onGateCancel={onGateCancel}
           />
         );
       })}
@@ -404,14 +519,27 @@ export function MessageItem({
       {/* Live executing tool calls during streaming */}
       {liveToolLabels && liveToolLabels.length > 0 && (
         <div className="space-y-1">
-          {liveToolLabels.map((toolName, i) => (
-            <ToolCallCard
-              key={`live-tool-${i}`}
-              name={toolName}
-              isExecuting
-              isWaitingConfirmation={pendingGateToolName === toolName}
-            />
-          ))}
+          {liveToolLabels.map((toolName, i) => {
+            const isWaiting =
+              Boolean(
+                (pendingGateToolCallId && false) ||
+                  (!pendingGateToolCallId && pendingGateToolName === toolName)
+              );
+            return (
+              <ToolCallCard
+                key={`live-tool-${i}`}
+                name={toolName}
+                isExecuting={!isWaiting}
+                isWaitingConfirmation={isWaiting}
+                activeGateRequest={isWaiting ? activeGateRequest : null}
+                pendingGateTotal={pendingGateTotal}
+                onGateApprove={onGateApprove}
+                onGateDeny={onGateDeny}
+                onGateAnswer={onGateAnswer}
+                onGateCancel={onGateCancel}
+              />
+            );
+          })}
         </div>
       )}
 

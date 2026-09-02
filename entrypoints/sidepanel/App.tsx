@@ -74,6 +74,9 @@ export default function App() {
   // 否则 turn1 完成到 finalize 之间无处渲染 → 气泡闪没/错乱。
   const [inFlight, setInFlight] = useState<{ sessionId: string; messages: ChatMessage[] } | null>(null);
 
+  // 本轮会话中已完成处理的门控次数（用于分页序号与总数统计）
+  const [resolvedGateCount, setResolvedGateCount] = useState(0);
+
   // 工具门控请求(confirm/ask)
   const [activeGate, setActiveGate] = useState<{
     request: GateRequest;
@@ -83,6 +86,7 @@ export default function App() {
   // 门控响应回调封装
   const handleGateApprove = useCallback(() => {
     if (activeGate) {
+      setResolvedGateCount((c) => c + 1);
       activeGate.resolve({ kind: 'confirm', approved: true });
       setActiveGate(null);
     }
@@ -90,6 +94,7 @@ export default function App() {
 
   const handleGateDeny = useCallback(() => {
     if (activeGate) {
+      setResolvedGateCount((c) => c + 1);
       activeGate.resolve({ kind: 'confirm', approved: false });
       setActiveGate(null);
     }
@@ -97,6 +102,7 @@ export default function App() {
 
   const handleGateAnswer = useCallback((answer: string) => {
     if (activeGate) {
+      setResolvedGateCount((c) => c + 1);
       activeGate.resolve({ kind: 'ask', answer });
       setActiveGate(null);
     }
@@ -104,6 +110,7 @@ export default function App() {
 
   const handleGateCancel = useCallback(() => {
     if (activeGate) {
+      setResolvedGateCount((c) => c + 1);
       activeGate.resolve({ kind: 'ask', answer: '', cancelled: true });
       setActiveGate(null);
     }
@@ -557,9 +564,7 @@ export default function App() {
     return () => browser.runtime.onMessage.removeListener(onMessage);
   }, [patchActiveDraft, updateSettings]);
 
-  // Sessions Management
-  // 规则 2「空会话回收」:切换到其他会话时,若离开的会话没有消息 → 删除它;
-  // 规则 1:切换到的目标若本身是空会话且无引用,不强行改动(其草稿随会话走)。
+  // 会话切换时冲销未处理门控请求并重置门控统计
   const handleSelectSession = useCallback(
     async (id: string) => {
       const leavingId = activeSessionIdRef.current;
@@ -567,6 +572,7 @@ export default function App() {
       // 切换会话冲销所有 pending 门控(安全拒绝)
       flushPendingGates();
       setActiveGate(null);
+      setResolvedGateCount(0);
       const leaving = leavingId
         ? sessionsRef.current.find((s) => s.id === leavingId) ?? null
         : null;
@@ -600,6 +606,7 @@ export default function App() {
     // 新建会话冲销所有 pending 门控
     flushPendingGates();
     setActiveGate(null);
+    setResolvedGateCount(0);
     flushDraftSaves();
     // 规则 1:新会话草稿预填当前活动页
     const newSess = createSession(
@@ -621,6 +628,7 @@ export default function App() {
       if (activeSessionIdRef.current === id) {
         flushPendingGates();
         setActiveGate(null);
+        setResolvedGateCount(0);
       }
       // 防止被删会话的待发草稿在 flush 时复活它;删除是自然 flush 边界
       pendingDraftSavesRef.current.delete(id);
@@ -712,7 +720,14 @@ export default function App() {
   // AI Chat & Agent Loop
   const handleSendMessage = useCallback(
     async (userText: string) => {
-      if (isStreaming || activeGate !== null) return;
+      // 若当前正在流式或有 pending 门控，按发送视为用户打断当前轮次
+      if (isStreaming || activeGate !== null) {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+        flushPendingGates();
+        setActiveGate(null);
+      }
 
       const active = findActiveModel(settingsRef.current);
       if (!active) {
@@ -786,6 +801,7 @@ export default function App() {
       streamingContentRef.current = '';
       setIsCancelled(false);
       setErrorMessage(null);
+      setResolvedGateCount(0);
       // 新一轮运行:清空 in-flight 并声明归属会话
       setInFlight({ sessionId: session.id, messages: [] });
 
@@ -907,6 +923,31 @@ export default function App() {
     [patchActiveDraft]
   );
 
+  // 统计本轮 in-flight / live 消息中需要门控确认的工具调用总数(支持分页 1/N 呈现)
+  const gatePagination = useMemo(() => {
+    if (!activeGate) return { step: 1, total: 1 };
+    let confirmCallCount = 0;
+    // 检查 in-flight 消息中的 confirm 工具调用（如 execute_js）
+    if (inFlight && inFlight.messages) {
+      for (const m of inFlight.messages) {
+        if (m.role === 'assistant' && Array.isArray(m.content)) {
+          for (const block of m.content) {
+            if (block.type === 'toolCall' && block.name === 'execute_js') {
+              confirmCallCount++;
+            }
+          }
+        }
+      }
+    }
+    // 包含当前活跃工具调用列表中待确认的工具
+    if (activeToolNames.includes('execute_js') && confirmCallCount === 0) {
+      confirmCallCount = 1;
+    }
+    const currentStep = resolvedGateCount + 1;
+    const totalCount = Math.max(currentStep, confirmCallCount);
+    return { step: currentStep, total: totalCount };
+  }, [activeGate, inFlight, activeToolNames, resolvedGateCount]);
+
   if (!loaded) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
@@ -945,6 +986,7 @@ export default function App() {
             streamingThinking={streamingThinking}
             activeToolLabels={activeToolNames}
             gateRequest={activeGate?.request ?? null}
+            pendingGateTotal={gatePagination.total}
             onGateApprove={handleGateApprove}
             onGateDeny={handleGateDeny}
             onGateAnswer={handleGateAnswer}
@@ -978,7 +1020,7 @@ export default function App() {
             onStartPickElement={handleStartPickElement}
             onRemovePickedElement={handleRemovePickedElement}
             onOpenSettings={handleOpenSettings}
-            disabled={!activeModelInfo || activeGate !== null}
+            disabled={!activeModelInfo}
             initialInput={draft.input}
             onInputChange={handleDraftInput}
           />

@@ -14,7 +14,6 @@ import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/typ
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
-import { GateCard } from './GateCard';
 import { Button } from '@/components/ui/button';
 
 interface MessageListProps {
@@ -27,6 +26,8 @@ interface MessageListProps {
   activeToolLabels?: string[];
   /** 当前待处理的门控请求(confirm/ask) */
   gateRequest?: GateRequest | null;
+  /** 待确认总数 (用于首张待确认卡显示「共 N 个待确认」轻提示) */
+  pendingGateTotal?: number;
   onGateApprove?: () => void;
   onGateDeny?: () => void;
   onGateAnswer?: (answer: string) => void;
@@ -75,6 +76,7 @@ export function MessageList({
   streamingThinking,
   activeToolLabels,
   gateRequest,
+  pendingGateTotal,
   onGateApprove,
   onGateDeny,
   onGateAnswer,
@@ -128,7 +130,7 @@ export function MessageList({
     smoothScrollToBottom();
   }, [smoothScrollToBottom]);
 
-  // 1. ResizeObserver: 监听消息内容容器高度变化 (包含气泡加载动画挂载、工具卡片完成、thinking 展开、Gate 出现等全场景)
+  // 1. ResizeObserver: 监听消息内容容器高度变化 (包含气泡加载动画挂载、工具卡片完成、thinking 展开等全场景)
   useEffect(() => {
     const contentEl = contentRef.current;
     if (!contentEl) return;
@@ -192,7 +194,6 @@ export function MessageList({
     return map;
   }, [messages]);
 
-  const pendingGateToolName = gateRequest?.kind === 'confirm' ? gateRequest.toolName : null;
   const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
 
   return (
@@ -203,17 +204,6 @@ export function MessageList({
         aria-hidden="true"
       />
 
-      {/* Top Gate Confirmation / Ask Card (z-30) */}
-      {gateRequest && onGateApprove && onGateDeny && onGateAnswer && onGateCancel && (
-        <GateCard
-          request={gateRequest}
-          onApprove={onGateApprove}
-          onDeny={onGateDeny}
-          onAnswer={onGateAnswer}
-          onCancel={onGateCancel}
-        />
-      )}
-
       {/* Error Alert Banner (z-20) */}
       {errorMessage && (
         <div className="sticky top-0 z-20 m-2 flex shrink-0 items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive overflow-hidden animate-in fade-in-0 slide-in-from-top-2 duration-150 motion-reduce:animate-none">
@@ -223,7 +213,7 @@ export function MessageList({
             <button
               type="button"
               onClick={onDismissError}
-              className="text-destructive/70 hover:text-destructive p-0.5 rounded transition-colors shrink-0"
+              className="text-destructive/70 hover:text-destructive p-0.5 rounded transition-colors shrink-0 cursor-pointer"
             >
               <X className="size-3.5" />
             </button>
@@ -288,7 +278,7 @@ export function MessageList({
                       key={item.title}
                       type="button"
                       onClick={() => onSelectPrompt(item.prompt)}
-                      className="group flex items-start gap-2.5 rounded-lg border bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+                      className="group flex items-start gap-2.5 rounded-lg border bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
                     >
                       <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
@@ -314,7 +304,12 @@ export function MessageList({
                   key={`${msg.timestamp}-${i}`}
                   message={msg}
                   toolResults={toolResultsByCallId}
-                  pendingGateToolName={pendingGateToolName}
+                  activeGateRequest={gateRequest}
+                  pendingGateTotal={pendingGateTotal}
+                  onGateApprove={onGateApprove}
+                  onGateDeny={onGateDeny}
+                  onGateAnswer={onGateAnswer}
+                  onGateCancel={onGateCancel}
                 />
               ))}
             {isStreaming && (
@@ -334,7 +329,12 @@ export function MessageList({
                 liveThinking={streamingThinking}
                 liveToolLabels={activeToolLabels}
                 toolResults={toolResultsByCallId}
-                pendingGateToolName={pendingGateToolName}
+                activeGateRequest={gateRequest}
+                pendingGateTotal={pendingGateTotal}
+                onGateApprove={onGateApprove}
+                onGateDeny={onGateDeny}
+                onGateAnswer={onGateAnswer}
+                onGateCancel={onGateCancel}
               />
             )}
           </div>
@@ -354,7 +354,7 @@ export function MessageList({
           size="icon"
           variant="secondary"
           onClick={handleManualScrollToBottom}
-          className="absolute bottom-3 right-5 z-20 size-7 rounded-full border border-border shadow-md hover:bg-secondary/90 animate-in fade-in-0 duration-150 motion-reduce:animate-none"
+          className="absolute bottom-3 right-5 z-20 size-7 rounded-full border border-border shadow-md hover:bg-secondary/90 animate-in fade-in-0 duration-150 motion-reduce:animate-none cursor-pointer"
           title="回到底部"
         >
           <ArrowDown className="size-3.5" />

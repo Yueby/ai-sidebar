@@ -90,7 +90,7 @@ export function createAskUserTool(): AgentTool<typeof ASK_USER_PARAMS> & { risk:
     description:
       'Ask the user a clarifying question and wait for their reply. Use it when the request is ambiguous, you need a user preference, or a destructive/irreversible action needs explicit approval. Do not overuse it for things you can reasonably infer. Provide `options` (max 6) when suitable answers are enumerable.',
     parameters: ASK_USER_PARAMS,
-    execute: async (_toolCallId, args) => {
+    execute: async (toolCallId, args) => {
       const question = typeof args?.question === 'string' ? args.question : '';
       if (!question.trim()) {
         return {
@@ -110,6 +110,7 @@ export function createAskUserTool(): AgentTool<typeof ASK_USER_PARAMS> & { risk:
         kind: 'ask',
         question,
         options: options && options.length > 0 ? options : undefined,
+        toolCallId,
       });
       if (res.kind !== 'ask' || res.cancelled) {
         return {
