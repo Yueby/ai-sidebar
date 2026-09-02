@@ -4,7 +4,7 @@
 
 ## 0. 三句话速读
 
-1. **UI 已全部实现,agent 运行时已升级到 pi-agent-core,引用架构为 `<page-refs>` 元数据块 + `extract_page`/`read_element` 工具按需读取**;聊天组件在 `entrypoints/sidepanel/components/chat/`,设置组件在 `components/settings/`,务必先做用户手动回归(见 §8)。
+1. **UI 已全部实现,agent 运行时已升级到 pi-agent-core,引用架构为 `<page-refs>` 元数据块 + `read_page`/`read_element` 工具按需读取**;聊天组件在 `entrypoints/sidepanel/components/chat/`,设置组件在 `components/settings/`,务必先做用户手动回归(见 §8)。
 2. **AI 通信一律走 `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(同版本 ^0.84.4),严禁手写 SSE/协议适配;`lib/agent.ts` 的 `runAgentTurn()` 是唯一发送入口;唯一例外是"拉模型列表"两个 GET(已在 `lib/models.ts`)。
 3. 每步验收:`pnpm compile && pnpm build` 必须全绿;改 content.ts/消息协议/权限后必须完整重启 `pnpm dev` 并刷新页面(见 §9)。
 
@@ -12,7 +12,7 @@
 
 开源 **BYOK 浏览器 AI 侧边栏扩展**(Chromium:Chrome/Edge/Brave),对标 Chrome 内置 Gemini 侧边栏,用用户自己的 API Key。`ai-sidebar` 是永久内部代号(目录/包名不改,改的只是产品名)。
 
-- MVP(已完成,待手动回归):sidePanel 聊天(流式/Markdown/工具卡片/思考折叠区/token 脚注/多会话/会话草稿)+ 读取当前网页(`extract_page`/`read_element` 工具按需读取,框选元素 + vision 读图)+ BYOK 多提供商(三种协议)
+- MVP(已完成,待手动回归):sidePanel 聊天(流式/Markdown/工具卡片/思考折叠区/token 脚注/多会话/会话草稿)+ 读取当前网页(`read_page`/`read_element` 工具按需读取,框选元素 + vision 读图)+ BYOK 多提供商(三种协议)
 - 二期:划词快捷提问、多模型快捷切换、会话重命名/导出
 - 三期:agent 页面操作工具层(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;browser-use/Stagehand/LaVague 服务端形态不可用)
 
@@ -26,12 +26,13 @@
 | 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`;已装:badge/button/checkbox/dialog/dropdown-menu/input/label/scroll-area/select/separator/switch/textarea/tooltip;**`components/ui/` 保持官方原样,严禁自定义组件/样式/变体** |
 | AI 请求 | **`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(见 §6/§7),sidepanel 直连,BYOK |
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,`idb` 封装,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;不引状态库;消息按 pi 消息联合形状持久化 |
-| 页面引用 | 引用元数据 = user 消息 content 内嵌 `<page-refs>{JSON}</page-refs>` 块(唯一事实源:LLM 直读 + UI 解析同源,`lib/pageRefs.ts`);实时内容经 `extract_page`(tabId 句柄)/`read_element`(引用页内任意 CSS selector)工具按需读取 |
+| 页面引用 | 引用元数据 = user 消息 content 内嵌 `<page-refs>{JSON}</page-refs>` 块(唯一事实源:LLM 直读 + UI 解析同源,`lib/pageRefs.ts`);实时内容经 `read_page`(tabId 句柄读整页正文)/`read_element`(引用页内任意 CSS selector,返回 outerHTML)工具按需读取 |
 | manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab`(+ host_permissions http/https) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight + highlight.js(样式已在 style.css 引入) |
 | 路径别名 | `@/*` → 项目根 |
 | Shell | Git Bash;**context-mode 工具(ctx_batch_execute)实际跑 PowerShell,POSIX 语法会炸,多命令一律用 `bash` 工具** |
 | 密钥 | 只存 `chrome.storage.local`;不打印/不提交任何 API Key |
+| 模型可见文本 | **一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支文本、非 vision 图片描述、system prompt 全文;UI 显示文案(TOOL_LABELS 中文值、ToolCallCard 等)保持中文,以后收敛 i18n |
 
 ## 3. 用户已拍板的决策(按时间序,勿推翻)
 
@@ -49,6 +50,8 @@
 12. **引用架构定稿 = `<page-refs>` 块**:引用元数据发送时序列化进 user 消息 content,此后永不改变;无 refSnapshot 字段、无 convertToLlm、system prompt 不注入引用目录(只放协议常量规则);`ChatMessage` 回归纯 pi 联合,零自定义字段。
 13. **会话草稿**:`Session.draft { input, refTabs, pickedElements }` 随会话持久化(IndexedDB 防抖落盘);新会话自动引用当前页;空会话离开即回收;发送即清空草稿。
 14. **工具安全边界 = tab 级白名单**(tabId ∈ 草稿引用 ∪ 历史 `<page-refs>` 块);selector 不设白名单(框选元素是提示,AI 可在引用页内自行探索);vision 门控:`model.input` 含 image 才产 ImageContent 块;工具中文文案单一来源 `TOOL_LABELS`(读取网页内容/读取页面元素)。
+15. **工具命名规范 = `<动词>_<域词>`**:动词集 {read, search, fetch, click, fill, scroll, screenshot} × 域词集 {page, element, url, web},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key extract_page 兼容历史会话 ToolCallCard)。内部消息协议字符串(`ai-sidebar/extract-page` 等)与工具名解耦,不随改名漂移。
+16. **模型可见文本一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支文本、非 vision 图片描述、system prompt 全文;UI 显示文案保持中文(TOOL_LABELS 中文值、ToolCallCard 等),以后收敛 i18n。
 
 ## 4. 当前代码状态
 
@@ -61,9 +64,9 @@ lib 层 + sidepanel 全部 UI 已完成(含 page-refs 引用架构、read_elemen
 | `lib/storage.ts` | ✅ 完成 | `settingsItem`/`activeSessionIdItem` + `sanitizeSettings`/`sanitizeSessions`(旧扁平消息结构按 pi 形状迁移)+ `uid/createSession(含 draft)/createUserMessage(text, refs?)/messageText/titleFromText/EMPTY_USAGE` |
 | `lib/sessionStore.ts` | ✅ 完成 | 会话历史唯一读写层(IndexedDB,`idb` 封装):`listSessions`(按 updatedAt 降序)/`saveSession`/`deleteSession`/`migrateLegacySessions`(旧 `local:sessions` 一次性迁移后删除旧 key);草稿随 Session 一起存 |
 | `lib/pageRefs.ts` | ✅ 完成 | `<page-refs>` 块纯函数:`renderPageRefsBlock`(序列化拼进 user content)/`parsePageRefs`(UI 解析渲染)/`stripPageRefs`(展示时剥块)/`collectPageRefs`(聚合历史块引用,做工具白名单) |
-| `lib/agent.ts` | ✅ 完成 | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;tabs 非空注入 extract_page,有可读 tab 注入 read_element)、`toPiModel`、`buildSystemPrompt()`(身份/语言 + `<page-refs>` 协议常量规则,不注入引用目录)、`createReadElementTool`(tab 级白名单 + vision 门控取图) |
+| `lib/agent.ts` | ✅ 完成 | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;tabs 非空注入 read_page,有可读 tab 注入 read_element)、`toPiModel`、`buildSystemPrompt()`(身份/语言 + `<page-refs>` 协议常量规则,不注入引用目录)、`createReadElementTool`(tab 级白名单 + vision 门控取图) |
 | `lib/models.ts` | ✅ 完成 | `fetchProviderModels`(openai 兼容 Bearer / anthropic x-api-key+version,路径 openai=`/models`、anthropic=`/v1/models`)、`fetchModelsDevMeta`、`applyModelMeta`、`syncModelsWithModelsDev`(「同步」按钮:为已有模型补全参数)、`testConnection` |
-| `lib/pageContext.ts` | ✅ 完成 | tab 级读取原语:`getActiveTabMeta`/`getTabMeta`/`listCandidateTabs`/`extractFromTab`/`renderPageContext`(content.ts 截 12000 字,本层透传)/`createExtractPageTool`;框选与元素解析:`startPickElement`(`ai-sidebar/pick-element`)、`resolveElement`(`ai-sidebar/resolve-element`,返回 markdown+images+dpr) |
+| `lib/pageContext.ts` | ✅ 完成 | tab 级读取原语:`getActiveTabMeta`/`getTabMeta`/`listCandidateTabs`/`extractFromTab`/`renderPageContext`(content.ts 截 12000 字,本层透传)/`createReadPageTool`;框选与元素解析:`startPickElement`(`ai-sidebar/pick-element`)、`resolveElement`(复用 `ai-sidebar/pick-element` + `action:'resolve'`,返回 outerHTML+truncated+preview+images+dpr) |
 | `lib/imageFetch.ts` | ✅ 完成 | read_element 取图管道:`fetchImageForModel`(fetch 主取)→ `captureCropForModel`(captureVisibleTab 按 rect×DPR 裁剪兜底,防盗链/403);canvas 降采样对齐 pi 上游:≤2000×2000、JPEG q0.8 起逐级降质、PNG/JPEG 取小、base64 ≤4.5MB |
 | `lib/utils.ts` | ✅ 完成 | cn() |
 | `entrypoints/content.ts` | ✅ 完成 | 结构化提取(article/main/[role=main] 优先,截 12000 字)+ 框选元素模式(@medv/finder 生成唯一 selector,结果经 `ai-sidebar/pick-element-result` 广播)+ 元素解析应答(`pick-element` 消息 `action:'resolve'`) |
@@ -257,7 +260,7 @@ type ApiType = 'openai-completions' | 'openai-responses' | 'anthropic-messages';
 type ReasoningLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 const REASONING_LEVELS: ReasoningLevel[];              // off~max 全档
 const REASONING_LEVEL_LABELS: Record<ReasoningLevel, { short: string; full: string }>;
-const TOOL_LABELS: Record<string, string>;             // 工具中文名单一来源(extract_page=读取网页内容, read_element=读取页面元素)
+const TOOL_LABELS: Record<string, string>;             // 工具中文名单一来源(read_page=读取网页内容, 旧 key extract_page 兼容历史会话, read_element=读取页面元素)
 interface ModelConfig { id: string; displayName?: string; contextWindow?: number;
   maxTokens?: number; tools?: boolean; vision?: boolean; reasoning?: boolean;
   reasoningLevels?: ReasoningLevel[];                  // 该模型支持的档位(不含 off;空回退 low/medium/high)
@@ -315,7 +318,7 @@ runAgentTurn({ provider; modelId; history: ChatMessage[]; userMessage: UserMessa
   thinkingLevel: ReasoningLevel; sessionId?; signal?; onEvent?: (e: AgentEvent) => void;
 }): Promise<RunAgentResult>
 // RunAgentResult { messages(完整转录); newMessages(本轮新增,含 toolResult); errorMessage? }
-// 语义:工具白名单 = 草稿引用 ∪ collectPageRefs(history);tabs 非空注入 extract_page,
+// 语义:工具白名单 = 草稿引用 ∪ collectPageRefs(history);tabs 非空注入 read_page,
 // 有可读 tab 注入 read_element;内部 new Agent({ streamFn: models.streamSimple, toolExecution:'sequential' });
 // 失败经协议事件编码(stopReason='error');中止时已生成部分保留在转录中;onEvent 透出供 UI 流式渲染
 
@@ -330,10 +333,10 @@ testConnection({ api, baseUrl, apiKey }): Promise<string>      // 复用拉取;�
 getActiveTabMeta(): Promise<RefTab | null>; getTabMeta(tabId): Promise<RefTab | null>
 listCandidateTabs(): Promise<RefTab[]>        // 候选引用页(排除扩展自身等)
 extractFromTab(tabId): Promise<ExtractedPage | null>  // sendMessage ai-sidebar/extract-page,失败 null 不阻塞
-renderPageContext(page): string               // extract_page 工具回传给模型的正文文本
-createExtractPageTool(refTabs): AgentTool     // 'extract_page':tabId 句柄读引用页正文
+renderPageContext(page): string               // read_page 工具回传给模型的正文文本(英文,Model-facing)
+createReadPageTool(refTabs): AgentTool        // 'read_page':tabId 句柄读引用页正文
 startPickElement(tabId): Promise<void>        // 广播 ai-sidebar/pick-element 进框选模式,结果经 pick-element-result 回传
-resolveElement(tabId, selector): Promise<ResolvedElement | null>  // 元素解析(markdown+images+dpr),read_element 底层;复用 pick-element 消息 action:'resolve'
+resolveElement(tabId, selector): Promise<ResolvedElement | null>  // 元素解析(outerHTML+truncated+preview+images+dpr),read_element 底层;复用 pick-element 消息 action:'resolve'
 
 // lib/imageFetch.ts(read_element 取图管道)
 fetchImageForModel(src): Promise<ModelImage | null>            // fetch 主取
@@ -353,7 +356,7 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
 
 ## 8. 待办(按序)
 
-1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome 加载扩展):重点 = 普通对话、extract_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移;另过一遍设置页全流程(添加提供商→测试→拉模型→同步→改参数→设为当前→聊天)。
+1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome 加载扩展):重点 = 普通对话、read_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移;另过一遍设置页全流程(添加提供商→测试→拉模型→同步→改参数→设为当前→聊天)。
 2. websearch / fetch_url 工具(读链接目标内容)。
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)。
 4. 三期页面操作:授权门控 `createGatedTool` 先行 → screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖)。

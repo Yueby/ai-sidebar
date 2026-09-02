@@ -57,6 +57,8 @@ export const REASONING_LEVEL_LABELS: Record<ReasoningLevel, { short: string; ful
  * 暂时统一中文;多语言以后再做。
  */
 export const TOOL_LABELS: Record<string, string> = {
+  read_page: '读取网页内容',
+  // 旧名,兼容历史会话 ToolCallCard(旧持久化消息 toolCall.name 仍是 extract_page)
   extract_page: '读取网页内容',
   read_element: '读取页面元素',
 };
@@ -70,7 +72,7 @@ export interface Settings {
   providers: ProviderConfig[];
   activeProviderId: string | null;
   activeModelId: string | null;
-  /** 发送时启用页面上下文(引用当前标签页,AI 经 extract_page 工具按需读取正文) */
+  /** 发送时启用页面上下文(引用当前标签页,AI 经 read_page 工具按需读取正文) */
   includePageContext: boolean;
   /** 思考等级,仅当激活模型 reasoning=true 时生效 */
   reasoningLevel: ReasoningLevel;

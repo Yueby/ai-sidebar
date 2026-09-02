@@ -3,6 +3,8 @@ export default defineContentScript({
   main() {
     /** 正文长度上限(块边界截断,而非硬切) */
     const TEXT_LIMIT = 12000;
+    /** read_element 返回的 outerHTML 字符上限(超出截断并标记) */
+    const ELEMENT_HTML_LIMIT = 12000;
     /** 首提结果低于该长度视为 SPA 未渲染完,等待后重试一次 */
     const SHORT_THRESHOLD = 200;
     /** document.readyState === 'complete' 的最长等待 */
@@ -371,21 +373,22 @@ export default defineContentScript({
       };
     }
 
-    /** 按 selector 定位元素并块级 Markdown 化(复用手写流水线);不存在返回 null */
+    /** 按 selector 定位元素并返回 outerHTML(原始 HTML,字符上限 12000);不存在返回 null */
     function resolveElementPayload(selector: string): {
       found: boolean;
       tagName: string;
-      markdown: string;
+      html: string;
+      truncated: boolean;
       preview: string;
-      /** 元素为 IMG 或包含 IMG(取前 3 张)时的图片列表;markdown 之外并列返回 */
+      /** 元素为 IMG 或包含 IMG(取前 3 张)时的图片列表;html 之外并列返回 */
       images: ReturnType<typeof elementImagePayload>[];
       /** 页面 devicePixelRatio(截图裁剪用) */
       dpr: number;
     } | null {
       const el = document.querySelector(selector);
       if (!el) return null;
-      // 单元素不走 Readability:直接用手写块级 Markdown 化
-      const markdown = renderBlock(el) || elementPreview(el);
+      const rawHtml = el.outerHTML;
+      const truncated = rawHtml.length > ELEMENT_HTML_LIMIT;
       const imgEls: HTMLImageElement[] =
         el.tagName === 'IMG'
           ? [el as HTMLImageElement]
@@ -394,7 +397,8 @@ export default defineContentScript({
       return {
         found: true,
         tagName: el.tagName.toLowerCase(),
-        markdown,
+        html: truncated ? rawHtml.slice(0, ELEMENT_HTML_LIMIT) : rawHtml,
+        truncated,
         preview: elementPreview(el),
         images,
         dpr: window.devicePixelRatio || 1,

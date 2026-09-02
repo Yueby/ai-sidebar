@@ -84,31 +84,33 @@ export async function extractFromTab(tabId: number): Promise<ExtractedPage | nul
 
 export function renderPageContext(page: ExtractedPage): string {
   const lines = [
-    '以下是用户当前浏览的网页内容,回答时可参考:',
+    'Below is the current content of a web page the user is browsing, for reference:',
     '',
     `<title>${page.title}`,
     `<url>${page.url}`,
-    `<content>`,
+    '<content>',
     page.text,
-    `</content>`,
+    '</content>',
   ];
-  if (page.truncated) lines.push('', '(注:以上网页内容因过长已被截断,可能不完整,请据此调整回答。)');
+  if (page.truncated) {
+    lines.push('', '(Note: the page content above was truncated due to length and may be incomplete. Adjust your answer accordingly.)');
+  }
   return lines.join('\n');
 }
 
-const EXTRACT_PAGE_PARAMS = Type.Object({
-  tabId: Type.Number({ description: '要读取的标签页 id(用户消息 <page-refs> 块中以 tabId 标注)' }),
+const READ_PAGE_PARAMS = Type.Object({
+  tabId: Type.Number({ description: 'Id of the tab to read (referenced tabs are annotated with tabId in the <page-refs> block of user messages)' }),
 });
 
-/** extract_page 工具:AI 按需读取某个被引用标签页的当前正文 */
-export function createExtractPageTool(refTabs: RefTab[]): AgentTool<typeof EXTRACT_PAGE_PARAMS> {
+/** read_page 工具:AI 按需读取某个被引用标签页的当前正文 */
+export function createReadPageTool(refTabs: RefTab[]): AgentTool<typeof READ_PAGE_PARAMS> {
   const validIds = refTabs.map((t) => t.id);
   return {
-    name: 'extract_page',
-    label: toolLabel('extract_page'),
+    name: 'read_page',
+    label: toolLabel('read_page'),
     description:
-      '读取用户引用的某个浏览器标签页的标题、URL 与正文内容。当用户的提问可能与被引用网页相关、或需要引用页面内容时,调用该工具并传入对应的 tabId。',
-    parameters: EXTRACT_PAGE_PARAMS,
+      "Read the title, URL and main text content of a user-referenced browser tab. Call this with the corresponding tabId when the user's question may relate to a referenced page or needs its content.",
+    parameters: READ_PAGE_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;
       if (typeof tabId !== 'number' || !validIds.includes(tabId)) {
@@ -116,9 +118,9 @@ export function createExtractPageTool(refTabs: RefTab[]): AgentTool<typeof EXTRA
           content: [
             {
               type: 'text',
-              text: `无效的 tabId: ${JSON.stringify(tabId ?? null)}。可读取的标签页: ${
-                validIds.map((id) => `#${id}`).join(', ') || '(无)'
-              }。`,
+              text: `Invalid tabId: ${JSON.stringify(tabId ?? null)}. Readable tabs: ${
+                validIds.map((id) => `#${id}`).join(', ') || '(none)'
+              }.`,
             },
           ],
           details: null,
@@ -130,7 +132,7 @@ export function createExtractPageTool(refTabs: RefTab[]): AgentTool<typeof EXTRA
           content: [
             {
               type: 'text',
-              text: `无法读取标签页 #${tabId}:可能已被用户关闭、不是普通网页(如浏览器设置页)、页面尚未加载完成或内容不可提取。请据此调整回答。`,
+              text: `Failed to read tab #${tabId}: it may have been closed, may not be a regular web page (e.g. a browser settings page), may still be loading, or its content may not be extractable. Adjust your answer accordingly.`,
             },
           ],
           details: null,
@@ -238,8 +240,10 @@ export interface ElementImage {
 
 export interface ResolvedElement {
   tagName: string;
-  /** 该元素的 Markdown 渲染(实时) */
-  markdown: string;
+  /** 该元素的 outerHTML(原始 HTML,实时;content 侧 12000 字符截断) */
+  html: string;
+  /** content 侧已因超长截断 */
+  truncated: boolean;
   preview: string;
   /** 元素为 IMG 或包含 IMG(前 3 张)时的图片列表;read_element 交给 vision 模型 */
   images: ElementImage[];
@@ -261,13 +265,14 @@ export async function resolveElement(
       | {
           found?: boolean;
           tagName?: string;
-          markdown?: string;
+          html?: string;
+          truncated?: boolean;
           preview?: string;
           images?: unknown;
           dpr?: unknown;
         }
       | undefined;
-    if (!res?.found || typeof res.markdown !== 'string') return null;
+    if (!res?.found || typeof res.html !== 'string') return null;
     const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
     const images: ElementImage[] = Array.isArray(res.images)
       ? res.images.flatMap((i): ElementImage[] => {
@@ -286,7 +291,8 @@ export async function resolveElement(
       : [];
     return {
       tagName: res.tagName ?? '',
-      markdown: res.markdown,
+      html: res.html,
+      truncated: res.truncated === true,
       preview: res.preview ?? '',
       images,
       dpr: typeof res.dpr === 'number' && res.dpr > 0 ? res.dpr : 1,

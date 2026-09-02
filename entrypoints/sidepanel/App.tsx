@@ -730,7 +730,7 @@ export default function App() {
           modelId: active.model.id,
           history: session.messages,
           userMessage,
-          // 实时引用(含 tabId)供本轮 extract_page/read_element 工具用;
+          // 实时引用(含 tabId)供本轮 read_page/read_element 工具用;
           // agent 侧再并入历史块,追问旧页面时句柄不丢
           refTabs: refreshedTabs,
           pickedElements: snapElements,

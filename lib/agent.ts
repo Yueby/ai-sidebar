@@ -14,12 +14,12 @@ import type { AssistantMessage, ImageContent, TextContent, UserMessage } from '@
 import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement } from './types';
 import { toolLabel } from './types';
 import { normalizeBaseUrl } from './providers';
-import { createExtractPageTool, resolveElement, type RefTab } from './pageContext';
+import { createReadPageTool, resolveElement, type RefTab } from './pageContext';
 import { collectPageRefs } from './pageRefs';
 import { fetchImageForModel, captureCropForModel } from './imageFetch';
 
 export type { AgentEvent } from '@earendil-works/pi-agent-core';
-export { createExtractPageTool } from './pageContext';
+export { createReadPageTool } from './pageContext';
 
 const API_IMPLEMENTATIONS = {
   'openai-completions': openAICompletionsApi(),
@@ -66,24 +66,44 @@ function buildProvider(p: ProviderConfig) {
 /**
  * 组装 system prompt:身份/语言 + <page-refs> 块协议的常量使用规则。
  * 定稿方案:引用清单不再进 system prompt(零中间层)——块随 user 消息 content 原样抵达 LLM,
- * 这里只解释协议;实时内容一律经 extract_page / read_element 工具获取。
+ * 这里只解释协议;实时内容一律经 read_page / read_element 工具获取。
+ * Model-facing 文本一律英文(硬约束);注释是给开发者看的,保持中文。
+ * 回复语言动态注入:sidepanel 上下文直读 navigator.language,异常时省略该行。
  */
+/** 本地日期 + UTC 偏移标签(如 `UTC+8`、`UTC+5:30`),供系统提示动态注入 */
+function utcOffsetLabel(): string {
+  const mins = -new Date().getTimezoneOffset();
+  const sign = mins >= 0 ? '+' : '-';
+  const h = Math.floor(Math.abs(mins) / 60);
+  const m = Math.abs(mins) % 60;
+  return `UTC${sign}${h}${m ? `:${String(m).padStart(2, '0')}` : ''}`;
+}
+
 export function buildSystemPrompt(): string {
-  return [
-    '你是用户浏览器侧边栏中的 AI 助手,回答使用与用户一致的语言(默认中文)。',
-    `今天是 ${new Date().toISOString().slice(0, 10)}。`,
+  const parts = [
+    "You are an AI assistant living in the user's browser sidebar. Respond in the same language the user writes in.",
+    `Today is ${new Date().toLocaleDateString('en-CA')} (${utcOffsetLabel()}).`,
+  ];
+  try {
+    const lang = navigator.language;
+    if (lang) {
+      parts.push(
+        `The user's browser language is ${lang}; if the user's message language is unclear, prefer it.`,
+      );
+    }
+  } catch {
+    // navigator.language 不可用:省略该行
+  }
+  parts.push(
     '',
-    '用户消息可能携带 <page-refs> 块,是用户发送该消息时引用的浏览器上下文(仅元数据):',
-    '- tabs 为引用的标签页列表,tabId 是读取句柄;focused 标记用户发送时正在查看的标签页,',
-    '  用户说「这个页面/这个」时默认指它。',
-    '- elements 为用户在页面上框选的元素,是其关注的重点提示(用 tabId + selector 读取);',
-    '  你也可以在引用页内自行探索其他元素,用任意 CSS 选择器经 read_element 读取。',
-    '- 需要页面或元素的实际内容时,调用 extract_page / read_element 工具;工具返回的是实时',
-    '  内容,与块中元数据冲突时以工具为准。',
-    '- 用户指代不明确时(无 focused 标记,或多个引用且指向不明),先追问确认,不要猜测,',
-    '  也不要反复调用工具试探。',
-    '- 工具返回无法读取/元素不存在,通常表示标签页已关闭或页面已导航,据此回应,不要原参数重试。',
-  ].join('\n');
+    'User messages may carry a <page-refs> block — the browser context referenced at send time (metadata only):',
+    '- `tabs` lists the referenced tabs; `tabId` is the read handle. The `focused` flag marks the tab the user was viewing when sending; when the user says "this page" or "this one", they mean that tab by default.',
+    '- `elements` lists elements the user picked on a page (read them with tabId + selector); they are hints about what the user cares about. You may also explore other elements yourself with any CSS selector via read_element.',
+    '- When you need the actual content of a page or element, call the read_page / read_element tools; tool results are live and win over the block metadata when they conflict.',
+    '- If the reference is ambiguous (no focused flag, or multiple refs without a clear target), ask a clarifying question first — do not guess or probe with repeated tool calls.',
+    '- A tool result saying unreadable / element not found usually means the tab was closed or has navigated away; respond accordingly and never retry with the exact same arguments.',
+  );
+  return parts.join('\n');
 }
 
 export interface RunAgentOptions {
@@ -115,8 +135,8 @@ export interface RunAgentResult {
 }
 
 const READ_ELEMENT_PARAMS = Type.Object({
-  tabId: Type.Number({ description: '元素所在标签页 id(用户引用的标签页在消息 <page-refs> 块中以 tabId 标注)' }),
-  selector: Type.String({ description: '任意 CSS 选择器,定位引用页内要读取的元素' }),
+  tabId: Type.Number({ description: 'Id of the tab containing the element (referenced tabs are annotated with tabId in the <page-refs> block of user messages)' }),
+  selector: Type.String({ description: 'Any CSS selector locating the element to read within the referenced page' }),
 });
 
 /**
@@ -140,7 +160,7 @@ export function createReadElementTool(
     name: 'read_element',
     label: toolLabel('read_element'),
     description:
-      '读取用户引用的某个标签页内指定 CSS 选择器元素的内容(文字/Markdown,含图片时附图像块)。tabId 必须来自用户消息 <page-refs> 块;selector 可为任意合法 CSS 选择器——<page-refs> 中 elements 是用户框选的重点提示,但你也可以在页面内自行探索其他元素。',
+      'Read the element matching a CSS selector inside a user-referenced tab and return its outerHTML (raw HTML with tags, attributes and structure — useful for understanding interactive elements; image blocks are attached when the element contains images and the model supports them). tabId must come from the <page-refs> block in the user message; selector can be any valid CSS selector — elements in <page-refs> are user-picked highlights, but you may also explore other elements on the page. For a full-page overview use read_page.',
     parameters: READ_ELEMENT_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;
@@ -150,9 +170,9 @@ export function createReadElementTool(
           content: [
             {
               type: 'text',
-              text: `无效的 tabId: ${JSON.stringify(tabId ?? null)}。可读取的标签页: ${
-                [...validTabIds].map((id) => `#${id}`).join(', ') || '(无)'
-              }。`,
+              text: `Invalid tabId: ${JSON.stringify(tabId ?? null)}. Readable tabs: ${
+                [...validTabIds].map((id) => `#${id}`).join(', ') || '(none)'
+              }.`,
             },
           ],
           details: null,
@@ -161,7 +181,7 @@ export function createReadElementTool(
       if (typeof selector !== 'string' || selector.length === 0) {
         return {
           content: [
-            { type: 'text', text: '无效的 selector:必须提供非空 CSS 选择器字符串。' },
+            { type: 'text', text: 'Invalid selector: a non-empty CSS selector string is required.' },
           ],
           details: null,
         };
@@ -172,7 +192,7 @@ export function createReadElementTool(
           content: [
             {
               type: 'text',
-              text: `无法读取标签页 #${tabId} 中的元素 \`${selector}\`:页面可能已导航、刷新导致元素不存在,或标签页已被关闭。请据此调整回答。`,
+              text: `Failed to read element \`${selector}\` in tab #${tabId}: the page may have navigated, the element may no longer exist after a refresh, or the tab may have been closed. Respond accordingly.`,
             },
           ],
           details: null,
@@ -182,11 +202,12 @@ export function createReadElementTool(
         {
           type: 'text',
           text: [
-            `标签页 #${tabId} 中的元素 <${element.tagName}>(selector: \`${selector}\`)当前内容:`,
+            `Element <${element.tagName}> in tab #${tabId} (selector: \`${selector}\`), current content:`,
             '',
             '<element>',
-            element.markdown,
+            element.html,
             '</element>',
+            ...(element.truncated ? ['', '(Element content truncated due to length)'] : []),
           ].join('\n'),
         },
       ];
@@ -196,11 +217,11 @@ export function createReadElementTool(
           // 非 vision 模型:只给文字说明(src/alt/尺寸),不产图
           const lines = element.images.map(
             (im) =>
-              `- 图片(${im.naturalWidth}×${im.naturalHeight}${im.alt ? `,alt: ${im.alt}` : ''}): ${im.src}`,
+              `- Image (${im.naturalWidth}×${im.naturalHeight}${im.alt ? `, alt: ${im.alt}` : ''}): ${im.src}`,
           );
           content.push({
             type: 'text',
-            text: `该元素包含图片,但当前模型不支持图片输入,仅提供图片信息:\n${lines.join('\n')}`,
+            text: `The element contains images, but the current model does not support image input. Image info only:\n${lines.join('\n')}`,
           });
         } else {
           // 取图兜底链:fetch(不受页面 CORS 限制)→ 截图裁剪(仅活动 tab)→ 文字说明
@@ -218,7 +239,7 @@ export function createReadElementTool(
           if (failed.length > 0) {
             content.push({
               type: 'text',
-              text: failed.map((s) => `[图片无法读取: ${s}]`).join('\n'),
+              text: failed.map((s) => `[Image unavailable: ${s}]`).join('\n'),
             });
           }
         }
@@ -273,13 +294,13 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   const pickedElements = [...elementByKey.values()];
 
   const tools: AgentTool[] = [];
-  // tabs 非空注入 extract_page;有可读 tab(引用页或框选元素所在页)即注入 read_element
+  // tabs 非空注入 read_page;有可读 tab(引用页或框选元素所在页)即注入 read_element
   // (selector 不设白名单,tab 级即安全边界;elements 元数据仅作提示,定稿方案,system prompt 不列清单)。
   // vision 门控在协议层同源:toPiModel 的 input 由 ModelConfig.vision 决定,
   // model.input 含 image 才允许 read_element 产 ImageContent 块(省 token + 非 vision 走文字描述);
   // pi-ai transform-messages 的 downgradeUnsupportedImages 是双保险(不支持时块降为占位文本)。
   const canUseImage = model.input.includes('image');
-  if (refTabs.length > 0) tools.push(createExtractPageTool(refTabs));
+  if (refTabs.length > 0) tools.push(createReadPageTool(refTabs));
   if (refTabs.length > 0 || pickedElements.length > 0) {
     tools.push(createReadElementTool(refTabs, pickedElements, canUseImage));
   }
