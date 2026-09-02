@@ -33,7 +33,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ContextPanel, type RoleShares } from './ContextPanel';
 import { SlashMenu } from './SlashMenu';
 import { InlineBadge } from './extensions/InlineBadge';
-import { buildBadgeAttrs, extractEditorState } from './extensions/editorSerialize';
+import { buildBadgeAttrs, buildUrlBadgeAttrs, extractEditorState, isSingleUrlText } from './extensions/editorSerialize';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -241,13 +241,20 @@ export function ChatInput({
         return false;
       },
       handlePaste: (view, event) => {
-        // 纯文本粘贴:屏蔽富文本/HTML,统一 insertText
-        const text = event.clipboardData?.getData('text/plain');
-        if (text) {
-          view.dispatch(view.state.tr.insertText(text));
+        const clipboardText = event.clipboardData?.getData('text/plain');
+        if (!clipboardText) return false;
+        // 单一 URL 粘贴 → url 徽章(照 sanshu tryParsePasteAsReference;多行/含空格走普通文本);
+        // serialized = [url: label] 随 onUpdate 进草稿,模型侧自描述,不进 refs.elements
+        if (isSingleUrlText(clipboardText)) {
+          const badgeNode = view.state.schema.nodes.inlineBadge?.create(buildUrlBadgeAttrs(clipboardText.trim()));
+          if (!badgeNode) return false;
+          view.dispatch(view.state.tr.replaceSelectionWith(badgeNode));
+          view.dispatch(view.state.tr.insertText(' '));
           return true;
         }
-        return false;
+        // 其余粘贴:纯文本 insertText(屏蔽富文本/HTML)
+        view.dispatch(view.state.tr.insertText(clipboardText));
+        return true;
       },
     },
     onUpdate: ({ editor: ed }) => {

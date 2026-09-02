@@ -92,6 +92,7 @@ export function buildSystemPrompt(): string {
     '- `tabs` lists the referenced tabs; `tabId` is the read handle. The `focused` flag marks the tab the user was viewing when sending — useful background, but NOT by itself the referent of a question.',
     '- `elements` lists elements the user deliberately picked on a page (selector + a short text preview). Picking is the strongest signal of user intent in this block.',
     '- Inline markers in the user message text like [元素:2] refer to `elements` entries by `id`. Treat a marker as the exact thing the user is pointing at with the words around it.',
+    '- Inline tokens like [url: example.com] are URLs the user pasted as references — they are self-describing; treat them as plain links, not element markers.',
     '- Referent resolution order:',
     '  1. An inline element marker — read that element (read_element with its tabId + selector) and answer about it. Its `preview` is only a hint; read the element for the real answer.',
     '  2. Explicit page wording ("this page", "这个页面") — the focused tab.',

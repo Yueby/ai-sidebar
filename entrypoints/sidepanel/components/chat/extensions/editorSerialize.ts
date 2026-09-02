@@ -9,8 +9,10 @@ import type { InlineBadgeAttrs } from './InlineBadge';
  * ELEMENT_MARKER_RE 消费完全一致);hardBreak → \n;段落尾追加 \n。
  */
 
-export function computeBadgeTag(element: { elementId: number }): string {
-  return makeElementMarker(element.elementId);
+/** 徽章 → 文本标记:sanshu 同形 —— element 输出 [元素:N](协议冻结),url 输出 [url: {label}](模型侧自描述) */
+export function computeBadgeTag(attrs: { badgeType: string; label: string; elementId?: number }): string {
+  if (attrs.badgeType === 'url') return `[url: ${attrs.label}]`;
+  return makeElementMarker(attrs.elementId ?? 0);
 }
 
 export interface ExtractedEditorState {
@@ -59,14 +61,37 @@ export function extractEditorState(editor: Editor | null): ExtractedEditorState 
 
 /** 由框选元素构造徽章 attrs(referenceData 存 PickedElement 全量,identity = elementId 字符串) */
 export function buildBadgeAttrs(element: PickedElement): InlineBadgeAttrs {
+  const label = element.preview || `元素 ${element.elementId}`;
   return {
     badgeType: 'element',
     identity: String(element.elementId),
-    label: element.preview || `元素 ${element.elementId}`,
+    label,
     kind: '元素',
-    serialized: computeBadgeTag(element),
+    serialized: computeBadgeTag({ badgeType: 'element', label, elementId: element.elementId }),
     referenceData: JSON.stringify(element),
     imageBadgeId: null,
     title: element.preview,
+  };
+}
+
+const URL_PATTERN = /^https?:\/\/\S+$/i;
+
+/** 粘贴文本是否为单一 URL(无空白/换行;多行或含空格走普通文本) */
+export function isSingleUrlText(text: string): boolean {
+  return URL_PATTERN.test(text.trim());
+}
+
+/** 由粘贴的 URL 构造 url 徽章 attrs(label = 去协议名/尾斜杠的展示名,referenceData 存完整 URL) */
+export function buildUrlBadgeAttrs(url: string): InlineBadgeAttrs {
+  const label = url.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return {
+    badgeType: 'url',
+    identity: url.trim().toLowerCase(),
+    label,
+    kind: 'URL',
+    serialized: computeBadgeTag({ badgeType: 'url', label }),
+    referenceData: JSON.stringify({ type: 'url', url }),
+    imageBadgeId: null,
+    title: url,
   };
 }
