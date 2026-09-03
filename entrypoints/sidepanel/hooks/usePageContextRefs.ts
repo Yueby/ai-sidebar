@@ -139,6 +139,46 @@ export function usePageContextRefs(params: {
     [patchActiveDraft, handleTogglePageContext]
   );
 
+  // 自动「当前页」芯片(决策 13 修订):随焦点更新、透明可移除——芯片在即发送,移除即不发送。
+  // 触发器:焦点切换 / 聚焦页导航(url 变化)/ 会话切换 / 总开关开启;总开关关闭时不注入。
+  const refreshAutoChip = useCallback(async () => {
+    const st = useAppStore.getState();
+    if (!st.settings.includePageContext) return;
+    if (!st.activeSessionId || !st.sessions.some((s) => s.id === st.activeSessionId)) return;
+    const meta = await getActiveTabMeta().catch(() => null);
+    if (!meta) return;
+    const current = selectCurrentSession(st);
+    if ((current?.draft?.refTabs ?? []).some((t) => t.id === meta.id)) return;
+    addRefTab(meta);
+  }, [addRefTab]);
+
+  useEffect(() => {
+    if (typeof browser === 'undefined' || !browser.tabs?.onActivated) return;
+    const onActivated = () => void refreshAutoChip();
+    const onUpdated = async (tabId: number, ci: { url?: string }) => {
+      if (!ci.url) return;
+      // 仅聚焦 tab 的导航触发重估(后台 tab 的导航与用户注意力无关)
+      try {
+        const tab = await browser.tabs.get(tabId);
+        if (tab.active) void refreshAutoChip();
+      } catch {
+        /* tab 已关闭 */
+      }
+    };
+    browser.tabs.onActivated.addListener(onActivated);
+    browser.tabs.onUpdated.addListener(onUpdated);
+    return () => {
+      browser.tabs.onActivated.removeListener(onActivated);
+      browser.tabs.onUpdated.removeListener(onUpdated);
+    };
+  }, [refreshAutoChip]);
+
+  const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const includePageContext = useAppStore((s) => s.settings.includePageContext);
+  useEffect(() => {
+    void refreshAutoChip();
+  }, [refreshAutoChip, activeSessionId, includePageContext]);
+
   // 元素框选模式:不带 tabId 时作用于当前活动标签页;带 tabId 时先激活该标签页(框选必须可见)
   const handleStartPickElement = useCallback(
     async (tabId?: number) => {

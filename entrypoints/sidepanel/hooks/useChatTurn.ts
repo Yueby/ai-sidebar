@@ -5,7 +5,6 @@ import { saveSession } from '@/lib/sessionStore';
 import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
 import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
-import { parsePageRefs } from '@/lib/pageRefs';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
 import { useAppStore, selectCurrentSession } from '../store';
@@ -81,8 +80,8 @@ export function useChatTurn(params: {
       const isFirstMessage = session.messages.length === 0 || session.title === '新会话';
       // 发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。
       // 逐 tab 刷新元信息(getTabMeta 失败回退草稿值,绝不丢引用);focused 仅标注
-      // 「发送时刻活动且在该引用列表内」的 tab。此外每次发送都注入当前聚焦 tab(用户拍板:
-      // 模型开启即知用户在看哪个页;仅入本轮 refs 块与工具白名单,不入 draft,composer 零变化)。
+      // 「发送时刻活动且在该引用列表内」的 tab,由 usePageContextRefs 的「当前页」动态芯片随焦点
+      // 自动维护(用户可移除;移除后面板级不再自动引用该 tab)。focused 标注发送时刻的活动 tab。
       const draftAtSend = session.draft ?? EMPTY_DRAFT;
       const snapTabs = store.settings.includePageContext ? draftAtSend.refTabs : [];
       const snapElements = store.settings.includePageContext
@@ -90,27 +89,8 @@ export function useChatTurn(params: {
         : [];
       let refreshedTabs = snapTabs;
       let pageRefs: PageRefs | undefined;
-      const focused = store.settings.includePageContext
-        ? await getActiveTabMeta().catch(() => null)
-        : null;
-      // 注意力驱动注入:仅当聚焦 tab 相对「上一条带 focused 的消息块」发生变化(切页/导航)时才
-      // 携带 focused 行——无关消息零页面噪音;白名单由历史块聚合保留,“当前页”追问不受影响
-      let lastFocused: { tabId: number; url: string } | null = null;
-      for (let i = session.messages.length - 1; i >= 0; i--) {
-        const m = session.messages[i]!;
-        if (m.role !== 'user' || typeof m.content !== 'string') continue;
-        const refs = parsePageRefs(m.content);
-        if (!refs) continue;
-        const ft = refs.tabs.find((t) => t.focused);
-        if (ft) {
-          lastFocused = { tabId: ft.tabId, url: ft.url };
-          break;
-        }
-      }
-      const attentionChanged =
-        !!focused && (!lastFocused || lastFocused.tabId !== focused.id || lastFocused.url !== focused.url);
-      if (snapTabs.length > 0 || snapElements.length > 0 || (focused && attentionChanged)) {
-        const focusedTabId = focused?.id;
+      if (snapTabs.length > 0 || snapElements.length > 0) {
+        const focusedTabId = (await getActiveTabMeta().catch(() => null))?.id;
         refreshedTabs = await Promise.all(
           snapTabs.map(async (t) => (await getTabMeta(t.id).catch(() => null)) ?? t)
         );
@@ -118,16 +98,8 @@ export function useChatTurn(params: {
           tabId: t.id,
           title: t.title,
           url: t.url,
-          ...(focused && t.id === focused.id && attentionChanged ? { focused: true } : {}),
+          ...(t.id === focusedTabId ? { focused: true } : {}),
         }));
-        // 聚焦 tab 不在引用内且注意力变化 → 追加为 focused 条目(非 http(s) 页 getActiveTabMeta 已返回 null 跳过)
-        if (focused && attentionChanged && !refreshedTabs.some((t) => t.id === focused.id)) {
-          tabs.push({ tabId: focused.id, title: focused.title, url: focused.url, focused: true });
-        }
-        // 白名单始终包含聚焦 tab(注意力未变时不重复注入,但 read_page 需要句柄)
-        if (focused && !refreshedTabs.some((t) => t.id === focused.id)) {
-          refreshedTabs = [...refreshedTabs, focused];
-        }
         // id = 数据侧 elementId(与 ChatInput 插入的 [element:N] 标记永久对齐)。
         // 元素内容不随消息携带:模型按 refs 块内 tabId+selector 调 read_element 获取;
         // preview 保持框选时的 100 字存量(仅 UI chip label 用)

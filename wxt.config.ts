@@ -5,6 +5,8 @@ import { defineConfig } from 'wxt';
 // 项目代号 ai-sidebar(内部用,产品名后续再定)
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
+  // dev 文件监听在部分 Windows 会话下静默失效(chokidar 事件丢失):强制 1s 轮询保证 rebuild 可靠
+  watchOptions: { usePolling: true, interval: 1000 },
   manifest: {
     name: 'AI Sidebar',
     description: 'BYOK AI sidebar — chat with any page using your own API key.',
