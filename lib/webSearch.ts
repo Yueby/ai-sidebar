@@ -28,7 +28,7 @@ export function isWebSearchConfigured(config: WebSearchConfig): boolean {
     case 'exa':
     case 'zhipu':
     case 'metaso':
-      return config.apiKey.trim() !== '';
+      return (config.apiKeys[config.provider] ?? '').trim() !== '';
     default:
       return false;
   }
@@ -115,12 +115,13 @@ async function searchSearXNG(config: WebSearchConfig, query: string): Promise<We
 
 /** Brave Search(API Key;免费层每月 2000 次) */
 async function searchBrave(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const apiKey = (config.apiKeys.brave ?? '').trim();
   const response = await fetchWithTimeout(
     `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${MAX_RESULTS}`,
     {
       headers: {
         Accept: 'application/json',
-        'X-Subscription-Token': config.apiKey.trim(),
+        'X-Subscription-Token': apiKey,
         'User-Agent': USER_AGENT,
       },
     },
@@ -138,10 +139,11 @@ async function searchBrave(config: WebSearchConfig, query: string): Promise<WebS
 
 /** Tavily(API Key;面向 AI 的搜索聚合) */
 async function searchTavily(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const apiKey = (config.apiKeys.tavily ?? '').trim();
   const response = await fetchWithTimeout('https://api.tavily.com/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: config.apiKey.trim(), query, max_results: MAX_RESULTS }),
+    body: JSON.stringify({ api_key: apiKey, query, max_results: MAX_RESULTS }),
   });
   if (!response.ok) {
     throw new Error(`search_failed: Tavily returned ${response.status}`);
@@ -156,11 +158,12 @@ async function searchTavily(config: WebSearchConfig, query: string): Promise<Web
 
 /** 博查(国内 agent 搜索事实标准;text 摘要) */
 async function searchBocha(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const apiKey = (config.apiKeys.bocha ?? '').trim();
   const response = await fetchWithTimeout('https://api.bochaai.com/v1/web-search', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey.trim()}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({ query, summary: false, count: MAX_RESULTS }),
   });
@@ -181,11 +184,12 @@ async function searchBocha(config: WebSearchConfig, query: string): Promise<WebS
 
 /** Serper(Google SERP;免费层每月 2500 次) */
 async function searchSerper(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const apiKey = (config.apiKeys.serper ?? '').trim();
   const response = await fetchWithTimeout('https://google.serper.dev/search', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-API-KEY': config.apiKey.trim(),
+      'X-API-KEY': apiKey,
     },
     body: JSON.stringify({ q: query, num: MAX_RESULTS }),
   });
@@ -202,11 +206,12 @@ async function searchSerper(config: WebSearchConfig, query: string): Promise<Web
 
 /** Exa(语义搜索;注册送额度) */
 async function searchExa(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const apiKey = (config.apiKeys.exa ?? '').trim();
   const response = await fetchWithTimeout('https://api.exa.ai/search', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': config.apiKey.trim(),
+      'x-api-key': apiKey,
     },
     body: JSON.stringify({ query, numResults: MAX_RESULTS }),
   });
@@ -228,11 +233,12 @@ async function searchExa(config: WebSearchConfig, query: string): Promise<WebSea
 
 /** 智谱(bigmodel.cn 开放平台 web_search) */
 async function searchZhipu(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const apiKey = (config.apiKeys.zhipu ?? '').trim();
   const response = await fetchWithTimeout('https://open.bigmodel.cn/api/paas/v4/web_search', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey.trim()}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({ search_query: query, search_engine: 'search_std', count: MAX_RESULTS }),
   });
@@ -249,11 +255,12 @@ async function searchZhipu(config: WebSearchConfig, query: string): Promise<WebS
 
 /** 秘塔(metaso.cn 开放 API) */
 async function searchMetaso(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const apiKey = (config.apiKeys.metaso ?? '').trim();
   const response = await fetchWithTimeout('https://metaso.cn/api/v1/search', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey.trim()}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({ q: query, scope: 'webpage', size: MAX_RESULTS }),
   });

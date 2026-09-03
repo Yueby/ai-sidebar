@@ -95,8 +95,10 @@ export interface WebSearchConfig {
   provider: WebSearchProvider;
   /** searxng 必填:实例 base_url(如 https://searx.example.org) */
   searxngBaseUrl: string;
-  /** brave/tavily 必填:对应平台 API Key(敏感,与提供商 API Key 同级保管,不打印不上报) */
-  apiKey: string;
+  /** API Key 型搜索源独立 Key(敏感,与提供商 API Key 同级保管,不打印不上报) */
+  apiKeys: Partial<
+    Record<'brave' | 'tavily' | 'bocha' | 'serper' | 'exa' | 'zhipu' | 'metaso', string>
+  >;
 }
 
 export interface Settings {

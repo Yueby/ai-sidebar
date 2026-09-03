@@ -504,8 +504,8 @@ export function ChatInput({
 
         {/* Toolbar row inside composer */}
         <div className="flex items-center justify-between px-2 pb-2 pt-0.5 gap-1">
-          {/* Left: [+] Add menu (Far left), Model Switcher, Reasoning Level */}
-          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
+          {/* Left: [+] Add menu (Far left), Model Switcher, Reasoning Level, Context Ring */}
+          <div className="@container flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
             {/* 1. Permanent Unified Add [+] Menu on far left */}
             <DropdownMenu onOpenChange={handleDropdownOpenChange}>
               <DropdownMenuTrigger asChild>
@@ -600,10 +600,11 @@ export function ChatInput({
                     variant="ghost"
                     size="sm"
                     className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground shrink-0 font-normal"
+                    title={`思考深度: ${currentReasoningShort}`}
                   >
                     <Brain className="size-3.5 shrink-0" />
-                    <span>思考: {currentReasoningShort}</span>
-                    <ChevronDown className="size-3 shrink-0 opacity-50" />
+                    <span className="@max-[285px]:hidden">思考: {currentReasoningShort}</span>
+                    <ChevronDown className="size-3 shrink-0 opacity-50 @max-[285px]:hidden" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-36">
@@ -638,10 +639,8 @@ export function ChatInput({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-          </div>
 
-          {/* Right: Context ring + Send / Stop button */}
-          <div className="flex items-center gap-1 shrink-0">
+            {/* 4. Context Ring & Panel */}
             {contextUsage && (
               <ContextPanel
                 usage={contextUsage}
@@ -652,6 +651,10 @@ export function ChatInput({
                 onCompact={onCompact}
               />
             )}
+          </div>
+
+          {/* Right: Send / Stop button */}
+          <div className="flex items-center gap-1 shrink-0">
             {isStreaming ? (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>

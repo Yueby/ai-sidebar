@@ -38,15 +38,34 @@ const WEB_SEARCH_PROVIDERS = [
   'metaso',
 ] as const;
 
+const KEY_BASED_WEB_SEARCH_PROVIDERS = [
+  'brave',
+  'tavily',
+  'bocha',
+  'serper',
+  'exa',
+  'zhipu',
+  'metaso',
+] as const;
+
 function sanitizeWebSearch(value: unknown): Settings['webSearch'] {
   const raw = (value ?? {}) as Partial<Settings['webSearch']>;
   const provider = WEB_SEARCH_PROVIDERS.includes(raw.provider as never)
     ? (raw.provider as Settings['webSearch']['provider'])
     : 'none';
+  const apiKeys: Settings['webSearch']['apiKeys'] = {};
+  if (raw.apiKeys && typeof raw.apiKeys === 'object') {
+    const rawKeys = raw.apiKeys as Record<string, unknown>;
+    for (const key of KEY_BASED_WEB_SEARCH_PROVIDERS) {
+      if (typeof rawKeys[key] === 'string') {
+        apiKeys[key] = rawKeys[key];
+      }
+    }
+  }
   return {
     provider,
     searxngBaseUrl: typeof raw.searxngBaseUrl === 'string' ? raw.searxngBaseUrl : '',
-    apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
+    apiKeys,
   };
 }
 
