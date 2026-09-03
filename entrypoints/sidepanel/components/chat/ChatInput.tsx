@@ -72,6 +72,14 @@ interface ChatInputProps {
 
 const REASONING_LABEL_MAP = REASONING_LEVEL_LABELS;
 
+// 菜单展示顺序:按档位升序(能力数组顺序来自模型配置,不保证有序;未知档沉底)
+const REASONING_DISPLAY_ORDER: ReasoningLevel[] = ['off', 'low', 'medium', 'high', 'max'];
+const sortReasoningLevels = (levels: ReasoningLevel[]): ReasoningLevel[] =>
+  [...levels].sort(
+    (a, b) =>
+      (REASONING_DISPLAY_ORDER.indexOf(a) + 1 || 99) - (REASONING_DISPLAY_ORDER.indexOf(b) + 1 || 99),
+  );
+
 export function ChatInput({
   onSend,
   onStop,
@@ -622,7 +630,7 @@ export function ChatInput({
                   </DropdownMenuItem>
 
                   {/* Supported levels */}
-                  {supportedLevels.map((lvl) => {
+                  {sortReasoningLevels(supportedLevels).map((lvl) => {
                     const isSelected = effectiveReasoningLevel === lvl;
                     const label = REASONING_LABEL_MAP[lvl]?.full || lvl;
                     return (
