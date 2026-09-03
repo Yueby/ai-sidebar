@@ -79,7 +79,7 @@ components/ui/        # shadcn 组件(保持官方原样)
 ## 待办(按序)
 
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome):重点 = 普通对话、read_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移
-2. websearch / fetch_url 工具(读链接目标内容)
+2. websearch / fetch_url 工具(读链接目标内容;外部实测验证:侧边栏内 agent 自评最高优先缺口——自主取回任意 URL 内容,外部 agent 对话原文可查用户会话)
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)
 4. 三期规格 v2(全文见 HANDOFF.md §8.4):**ARIA 定位与页面动作原语**——引库唯一新依赖 `dom-accessibility-api`;五新工具 `search_element`(safe,AX 交互元素清单紧凑行式)/ `click_element` / `fill_element`(confirm+会话 grant)/ `scroll_page`(safe)/ `screenshot_page`(confirm);时序等待内置有界 settle 不设独立工具;反馈 Before/After + 结构化错误前缀;寻址双轨(用户框选 = picked-element 块 CSS selector 不变,模型动作 = ARIA role+name locator,默认 focused tab);会话级 grant 扩展进 gate.ts(execute_js 永不可 grant);实施序列 ①search → ②click/fill+scroll+grant+高亮 → ③screenshot → ④返回模板 v2 → ⑤chrome.debugger(条件触发,不排期);验收标尺 = search→click 链完成登录页填字点按钮零手写 JS(execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
 5. 发布:图标 + `wxt zip`

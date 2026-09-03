@@ -394,7 +394,7 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
 ## 8. 待办(按序)
 
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome 加载扩展):重点 = 普通对话、read_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移;另过一遍设置页全流程(添加提供商→测试→拉模型→同步→改参数→设为当前→聊天)。
-2. websearch / fetch_url 工具(读链接目标内容)。
+2. websearch / fetch_url 工具(读链接目标内容;外部实测验证:侧边栏内 agent 自评最高优先缺口——自主取回任意 URL 内容,外部 agent 对话原文可查用户会话)。
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)。
 4. **三期规格 v2:ARIA 定位与页面动作原语**(原"页面操作"粗粒度条目替换;chrome.debugger 条件触发行保留,见 ⑤):
    - **引库决策**:唯一新依赖 `dom-accessibility-api`(~12KB gzip,零依赖,114M/周)——getRole(含隐式 role,原生反射不算)/computeAccessibleName(AccName 全算法)/isDisabled;aria-query/axe-core/@testing-library/原生反射全否决;交互判定白名单自研 ~30 行(button/link/input/select/textarea/combobox/slider/tab 等 role 子集 + tabIndex≥0)
@@ -406,6 +406,7 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
      5. `screenshot_page`(confirm,视觉反馈):captureVisibleTab(仅活动 tab,明示限制)
    - **时序等待**:不设独立工具——动作内置有界 settle(readyState+rAF settle ≤3s;MutationObserver 100ms 静默 + 3s 天花板模式,参考 AhYi8 waitForStableDom)
    - **反馈**:动作返回 Before/After 段(元素文本 delta/可见性),结构化错误前缀(`tab_closed:`/`element_not_found:`/`ambiguous_locator (N matches):`/`navigation_started:`)
+   - **页面版本指纹**(实施序列 ④ 内):read_page/read_element 返回体附带页面状态指纹(URL+title+内容长度的 hash)——模型对比两次读取的指纹即可判断页面是否/如何变化,为跨读取的 change-detection 提供地基(外部 agent 实测需求:确认动作是否生效的另一半)
    - **会话级 grant 扩展**(gate.ts):confirm 卡加"本会话内允许此类操作"复选框 → grant 存运行时切片(面板关闭即失效);requestGate 查 grant 短路;execute_js 永不可 grant
    - **动作前反馈**:目标元素 400ms 轮廓闪烁(高亮)
    - **寻址双轨**:用户框选 = CSS selector(picked-element 块,不变);模型动作 = ARIA role+name locator(新);默认目标 = focused tab(tabId 可选)
