@@ -22,8 +22,8 @@ export function useGate() {
   const resetGates = useAppStore((s) => s.resetGates);
   const resetResolvedGateCount = useAppStore((s) => s.resetResolvedGateCount);
 
-  // 门控响应回调(store action 薄层)
-  const handleGateApprove = useCallback(() => approveGate(), [approveGate]);
+  // 门控响应回调(store action 薄层);approve 携带会话级 grant 勾选态
+  const handleGateApprove = useCallback((grant?: boolean) => approveGate(grant), [approveGate]);
   const handleGateDeny = useCallback(() => denyGate(), [denyGate]);
   const handleGateAnswer = useCallback((answer: string) => answerGate(answer), [answerGate]);
   const handleGateCancel = useCallback(() => cancelGate(), [cancelGate]);

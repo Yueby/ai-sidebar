@@ -10,11 +10,13 @@ import {
 } from 'lucide-react';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 
 interface ApprovalSectionProps {
   request: GateRequest;
-  onApprove: () => void;
+  /** grant:确认卡上“暂时允许”勾选态(仅 grantable 的 confirm 会传;工具+当前页粒度,关面板失效) */
+  onApprove: (grant?: boolean) => void;
   onDeny: () => void;
   onAnswer: (answer: string) => void;
   onCancel: () => void;
@@ -34,11 +36,13 @@ export function ApprovalSection({
   // 点击审批就地 loading 态 (Cline 模式防重)
   const [pendingAction, setPendingAction] = useState<'approve' | 'deny' | 'answer' | 'cancel' | null>(null);
   const [activeOptionAnswer, setActiveOptionAnswer] = useState<string | null>(null);
+  // 会话级 grant 勾选(仅 grantable 的 confirm;勾选后允许 = 记录工具+tab 范围,同类后续免确认)
+  const [grantChecked, setGrantChecked] = useState(false);
 
   const handleApproveClick = () => {
     if (pendingAction) return;
     setPendingAction('approve');
-    onApprove();
+    onApprove(grantChecked || undefined);
   };
 
   const handleDenyClick = () => {
@@ -192,7 +196,41 @@ export function ApprovalSection({
         </div>
       )}
 
-      {/* 3. 统一操作区 (底部分割线 + 动作按钮) */}
+      {/* 3. 会话级 grant 复选框 (仅 grantable 的 confirm) */}
+      {isConfirm && request.grantable && (
+        <div className="pl-5">
+          <label
+            className={`group/grant flex items-center gap-2 px-2 py-1.5 rounded-md border transition-all select-none cursor-pointer ${
+              grantChecked
+                ? 'border-amber-500/35 bg-amber-500/10 text-amber-950 dark:text-amber-100 shadow-2xs'
+                : 'border-border/40 bg-background/50 hover:bg-background/80 text-muted-foreground hover:text-foreground'
+            } ${pendingAction !== null ? 'opacity-60 cursor-not-allowed pointer-events-none' : ''}`}
+          >
+            <Checkbox
+              checked={grantChecked}
+              onCheckedChange={(v) => setGrantChecked(v === true)}
+              disabled={pendingAction !== null}
+              className="size-3.5 rounded-[3px] border-amber-500/40 data-[state=checked]:border-amber-600 data-[state=checked]:bg-amber-600 dark:data-[state=checked]:bg-amber-500 dark:data-[state=checked]:border-amber-500 data-[state=checked]:text-white dark:data-[state=checked]:text-neutral-950"
+            />
+            <div className="flex-1 min-w-0 flex items-center justify-between gap-1.5">
+              <span className="text-[11px] leading-snug font-normal truncate">
+                暂时允许对当前页执行「{request.label}」
+              </span>
+              <span
+                className={`text-[9px] shrink-0 font-medium px-1 py-0.2 rounded transition-colors ${
+                  grantChecked
+                    ? 'text-amber-700 dark:text-amber-300 bg-amber-500/15'
+                    : 'text-muted-foreground/70 group-hover/grant:text-muted-foreground'
+                }`}
+              >
+                关面板后恢复询问
+              </span>
+            </div>
+          </label>
+        </div>
+      )}
+
+      {/* 4. 统一操作区 (底部分割线 + 动作按钮) */}
       <div className={`flex items-center justify-end gap-1.5 pt-1.5 border-t ${dividerTheme}`}>
         {isConfirm ? (
           <>
@@ -214,10 +252,20 @@ export function ApprovalSection({
               variant="default"
               disabled={pendingAction !== null}
               onClick={handleApproveClick}
-              className="h-6 text-[11px] px-2.5 cursor-pointer gap-1"
+              className={`h-6 text-[11px] px-2.5 cursor-pointer gap-1 transition-colors ${
+                grantChecked
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-500 dark:hover:bg-amber-600 dark:text-neutral-950 shadow-xs'
+                  : ''
+              }`}
             >
               {pendingAction === 'approve' && <Loader2 className="size-3 animate-spin shrink-0" />}
-              <span>{pendingAction === 'approve' ? '允许中…' : '允许'}</span>
+              <span>
+                {pendingAction === 'approve'
+                  ? '允许中…'
+                  : grantChecked
+                    ? '允许并记住'
+                    : '允许'}
+              </span>
             </Button>
           </>
         ) : (

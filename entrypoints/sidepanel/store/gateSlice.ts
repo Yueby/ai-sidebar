@@ -12,8 +12,8 @@ export interface GateSlice {
   resolvedGateCount: number;
   /** lib/gate handler 入口(模块级注册一次) */
   pushGate: (request: GateRequest, resolve: (res: GateResponse) => void) => void;
-  /** 四类应答:计数 +1、resolve、收卡 */
-  approveGate: () => void;
+  /** 四类应答:计数 +1、resolve、收卡;confirm 可携带会话级 grant */
+  approveGate: (grant?: boolean) => void;
   denyGate: () => void;
   answerGate: (answer: string) => void;
   cancelGate: () => void;
@@ -44,7 +44,8 @@ export function createGateSlice(set: SliceSet, get: SliceGet): GateSlice {
 
     pushGate: (request, resolve) => set({ activeGate: { request, resolve } }),
 
-    approveGate: () => respond(get, set, { kind: 'confirm', approved: true }),
+    approveGate: (grant?: boolean) =>
+      respond(get, set, grant ? { kind: 'confirm', approved: true, grant } : { kind: 'confirm', approved: true }),
     denyGate: () => respond(get, set, { kind: 'confirm', approved: false }),
     answerGate: (answer) => respond(get, set, { kind: 'ask', answer }),
     cancelGate: () => respond(get, set, { kind: 'ask', answer: '', cancelled: true }),

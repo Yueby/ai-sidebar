@@ -39,6 +39,13 @@ export function useChatTurn(params: {
   // turn 身份守卫:打断重发后旧 turn 的拆卸链与新 turn 并发,seq 不匹配者不得触碰共享状态
   const turnSeqRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // 流式增量节流:token 级 message_update 每次都全量渲染,长对话会卡;攒最新值定期冲刷,终值不丢
+  const STREAM_FLUSH_INTERVAL_MS = 50;
+  const streamThrottleRef = useRef<{ text: string; thinking: string; timer: ReturnType<typeof setTimeout> | null }>({
+    text: '',
+    thinking: '',
+    timer: null,
+  });
   // AI 自主压缩标记:compact_context 工具 execute 只置位;轮末由本 hook 消费
   const compactRequestedRef = useRef(false);
 
@@ -140,6 +147,9 @@ export function useChatTurn(params: {
       setIsCancelled(false);
       setErrorMessage(null);
       resetResolvedGateCount();
+      // 上一轮遗留的节流定时器作废(终值已随 message_end 物化或被轮末清空)
+      if (streamThrottleRef.current.timer) clearTimeout(streamThrottleRef.current.timer);
+      streamThrottleRef.current = { text: '', thinking: '', timer: null };
       // 新一轮运行:清空 in-flight 并声明归属会话
       setInFlight({ sessionId: session.id, messages: [] });
 
@@ -176,7 +186,6 @@ export function useChatTurn(params: {
               // 打断重发后,旧 turn 的 aborted partial 事件流必须静默——
               // 同会话守卫拦不住跨 turn,ghost 半截回答会悬空 + finalize 索引回移重挂载
               if (seq !== turnSeqRef.current) return;
-              const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
               const text = event.message.content
                 .filter((b) => b.type === 'text')
                 .map((b) => b.text)
@@ -185,8 +194,18 @@ export function useChatTurn(params: {
                 .filter((b) => b.type === 'thinking')
                 .map((b) => b.thinking)
                 .join('');
-              setStreamText(text);
-              setStreamThink(thinking);
+              // 攒最新值,定期冲刷(token 级增量直推 store 会让长对话全列表重绘卡顿)
+              const st = streamThrottleRef.current;
+              st.text = text;
+              st.thinking = thinking;
+              if (!st.timer) {
+                st.timer = setTimeout(() => {
+                  st.timer = null;
+                  const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
+                  setStreamText(st.text);
+                  setStreamThink(st.thinking);
+                }, STREAM_FLUSH_INTERVAL_MS);
+              }
             } else if (event.type === 'message_end' && event.message.role === 'assistant') {
               // 同上,旧 turn 的 message_end 不得进新 turn 的 in-flight
               if (seq !== turnSeqRef.current) return;
@@ -198,6 +217,8 @@ export function useChatTurn(params: {
                   ? { ...prev, messages: [...prev.messages, done as ChatMessage] }
                   : prev
               );
+              if (streamThrottleRef.current.timer) clearTimeout(streamThrottleRef.current.timer);
+              streamThrottleRef.current = { text: '', thinking: '', timer: null };
               const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
               setStreamText('');
               setStreamThink('');
@@ -280,6 +301,9 @@ export function useChatTurn(params: {
           teardown.setIsStreaming(false);
           teardown.setActiveToolNames([]);
           abortControllerRef.current = null;
+          // 残余节流定时器作废(避免旧轮终值写进新轮的流式态)
+          if (streamThrottleRef.current.timer) clearTimeout(streamThrottleRef.current.timer);
+          streamThrottleRef.current = { text: '', thinking: '', timer: null };
           // 轮末自主压缩:finally 清理完成后再触发(isStreaming 已复位,互斥守卫可通过);
           // setTimeout 0 = 完全脱离本链,handleCompact 的守卫与错误处理自洽
           if (autoCompactPending) {

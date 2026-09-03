@@ -1,4 +1,5 @@
 import {
+  PAGE_ACTION_MESSAGE,
   PICK_ELEMENT_MESSAGE,
   PICK_ELEMENT_RESULT_MESSAGE,
   READ_PAGE_MESSAGE,
@@ -6,7 +7,7 @@ import {
   SEARCH_ELEMENT_LIMIT,
 } from '@/lib/types';
 // type-only:编译期擦除,不引入运行时代码(载荷形状与 sidepanel 侧同源)
-import type { SearchElementsResult } from '@/lib/pageContext';
+import type { PageActionResult, ResolvedActionElement, SearchElementsResult } from '@/lib/pageContext';
 
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
@@ -631,19 +632,31 @@ export default defineContentScript({
       return out;
     }
 
-    /**
-     * 交互元素清单(search_element 内容侧计算):
-     * 全量遍历 → 候选过滤 → 生效 role/可访问名称/状态 → 同 role+name 组内文档序编号(序号在截断前
-     * 按全量计数,保证输出 [N] 与步② locator 解析一致)→ 截前 SEARCH_ELEMENT_LIMIT 条。
-     */
-    async function collectInteractiveElements(): Promise<SearchElementsResult | { error: string }> {
-      const libs = await loadAccessibilityLibs();
-      if (!libs) return { error: 'Failed to load the accessibility analysis library.' };
-      const { getRole, computeAccessibleName, isDisabled } = libs;
+    /** 全量交互元素(search 输出与步② locator 解析的单一来源;文档序,序号在 role+name 组内全量计数) */
+    interface EnumeratedElement {
+      el: Element;
+      role: string;
+      name: string;
+      ordinal: number;
+      disabled: boolean;
+      visible: boolean;
+      /** 文本型 input 的真实 type(password/email/tel/url/日期族等,与 role 冗余时有区分价值) */
+      inputType?: string;
+    }
 
-      const computeStartedAt = performance.now();
+    /** 对输入类元素,名称/预览优先用 placeholder/value(大量真实表单只有 placeholder 没有 label) */
+    function elementActionPreview(el: Element): string {
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        const hint = el.placeholder || el.value;
+        if (hint) return hint.slice(0, 80);
+      }
+      return elementPreview(el).slice(0, 80);
+ }
+
+    function enumerateInteractiveElements(libs: AccessibilityLibs): EnumeratedElement[] {
+      const { getRole, computeAccessibleName, isDisabled } = libs;
       const ordinals = new Map<string, number>();
-      const elements: SearchElementsResult['elements'] = [];
+      const out: EnumeratedElement[] = [];
       for (const el of collectWalkableElements()) {
         if (!isInteractiveCandidate(el, getRole)) continue;
         const role = effectiveRole(el, getRole);
@@ -655,24 +668,60 @@ export default defineContentScript({
           name = '';
         }
         name = name.replace(/\s+/g, ' ').trim();
+        // placeholder 兑底名称:真实网站大量字段只有 placeholder 没有 label,无名会导致无法寻址
+        if (!name && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
+          const placeholder = el.placeholder;
+          if (placeholder) name = placeholder.replace(/\s+/g, ' ').trim();
+        }
         // 降噪:非交互 role 且无名且非 DOM 交互标签(tabIndex≥0 带进来的纯容器)对 role+name 寻址无意义
         if (!INTERACTIVE_ROLES.has(role) && !name && !isDomInteractive(el)) continue;
         const key = `${role}\u0000${name}`;
         const ordinal = (ordinals.get(key) ?? 0) + 1;
         ordinals.set(key, ordinal);
-        elements.push({
+        // 文本型 input 的真实 type 提示(密码框直接现形;排除已被 role 表达的类型)
+        const genericTypes = [
+          'text', 'hidden', 'checkbox', 'radio', 'button', 'submit', 'reset',
+          'image', 'file', 'search', 'range', 'number',
+        ];
+        const inputType =
+          el instanceof HTMLInputElement && !genericTypes.includes(el.type) ? el.type : undefined;
+        out.push({
+          el,
           role,
           name,
           ordinal,
           disabled: isDisabled(el),
           visible: isElementVisible(el),
+          inputType,
         });
       }
-      const total = elements.length;
-      // 预算优先给可见元素(隐藏项多为折叠菜单/重复入口,行动价值低;序号已在全量上计数,选集不 影响 [N] 寻址),组内保持文档序
+      return out;
+    }
+
+    /**
+     * 交互元素清单(search_element 内容侧计算):全量枚举 → 可见优先预算截断。
+     * 序号在全量上计数,输出选集不影响 [N] 与步② locator 解析的一致性。
+     */
+    async function collectInteractiveElements(rawQuery: unknown): Promise<SearchElementsResult | { error: string }> {
+      const libs = await loadAccessibilityLibs();
+      if (!libs) return { error: 'Failed to load the accessibility analysis library.' };
+
+      const computeStartedAt = performance.now();
+      let all = enumerateInteractiveElements(libs);
+      // query 过滤:单串或多串数组(OR 语义,任一命中即保留),role/可访问名称的大小写不敏感子串匹配,
+      // 先于预算截断(目标不在默认清单时的定位出路)
+      const terms = (Array.isArray(rawQuery) ? rawQuery : [rawQuery])
+        .filter((t): t is string => typeof t === 'string')
+        .map((t) => t.trim().toLowerCase())
+        .filter(Boolean);
+      if (terms.length > 0) {
+        all = all.filter((e) => terms.some((t) => e.role.includes(t) || e.name.toLowerCase().includes(t)));
+      }
+      const total = all.length;
+      // 预算优先给可见元素(隐藏项多为折叠菜单/重复入口,行动价值低),组内保持文档序
       const visibleFirst = [
-        ...elements.filter((e) => e.visible),
-        ...elements.filter((e) => !e.visible),
+        ...all.filter((e) => e.visible),
+        ...all.filter((e) => !e.visible),
       ];
       return {
         url: location.href,
@@ -680,8 +729,379 @@ export default defineContentScript({
         total,
         truncated: total > SEARCH_ELEMENT_LIMIT,
         durationMs: Math.round(performance.now() - computeStartedAt),
-        elements: visibleFirst.slice(0, SEARCH_ELEMENT_LIMIT),
+        elements: visibleFirst.slice(0, SEARCH_ELEMENT_LIMIT).map(({ el: _el, ...info }) => info),
       };
+    }
+
+    // ===== 页面动作(click/fill/scroll;三期步②,与 search_element 同源寻址)=====
+
+    interface LocatorSpec {
+      role: string;
+      name: string;
+      ordinal?: number;
+    }
+
+    /** 宽松解析 locator;name 允许空串(清单里的无名元素同样可寻址) */
+    function parseLocator(v: unknown): LocatorSpec | null {
+      if (!v || typeof v !== 'object') return null;
+      const x = v as Record<string, unknown>;
+      if (typeof x.role !== 'string' || !x.role.trim() || typeof x.name !== 'string') return null;
+      if (x.name.trim() === '' && x.name !== '') return null;
+      return {
+        role: x.role,
+        name: x.name,
+        ordinal: typeof x.ordinal === 'number' && x.ordinal > 0 ? Math.floor(x.ordinal) : undefined,
+      };
+    }
+
+    /** locator 解析:role 小写 + name 精确匹配(与清单同枚举同序号语义);not_found 附同 role 现有目标 */
+    function resolveLocator(
+      all: EnumeratedElement[],
+      locator: LocatorSpec,
+    ):
+      | { status: 'ok'; hit: EnumeratedElement }
+      | { status: 'not_found'; alternatives: string[] }
+      | { status: 'ambiguous'; matches: { ordinal: number; tagName: string; preview: string }[] } {
+      const role = locator.role.trim().toLowerCase();
+      const name = locator.name.trim();
+      const wanted = locator.ordinal ?? 1;
+      const sameKey = all.filter((e) => e.role === role && e.name === name);
+      if (sameKey.length === 0) {
+        const alternatives = [
+          ...new Set(
+            all
+              .filter((e) => e.role === role)
+              .map((e) => `${e.role} ${JSON.stringify(e.name)}`),
+          ),
+        ].slice(0, 8);
+        return { status: 'not_found', alternatives };
+      }
+      if (wanted > sameKey.length) {
+        return {
+          status: 'ambiguous',
+          matches: sameKey.map((e) => ({
+            ordinal: e.ordinal,
+            tagName: e.el.tagName.toLowerCase(),
+            preview: elementActionPreview(e.el),
+          })),
+        };
+      }
+      // wanted ∈ [1, sameKey.length] 已由上方检查保证
+      return { status: 'ok', hit: sameKey[wanted - 1]! };
+    }
+
+    function elementSummary(e: EnumeratedElement): {
+      role: string;
+      name: string;
+      ordinal: number;
+      tagName: string;
+      preview: string;
+    } {
+      return {
+        role: e.role,
+        name: e.name,
+        ordinal: e.ordinal,
+        tagName: e.el.tagName.toLowerCase(),
+        preview: elementActionPreview(e.el),
+      };
+    }
+
+    /** 动作前反馈:固定定位轮廓高亮 400ms(pointer-events:none,不影响命中测试与页面交互) */
+    function highlightElement(el: Element): void {
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) return;
+      const box = document.createElement('div');
+      box.style.cssText =
+        `position:fixed;left:${rect.left - 2}px;top:${rect.top - 2}px;width:${rect.width + 4}px;` +
+        `height:${rect.height + 4}px;outline:2px solid #2563eb;outline-offset:0;border-radius:4px;` +
+        'background:rgba(37,99,235,0.12);z-index:2147483646;pointer-events:none;';
+      document.documentElement.appendChild(box);
+      setTimeout(() => box.remove(), 400);
+    }
+
+    /**
+     * 有界 settle:readyState complete(短上限)→ MutationObserver 100ms 静默(天花板 maxMs)→ 一帧 rAF。
+     * 动作内置等待,不设独立等待工具(规格 8.4)。
+     */
+    async function waitForSettle(maxMs = 3000): Promise<void> {
+      if (document.readyState !== 'complete') {
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            clearTimeout(timer);
+            document.removeEventListener('readystatechange', check);
+            resolve();
+          };
+          const check = () => {
+            if (document.readyState === 'complete') done();
+          };
+          const timer = setTimeout(done, 1500);
+          document.addEventListener('readystatechange', check);
+        });
+      }
+      await new Promise<void>((resolve) => {
+        const finish = () => {
+          clearTimeout(timer);
+          mo.disconnect();
+          resolve();
+        };
+        let timer = setTimeout(finish, 100);
+        const mo = new MutationObserver(() => {
+          clearTimeout(timer);
+          timer = setTimeout(finish, 100);
+        });
+        mo.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+        setTimeout(() => {
+          mo.disconnect();
+          resolve();
+        }, maxMs);
+      });
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+
+    /**
+     * 合成点击:scrollIntoView 居中 → 400ms 高亮 → 遮挡命中检测;
+     * 命中失败走固定 fallback(直接在元素上派发事件序列,拍板:结果里注明)。
+     * 事件为 untrusted(chrome.debugger 特权层条件触发,不排期)。返回注记(英文)。
+     */
+    function performClick(el: Element): string[] {
+      const notes: string[] = [];
+      el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+      highlightElement(el);
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      const clear = !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+      if (!clear && hit) {
+        notes.push(
+          `Element was occluded by <${hit.localName.toLowerCase()}>; the event sequence was dispatched directly on the element.`,
+        );
+      }
+      for (const type of ['mouseover', 'mousedown', 'mouseup', 'click']) {
+        el.dispatchEvent(
+          new MouseEvent(type, {
+            view: window,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            buttons: 1,
+            clientX: x,
+            clientY: y,
+          }),
+        );
+      }
+      if (typeof (el as HTMLElement).focus === 'function') (el as HTMLElement).focus();
+      return notes;
+    }
+
+    function isToggleElement(el: Element): boolean {
+      if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) return true;
+      const role = el.getAttribute('role');
+      return (
+        role === 'switch' ||
+        role === 'checkbox' ||
+        role === 'radio' ||
+        el.hasAttribute('aria-checked') ||
+        el.hasAttribute('aria-pressed')
+      );
+    }
+
+    /** 文本类:input(非按钮型)/textarea/contenteditable;checkbox/radio 已被 toggle 分支接走 */
+    function isTextLikeElement(el: Element): boolean {
+      if (el instanceof HTMLTextAreaElement) return true;
+      if ((el as HTMLElement).isContentEditable) return true;
+      if (el instanceof HTMLInputElement) {
+        return !['button', 'submit', 'reset', 'image', 'file', 'hidden', 'checkbox', 'radio'].includes(el.type);
+      }
+      return false;
+    }
+
+    function dispatchInputAndChange(el: Element): void {
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    /**
+     * 受控填充(AhYi8 模式,无 CDP 特权层):
+     * select 按 value/text 匹配选项;toggle 只收 true/false(原生 click() 切换);
+     * 文本类 = focus → 全选 → 原生 prototype setter(绕 React/Vue 值跟踪)→ input/change;
+     * contenteditable = 全选后 execCommand('insertText')(富文本编辑器兼容)。空串 = 明确清空语义。
+     */
+    function performFill(
+      el: Element,
+      value: string,
+    ): { notes: string[] } | { fail: { reason: 'option_not_found' | 'unsupported_element' | 'invalid_value'; options?: string[] } } {
+      const notes: string[] = [];
+      if (el instanceof HTMLSelectElement) {
+        const target = Array.from(el.options).find(
+          (o) => o.value === value || o.text.trim() === value,
+        );
+        if (!target) {
+          return {
+            fail: {
+              reason: 'option_not_found',
+              options: Array.from(el.options)
+                .map((o) => o.text.trim())
+                .slice(0, 20),
+            },
+          };
+        }
+        el.value = target.value;
+        dispatchInputAndChange(el);
+        return { notes };
+      }
+      if (isToggleElement(el)) {
+        const normalized = value.trim().toLowerCase();
+        if (normalized !== 'true' && normalized !== 'false') {
+          return { fail: { reason: 'invalid_value' } };
+        }
+        const target = normalized === 'true';
+        if (el instanceof HTMLInputElement) {
+          if (el.type === 'radio' && !target && el.checked) {
+            notes.push('Radio buttons cannot be unchecked directly; select another option instead.');
+            return { notes };
+          }
+          if (el.checked === target) {
+            notes.push('The element was already in the requested state; nothing changed.');
+            return { notes };
+          }
+          el.click();
+          if (el.checked !== target) {
+            el.checked = target;
+            dispatchInputAndChange(el);
+          }
+          return { notes };
+        }
+        const nextValue = target ? 'true' : 'false';
+        if (el.hasAttribute('aria-checked')) el.setAttribute('aria-checked', nextValue);
+        if (el.hasAttribute('aria-pressed')) el.setAttribute('aria-pressed', nextValue);
+        if (typeof (el as HTMLElement).click === 'function') (el as HTMLElement).click();
+        dispatchInputAndChange(el);
+        return { notes };
+      }
+      if (isTextLikeElement(el)) {
+        (el as HTMLElement).focus();
+        if ((el as HTMLElement).isContentEditable) {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          if (value) {
+            document.execCommand('insertText', false, value);
+          } else {
+            document.execCommand('delete');
+          }
+          if ((el.textContent ?? '') !== value) {
+            // execCommand 失败或未生效的兑底:直接改写文本(富文本格式会丢失,但值语义保住)
+            el.textContent = value;
+          }
+          dispatchInputAndChange(el);
+          return { notes };
+        }
+        if (typeof (el as HTMLInputElement).select === 'function') (el as HTMLInputElement).select();
+        const proto =
+          el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+        if (desc?.set) desc.set.call(el, value);
+        else (el as HTMLInputElement).value = value;
+        dispatchInputAndChange(el);
+        return { notes };
+      }
+      return { fail: { reason: 'unsupported_element' } };
+    }
+
+    /** 滚动:无定位 = 视口 scrollBy(默认 0.8 视口高/宽);有定位 = scrollIntoView 居中(+高亮) */
+    function performScroll(el: Element | null, direction: string, amount: number | undefined): string[] {
+      if (el) {
+        el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+        highlightElement(el);
+        return [`Scrolled the target element into view.`];
+      }
+      const vertical = direction === 'up' || direction === 'down';
+      const viewport = vertical
+        ? document.documentElement.clientHeight || window.innerHeight
+        : document.documentElement.clientWidth || window.innerWidth;
+      const delta = typeof amount === 'number' && amount > 0 ? Math.min(Math.round(amount), 10000) : Math.round(viewport * 0.8);
+      const signed = direction === 'up' || direction === 'left' ? -delta : delta;
+      window.scrollBy({ left: vertical ? 0 : signed, top: vertical ? signed : 0, behavior: 'instant' });
+      return [`Scrolled ${direction} by ${delta}px.`];
+    }
+
+    async function runPageAction(message: {
+      action?: unknown;
+      locator?: unknown;
+      value?: unknown;
+      direction?: unknown;
+      amount?: unknown;
+    }): Promise<PageActionResult> {
+      const libs = await loadAccessibilityLibs();
+      if (!libs) return { ok: false, url: location.href, reason: 'not_found' };
+      const urlBefore = location.href;
+      const action = message.action;
+
+      if (action === 'scroll') {
+        const direction = typeof message.direction === 'string' ? message.direction : '';
+        if (direction !== 'up' && direction !== 'down' && direction !== 'left' && direction !== 'right') {
+          return { ok: false, url: urlBefore, reason: 'invalid_value' };
+        }
+        const amount = typeof message.amount === 'number' && message.amount > 0 ? message.amount : undefined;
+        let target: Element | null = null;
+        let summary: ResolvedActionElement | undefined;
+        const locator = parseLocator(message.locator);
+        if (locator) {
+          const res = resolveLocator(enumerateInteractiveElements(libs), locator);
+          if (res.status === 'not_found') return { ok: false, url: urlBefore, reason: 'not_found', alternatives: res.alternatives };
+          if (res.status === 'ambiguous') return { ok: false, url: urlBefore, reason: 'ambiguous', matches: res.matches };
+          target = res.hit.el;
+          summary = elementSummary(res.hit);
+        }
+        const notes = performScroll(target, direction, amount);
+        await waitForSettle(1500);
+        return { ok: true, url: location.href, title: document.title, element: summary, notes };
+      }
+
+      if (action === 'resolve' || action === 'click' || action === 'fill') {
+        const locator = parseLocator(message.locator);
+        if (!locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
+        const res = resolveLocator(enumerateInteractiveElements(libs), locator);
+        if (res.status === 'not_found') {
+          return { ok: false, url: urlBefore, reason: 'not_found', alternatives: res.alternatives };
+        }
+        if (res.status === 'ambiguous') {
+          return { ok: false, url: urlBefore, reason: 'ambiguous', matches: res.matches };
+        }
+        const summary = elementSummary(res.hit);
+        if (action === 'resolve') {
+          return { ok: true, url: urlBefore, title: document.title, element: summary, notes: [] };
+        }
+
+        const notes: string[] = [];
+        if (res.hit.disabled) {
+          notes.push('Note: the target element is disabled; the browser may ignore the interaction.');
+        }
+        if (!res.hit.visible) {
+          notes.push('Note: the target element is currently not visible.');
+        }
+        let fail: { reason: 'option_not_found' | 'unsupported_element' | 'invalid_value'; options?: string[] } | undefined;
+        if (action === 'click') {
+          notes.push(...performClick(res.hit.el));
+        } else {
+          const value = typeof message.value === 'string' ? message.value : '';
+          const filled = performFill(res.hit.el, value);
+          if ('fail' in filled) fail = filled.fail;
+          else notes.push(...filled.notes);
+        }
+        if (fail) return { ok: false, url: location.href, reason: fail.reason, options: fail.options };
+        const urlAfterAct = location.href;
+        await waitForSettle();
+        if (location.href !== urlAfterAct) {
+          notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
+        }
+        return { ok: true, url: location.href, title: document.title, element: summary, notes };
+      }
+
+      return { ok: false, url: urlBefore, reason: 'invalid_value' };
     }
 
     browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -695,9 +1115,15 @@ export default defineContentScript({
       }
       if (message?.type === SEARCH_ELEMENT_MESSAGE) {
         // 异步计算(动态导入 dom-accessibility-api):返回 true 保持消息通道开放
-        collectInteractiveElements()
+        collectInteractiveElements(message.query)
           .then(sendResponse)
           .catch(() => sendResponse({ error: 'Unexpected failure while collecting interactive elements.' }));
+        return true;
+      }
+      if (message?.type === PAGE_ACTION_MESSAGE) {
+        runPageAction(message)
+          .then(sendResponse)
+          .catch(() => sendResponse({ ok: false, url: location.href, reason: 'not_found' }));
         return true;
       }
       if (message?.type !== READ_PAGE_MESSAGE) {

@@ -1,6 +1,6 @@
 # ai-sidebar — 项目代号
 
-> **交接注(2026-09)**:UI 已全部实现,agent 运行时为 pi-agent-core;引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ `read_page`/`read_element`/`search_element`/`fetch_url`/`search_web` 工具。当前唯一权威现状、最新决策与 API 契约见 **`HANDOFF.md`**,以它为准;本文件与它已同步。
+> **交接注(2026-09)**:UI 已全部实现,agent 运行时为 pi-agent-core;引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ `read_page`/`read_element`/`search_element`/`click_element`/`fill_element`/`scroll_page`/`fetch_url`/`search_web` 工具。当前唯一权威现状、最新决策与 API 契约见 **`HANDOFF.md`**,以它为准;本文件与它已同步。
 
 开源 **BYOK 浏览器 AI 侧边栏扩展**(Chromium 系:Chrome/Edge/Brave),对标 Chrome 内置 Gemini 侧边栏,但用你自己的 API Key、UI 现代化。
 
@@ -17,7 +17,7 @@
   - 网络搜索:设置页"搜索"页签配置十源(duckduckgo/searxng/brave/tavily/bocha/serper/exa/zhipu/metaso/bing),`search_web` 条件注册(未配置不占工具面)
   - BYOK 多提供商:三种协议 —— **OpenAI 兼容 · Chat Completions / OpenAI 兼容 · Responses / Anthropic Messages**(OpenAI / DeepSeek / OpenRouter / Kimi / GLM / Ollama / 自定义 baseUrl+key+model)
 - **二期**:划词快捷提问(选中文字弹快捷操作)、多模型快捷切换、会话重命名/导出
-- **三期(规格 v2,详见 HANDOFF.md §8.4)**:ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;未实施
+- **三期(规格 v2,详见 HANDOFF.md §8.4)**:ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;步①②已实施(search_element 发现层 + click/fill/scroll 页面动作原语 + 会话级 grant),步③screenshot_page/④返回模板 v2 待做
 
 ## UI 方向(已确认)
 
@@ -62,7 +62,7 @@ entrypoints/
     components/chat/      # ChatHeader / MessageList / MessageItem(分段渲染+ToolCallCard/思考折叠)/ MarkdownView / ChatInput(TipTap)/ ApprovalSection(审批槽位)/ CompactionRow(压缩摘要卡)/ SlashMenu(斜杠命令)/ ContextRing+ContextPanel(上下文占用)/ elementMarkerText(chip 渲染)/ extensions/(InlineBadge+BadgeNodeView+editorSerialize)
     components/settings/  # SettingsMainView(提供商/搜索/关于)/ ProviderDialog / ModelConfigDialog / SearchSettingsView(十源搜索配置)
   background.ts       # 点击工具栏图标打开侧边栏
-  content.ts          # 结构化提取(Readability+语义 markdown)+ 框选元素(@medv/finder 生成唯一 selector)+ 元素解析 + 交互元素发现(search_element,content 侧 dom-accessibility-api)
+  content.ts          # 结构化提取(Readability+语义 markdown)+ 框选元素(@medv/finder 生成唯一 selector)+ 元素解析 + 交互元素发现(search_element,content 侧 dom-accessibility-api)+ 页面动作执行器(click/fill/scroll:locator 解析/400ms 高亮/遮挡 fallback 直发/受控填充/settle/navigation_started)
 lib/
   types.ts            # ApiType/ModelConfig(reasoningLevels)/Settings(reasoningLevel+webSearch)/ChatMessage(pi 联合)/PageRefs/SessionDraft/PickedElement(elementId)/WebSearchConfig/TOOL_LABELS(中文单一来源)/消息协议常量
   storage.ts          # settingsItem/activeSessionIdItem + sanitizeSettings(含 webSearch)/sanitizeSessions 迁移 + createUserMessage(带 refs)/messageText/EMPTY_USAGE
@@ -72,25 +72,25 @@ lib/
   models.ts           # fetchProviderModels/fetchModelsDevMeta/applyModelMeta/syncModelsWithModelsDev/testConnection
   pageRefs.ts         # renderPageRefsBlock/parsePageRefs/stripPageRefs/collectPageRefs(纯函数,<page-refs> 块)
   elementLabel.ts     # elementChipLabel/elementListLabel(元素预览 chip label,CJK 视觉宽度加权)
-  pageContext.ts      # tab 级读取原语(getActiveTabMeta/getTabMeta/listCandidateTabs/extractFromTab/renderPageContext)+ startPickElement/resolveElement(框选/元素解析)+ searchElementsInTab(交互元素清单,search_element 底层)
+  pageContext.ts      # tab 级读取原语(getActiveTabMeta/getTabMeta/listCandidateTabs/extractFromTab/renderPageContext)+ startPickElement/resolveElement(框选/元素解析)+ searchElementsInTab(交互元素清单,search_element 底层)+ performPageAction(页面动作原语 resolve/click/fill/scroll,步②)
   fetchPage.ts        # fetch_url 抓取管线:直连 GET + Readability 提取(私有内网拒绝+重定向复检;2MB/12000 上限;错误前缀族)
   webSearch.ts        # websearch 十源适配器(统一 {title,url,snippet})+ isWebSearchConfigured(注册/运行守卫单一来源)
   compaction.ts       # compact_context 压缩管线(runCompact/findCutIndex)
   pageScripting.ts    # execute_js 注入原语:isUserScriptsAvailable/executePageScript(userScripts.execute 主路线 + scripting MAIN world 兜底,8000 截断)
   imageFetch.ts       # fetchImageForModel/captureCropForModel(≤2000²、JPEG q80 逐级降质、base64 ≤4.5MB)
-  gate.ts             # 工具门控契约:GateRequest(confirm/ask)/setGateHandler/flushPendingGates/requestGate/createGatedTool
-  tools/              # 工具注册表(pi 一工具一文件 + 集合函数模式):registry.ts = 唯一组装点 getTools(GetToolsOptions{refTabs,pickedElements,canUseImage,onCompactContext,webSearch},组装序 utility→web→read→discovery→fetch→gated);read-page/read-element/search-element/fetch-url/web-search/compact-context/execute-js/read-time/ask-user 各导出 createXxxToolDefinition;time.ts = 本地时间助手
+  gate.ts             # 工具门控契约:GateRequest(confirm/ask)/setGateHandler/flushPendingGates/requestGate/createGatedTool + 会话级 grant(grantedScopes 短路,工具+tab 粒度,面板生命周期;execute_js 永不可 grant)
+  tools/              # 工具注册表(pi 一工具一文件 + 集合函数模式):registry.ts = 唯一组装点 getTools(GetToolsOptions{refTabs,pickedElements,canUseImage,onCompactContext,webSearch},组装序 utility→web→read→discovery→action→fetch→gated);read-page/read-element/search-element/click-element/fill-element/scroll-page/page-action-shared/fetch-url/web-search/compact-context/execute-js/read-time/ask-user 各导出 createXxxToolDefinition;time.ts = 本地时间助手
   utils.ts            # cn()/getErrorMessage
 components/ui/        # shadcn 组件(保持官方原样)
 ```
 
 ## 待办(按序)
 
-> **当前阶段**:MVP + 获取支柱 + 三期步① search_element 落地(MVP 回归已通过,search_element 待单独回归);接下来 = search_element 手动回归 → 三期步②(click/fill/scroll + 会话 grant 扩展 + 高亮)→ ③screenshot_page → ④返回模板 v2 → i18n → 发布。
+> **当前阶段**:MVP + 获取支柱 + 三期步①②(search_element 发现层 + 页面动作原语)落地且回归通过;接下来 = 步③screenshot_page → ④返回模板 v2 → i18n → 发布。
 
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome):重点 = 普通对话、read_page/read_element/fetch_url/search_web(需在设置"搜索"页签启用)工具触发、search_element 触发(交互元素清单、file input 不入列、shadow DOM 页、超 80 元素截断)、框选元素(TipTap 徽章)+ vision 读图、压缩摘要分隔线卡、上下文占用环、思考折叠区、token 脚注、流式中途停止、自动跟底(流式无跳动)、旧会话数据迁移(旧格式元素/标记按裸文本丢弃,dev 数据可弃)
 2. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)
-3. 三期规格 v2(全文见 HANDOFF.md §8.4):**ARIA 定位与页面动作原语**——引库唯一新依赖 `dom-accessibility-api`;五新工具 `search_element`(safe,AX 交互元素清单紧凑行式)/ `click_element` / `fill_element`(confirm+会话 grant)/ `scroll_page`(safe)/ `screenshot_page`(confirm);时序等待内置有界 settle 不设独立工具;反馈 Before/After + 结构化错误前缀;寻址双轨(用户框选 = picked-element 块 CSS selector 不变,模型动作 = ARIA role+name locator,默认 focused tab;search_element 已按默认 focused tab、无白名单实施——用户拍板);会话级 grant 扩展进 gate.ts(execute_js 永不可 grant);实施序列 ①search(✅ 已完成 2026-09)→ ②click/fill+scroll+grant+高亮 → ③screenshot → ④返回模板 v2 → ⑤chrome.debugger(条件触发,不排期);验收标尺 = search→click 链完成登录页填字点按钮零手写 JS(execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
+3. 三期规格 v2(全文见 HANDOFF.md §8.4):**ARIA 定位与页面动作原语**——引库唯一新依赖 `dom-accessibility-api`;五新工具 `search_element`(safe,AX 交互元素清单紧凑行式)/ `click_element` / `fill_element`(confirm+会话 grant)/ `scroll_page`(safe)/ `screenshot_page`(confirm);时序等待内置有界 settle 不设独立工具;反馈 Before/After + 结构化错误前缀;寻址双轨(用户框选 = picked-element 块 CSS selector 不变,模型动作 = ARIA role+name locator,默认 focused tab;search_element 已按默认 focused tab、无白名单实施——用户拍板);会话级 grant 扩展进 gate.ts(execute_js 永不可 grant);实施序列 ①search(✅ 已完成 2026-09)→ ②click/fill+scroll+grant+高亮(✅ 已完成 2026-09)→ ③screenshot → ④返回模板 v2 → ⑤chrome.debugger(条件触发,不排期);验收标尺 = search→click 链完成登录页填字点按钮零手写 JS(✅ 真实登录页已通过;execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
 4. 发布:图标 + `wxt zip`
 
 > 已完成(2026-09-02):`err: any` → `unknown`(getErrorMessage helper);dev 可观测性(未知 `ai-sidebar/` 消息 console.warn);execute_js 工具(userScripts.execute 主路线 + scripting MAIN world 兜底,confirm 门控动态预览代码,Chrome 135+ / Allow User Scripts 开关引导)。用户拍板不做:highlight.js 语言包裁剪(本地加载,941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。

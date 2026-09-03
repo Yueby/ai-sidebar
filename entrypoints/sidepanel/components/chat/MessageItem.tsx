@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Copy,
   Check,
@@ -58,6 +58,74 @@ function formatTokens(count: number): string {
     return `${k}k`;
   }
   return `${count}`;
+}
+
+/**
+ * 流式平滑揭示: 目标文本(store 80ms 节流批次) → rAF 逐帧追赶, 文字连续平滑流出而非整块蹦出。
+ * 本地 state 驱动重渲染仅局限于当前组件自身, 不触发全局与全列表重绘。
+ * 遵循系统 prefers-reduced-motion 约定, 减少动画时直接全量呈现。
+ */
+function useSmoothText(target: string, enabled: boolean): string {
+  const prefersReducedMotion = typeof window !== 'undefined'
+    ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false
+    : false;
+
+  const isSmooth = enabled && !prefersReducedMotion;
+  const shownLenRef = useRef(isSmooth ? 0 : target.length);
+  const [shownLen, setShownLen] = useState(shownLenRef.current);
+  const targetRef = useRef(target);
+  targetRef.current = target;
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!isSmooth) {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      shownLenRef.current = target.length;
+      setShownLen(target.length);
+      return;
+    }
+
+    const tick = () => {
+      const full = targetRef.current;
+      if (shownLenRef.current > full.length) {
+        shownLenRef.current = full.length;
+      }
+      const remaining = full.length - shownLenRef.current;
+      if (remaining <= 0) {
+        rafRef.current = null;
+        return; // 已追平, 待目标下一次变长时由 effect 触发重新调度
+      }
+      // 动态步长: 剩余字数多时自适应加速, 接近终点时平缓递增(每帧最少 1 字符)
+      const step = Math.max(1, Math.ceil(remaining / 8));
+      shownLenRef.current = Math.min(full.length, shownLenRef.current + step);
+      setShownLen(shownLenRef.current);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    if (targetRef.current.length > shownLenRef.current) {
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    }
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [target, isSmooth]);
+
+  return isSmooth ? target.slice(0, shownLen) : target;
+}
+
+/** 流式末段平滑揭示: 仅在流式末尾文本段用已揭示前缀渲染 Markdown; 物化后自动走 MarkdownView 全量直渲 */
+function SmoothMarkdown({ text, className }: { text: string; className?: string }) {
+  const shown = useSmoothText(text, true);
+  return <MarkdownView content={shown} className={className} />;
 }
 
 function renderUserMessageText(text: string, elementById?: Map<number, RefElementMeta> | null) {
@@ -140,6 +208,8 @@ function ThinkingBlock({
   isGenerating?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  // 流式思考过程中逐帧平滑揭示文字; 物化完成后直接全量显示
+  const shownThinking = useSmoothText(thinking, isGenerating);
 
   // Extract latest 3 non-empty lines for collapsed preview(useMemo 必须在条件 return 之前)
   const previewText = useMemo(() => {
@@ -168,7 +238,7 @@ function ThinkingBlock({
 
       {open ? (
         <div className="mt-1 whitespace-pre-wrap break-all border-l-2 border-border pl-2.5 text-[11px] leading-relaxed text-muted-foreground animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
-          {thinking}
+          {shownThinking}
         </div>
       ) : (
         <div
@@ -643,16 +713,19 @@ export function MessageItem({
                   item.type === 'thinking' ? (
                     <ThinkingBlock key={j} thinking={item.thinking} />
                   ) : item.type === 'text' ? (
-                    <MarkdownView
-                      key={j}
-                      content={item.text}
-                      /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
-                      className={
-                        i === lastBubbleIndex && j === seg.items.length - 1 && isStreaming && rawText
-                          ? 'md-caret'
-                          : ''
-                      }
-                    />
+                    i === lastBubbleIndex && j === seg.items.length - 1 && isStreaming && rawText ? (
+                      <SmoothMarkdown
+                        key={j}
+                        text={item.text}
+                        /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
+                        className="md-caret"
+                      />
+                    ) : (
+                      <MarkdownView
+                        key={j}
+                        content={item.text}
+                      />
+                    )
                   ) : null
                 )}
 

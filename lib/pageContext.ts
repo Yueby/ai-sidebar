@@ -1,5 +1,10 @@
 import type { PageContext } from './types';
-import { PICK_ELEMENT_MESSAGE, READ_PAGE_MESSAGE, SEARCH_ELEMENT_MESSAGE } from './types';
+import {
+  PAGE_ACTION_MESSAGE,
+  PICK_ELEMENT_MESSAGE,
+  READ_PAGE_MESSAGE,
+  SEARCH_ELEMENT_MESSAGE,
+} from './types';
 
 /**
  * content 侧提取应答:PageContext + 截断标记。
@@ -254,13 +259,15 @@ export async function resolveElement(
 export interface InteractiveElementInfo {
   /** 生效 ARIA role(getRole 显式+隐式;password 等无隐式 role 的 input 与 contenteditable 兑底 textbox) */
   role: string;
-  /** 可访问名称(AccName 全算法,空白已坍缩;可为空串) */
+  /** 可访问名称(AccName 全算法,空白已坍缩;可为空串时 input/textarea 兑底 placeholder) */
   name: string;
   /** 同 role+name 组内 1 起文档序序号(首现 1 不输出,后续输出 [2]/[3]);全量计数与输出截断解耦 */
   ordinal: number;
   disabled: boolean;
   /** 未被 AX 排除且渲染可见且非零尺寸(不可见时输出 [hidden] 旗标) */
   visible: boolean;
+  /** 文本型 input 的真实 type(password/email/tel/url/日期族等,输出 [type=x] 旗标) */
+  inputType?: string;
 }
 
 /** content.ts 交互元素清单应答载荷 */
@@ -277,10 +284,14 @@ export interface SearchElementsResult {
 
 /**
  * 列出指定标签页的交互元素清单(search_element 底层)。
+ * query 可选:role/可访问名称的大小写不敏感子串过滤(目标超出默认 80 条时的定位出路)。
  * 失败返回 null(不可达/非 http(s)/导航中/无 content script 且补注入失败);
  * content script 不在(扩展加载前已存在的标签页)时补注入后重试一次(动作链路健壮性)。
  */
-export async function searchElementsInTab(tabId: number): Promise<SearchElementsResult | null> {
+export async function searchElementsInTab(
+  tabId: number,
+  query?: string | string[],
+): Promise<SearchElementsResult | null> {
   let url: string;
   try {
     const tab = await browser.tabs.get(tabId);
@@ -290,10 +301,10 @@ export async function searchElementsInTab(tabId: number): Promise<SearchElements
     return null;
   }
   const request = async (): Promise<SearchElementsResult | { error: string } | undefined> => {
-    const res = (await browser.tabs.sendMessage(tabId, { type: SEARCH_ELEMENT_MESSAGE })) as
-      | SearchElementsResult
-      | { error: string }
-      | undefined;
+    const res = (await browser.tabs.sendMessage(tabId, {
+      type: SEARCH_ELEMENT_MESSAGE,
+      query,
+    })) as SearchElementsResult | { error: string } | undefined;
     return res;
   };
   let res = await request().catch(() => undefined);
@@ -314,6 +325,7 @@ export async function searchElementsInTab(tabId: number): Promise<SearchElements
         typeof x.ordinal === 'number' && Number.isInteger(x.ordinal) && x.ordinal > 0 ? x.ordinal : 1,
       disabled: x.disabled === true,
       visible: x.visible !== false,
+      inputType: typeof x.inputType === 'string' && x.inputType ? x.inputType : undefined,
     }];
   });
   return {
@@ -323,5 +335,133 @@ export async function searchElementsInTab(tabId: number): Promise<SearchElements
     truncated: res.truncated === true,
     durationMs: typeof res.durationMs === 'number' && res.durationMs >= 0 ? res.durationMs : 0,
     elements,
+  };
+}
+
+// ===== 页面动作(click/fill/scroll;三期步②,与 search_element 同源寻址)=====
+
+/** ARIA locator:与 search_element 清单行同语义(role + 可访问名称 + 组内序号) */
+export interface ActionLocator {
+  role: string;
+  name: string;
+  /** 同 role+name 组内 1 起序号(缺省 1 = 首个) */
+  ordinal?: number;
+}
+
+/** resolve/动作命中的元素摘要(确认卡预览 + 动作结果) */
+export interface ResolvedActionElement {
+  role: string;
+  name: string;
+  ordinal: number;
+  tagName: string;
+  /** 元素可见文本预览(截 ~80 字) */
+  preview: string;
+}
+
+export type PageActionResult =
+  | {
+      ok: true;
+      url: string;
+      title: string;
+      /** scroll 无定位时缺省 */
+      element?: ResolvedActionElement;
+      /** 动作注记(遮挡 fallback / navigation_started 等,英文,模型可见) */
+      notes: string[];
+    }
+  | {
+      ok: false;
+      url: string;
+      reason: 'not_found' | 'ambiguous' | 'option_not_found' | 'unsupported_element' | 'invalid_value';
+      /** ambiguous 时的同名候选 */
+      matches?: { ordinal: number; tagName: string; preview: string }[];
+      /** option_not_found 时的选项文本(前 20) */
+      options?: string[];
+      /** not_found 时同 role 的现有目标(role "name" 行,帮助模型纠错) */
+      alternatives?: string[];
+    };
+
+/**
+ * 解析 locator(动作前预览,确认卡用)或执行动作(点击/填充/滚动)。
+ * 失败返回 null(不可达/非 http(s)/导航中/补注入失败);结构化失败走 PageActionResult(ok:false)。
+ */
+export async function performPageAction(
+  tabId: number,
+  action: 'resolve' | 'click' | 'fill' | 'scroll',
+  params: { locator?: ActionLocator; value?: string; direction?: string; amount?: number } = {},
+): Promise<PageActionResult | null> {
+  let url: string;
+  try {
+    const tab = await browser.tabs.get(tabId);
+    if (!tab?.url?.startsWith('http')) return null;
+    url = tab.url;
+  } catch {
+    return null;
+  }
+  const request = async (): Promise<PageActionResult | undefined> => {
+    const res = (await browser.tabs.sendMessage(tabId, {
+      type: PAGE_ACTION_MESSAGE,
+      action,
+      ...params,
+    })) as PageActionResult | undefined;
+    return res;
+  };
+  let res = await request().catch(() => undefined);
+  if (!res) {
+    const injected = await ensureContentScript(tabId);
+    if (!injected) return null;
+    res = await request().catch(() => undefined);
+  }
+  if (
+    !res ||
+    typeof res !== 'object' ||
+    typeof res.url !== 'string' ||
+    typeof res.ok !== 'boolean'
+  ) {
+    return null;
+  }
+  if (res.ok) {
+    return {
+      ok: true,
+      url: res.url,
+      title: typeof res.title === 'string' ? res.title : '',
+      element: normalizeActionElement(res.element),
+      notes: Array.isArray(res.notes) ? res.notes.filter((n): n is string => typeof n === 'string') : [],
+    };
+  }
+  const reasons = ['not_found', 'ambiguous', 'option_not_found', 'unsupported_element', 'invalid_value'];
+  return {
+    ok: false,
+    url: res.url,
+    reason: reasons.includes(res.reason as never) ? res.reason : 'not_found',
+    matches: Array.isArray(res.matches)
+      ? res.matches.flatMap((m) => {
+          if (!m || typeof m !== 'object') return [];
+          const x = m as Record<string, unknown>;
+          if (typeof x.tagName !== 'string') return [];
+          return [{
+            ordinal: typeof x.ordinal === 'number' && x.ordinal > 0 ? x.ordinal : 1,
+            tagName: x.tagName,
+            preview: typeof x.preview === 'string' ? x.preview : '',
+          }];
+        })
+      : undefined,
+    options: Array.isArray(res.options) ? res.options.filter((o): o is string => typeof o === 'string') : undefined,
+    alternatives: Array.isArray(res.alternatives)
+      ? res.alternatives.filter((a): a is string => typeof a === 'string')
+      : undefined,
+  };
+}
+
+/** 宽松透传元素摘要;字段不合格返回 undefined */
+function normalizeActionElement(v: unknown): ResolvedActionElement | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  const x = v as Record<string, unknown>;
+  if (typeof x.role !== 'string' || x.role.length === 0 || typeof x.name !== 'string') return undefined;
+  return {
+    role: x.role,
+    name: x.name,
+    ordinal: typeof x.ordinal === 'number' && x.ordinal > 0 ? x.ordinal : 1,
+    tagName: typeof x.tagName === 'string' ? x.tagName : '',
+    preview: typeof x.preview === 'string' ? x.preview : '',
   };
 }

@@ -14,12 +14,25 @@ const SEARCH_ELEMENT_PARAMS = Type.Object({
         'Id of the tab to inspect; omit to use the currently focused tab. Referenced tabs are annotated with tabId in the <page-refs> block of user messages',
     }),
   ),
+  query: Type.Optional(
+    Type.Union(
+      [
+        Type.String(),
+        Type.Array(Type.String({ description: 'Substring of role or accessible name' })),
+      ],
+      {
+        description:
+          'One or more substrings to filter by (case-insensitive, matched against role or accessible name; ANY match counts — OR semantics). Pass a string (e.g. "submit") or an array for multiple kinds at once (e.g. ["button", "textbox"]). Use it when your target is not in the default list — the unfiltered list is capped at 80 entries.',
+      },
+    ),
+  ),
 });
 
-/** 单条清单行:role + "可访问名称" + 稀疏旗标(序号>1 / disabled / hidden 仅在非默认时标注) */
+/** 单条清单行:role + "可访问名称" + 稀疏旗标(序号>1 / type / disabled / hidden 仅在非默认时标注) */
 function renderElementLine(el: InteractiveElementInfo): string {
   const flags: string[] = [];
   if (el.ordinal > 1) flags.push(String(el.ordinal));
+  if (el.inputType) flags.push(`type=${el.inputType}`);
   if (el.disabled) flags.push('disabled');
   if (!el.visible) flags.push('hidden');
   const name = el.name ? ` ${JSON.stringify(el.name)}` : '';
@@ -40,7 +53,7 @@ export function createSearchElementToolDefinition(): AgentTool<
     label: toolLabel('search_element'),
     risk: 'safe',
     description:
-      'List the interactive elements of a web page tab — buttons, links, text fields, selects, checkboxes, tabs, sliders and similar — one per line with their ARIA role and accessible name, e.g. `- button "Sign in"`. Non-default state is flagged (`[disabled]`, `[hidden]`) and duplicate role+name pairs get an ordinal (`[2]`), so each element is uniquely addressable by role + accessible name + ordinal. When the list is truncated, visible elements are listed before hidden ones. Defaults to the currently focused tab; pass tabId to inspect another tab. Use it to discover what can be acted on and how to address each element, when full page text is not needed (read_page returns the page text instead).',
+      'List the interactive elements of a web page tab — buttons, links, text fields, selects, checkboxes, tabs, sliders and similar — one per line with their ARIA role and accessible name, e.g. `- button "Sign in"`. Non-default state is flagged (`[disabled]`, `[hidden]`) and duplicate role+name pairs get an ordinal (`[2]`), so each element is uniquely addressable by role + accessible name + ordinal — click_element and fill_element accept exactly these rows as their locator. Text-like inputs may carry a `[type=x]` hint (e.g. `[type=password]` for password fields), and placeholder-only fields use their placeholder as the accessible name. The unfiltered list is capped at 80 entries (visible elements first); pass `query` to filter by a case-insensitive substring of role or accessible name when your target is not shown. Defaults to the currently focused tab; pass tabId to inspect another tab. Prefer this tool over execute_js whenever you need to locate or verify page elements.',
     parameters: SEARCH_ELEMENT_PARAMS,
     execute: async (_toolCallId, args) => {
       const rawTabId = args?.tabId;
@@ -73,7 +86,11 @@ export function createSearchElementToolDefinition(): AgentTool<
         };
       }
       const startedAt = performance.now();
-      const result = await searchElementsInTab(tabId);
+      const rawQuery = args?.query;
+      const result = await searchElementsInTab(
+        tabId,
+        typeof rawQuery === 'string' || Array.isArray(rawQuery) ? rawQuery : undefined,
+      );
       const totalMs = Math.round(performance.now() - startedAt);
       if (!result) {
         if (import.meta.env.DEV) {
@@ -113,7 +130,11 @@ export function createSearchElementToolDefinition(): AgentTool<
       if (result.truncated) {
         lines.push(
           '',
-          `(Showing ${result.elements.length} of ${result.total} interactive elements; visible elements are prioritized, hidden ones may be omitted. The list is capped at ${SEARCH_ELEMENT_LIMIT} entries.)`,
+          `(Showing ${result.elements.length} of ${result.total} interactive elements; visible elements are prioritized, hidden ones may be omitted. The list is capped at ${SEARCH_ELEMENT_LIMIT} entries.${
+            rawQuery
+              ? ' Narrow the query further if your target is not listed.'
+              : ' Pass the query parameter to filter by role or accessible name if your target is not listed.'
+          })`,
         );
       }
       return {

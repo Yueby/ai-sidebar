@@ -4,6 +4,9 @@ import type { RefTab } from '../pageContext';
 import { createReadPageToolDefinition } from './read-page';
 import { createReadElementToolDefinition } from './read-element';
 import { createSearchElementToolDefinition } from './search-element';
+import { createClickElementToolDefinition } from './click-element';
+import { createFillElementToolDefinition } from './fill-element';
+import { createScrollPageToolDefinition } from './scroll-page';
 import { createFetchUrlToolDefinition } from './fetch-url';
 import { createWebSearchToolDefinition } from './web-search';
 import { isWebSearchConfigured } from '../webSearch';
@@ -52,6 +55,16 @@ export function createPageDiscoveryTools(): AgentTool[] {
   return [createSearchElementToolDefinition()];
 }
 
+/** 页面动作组:click/fill(confirm + 会话级 grant,grantScope=工具@tabId)+ scroll(safe);
+ *  寻址与 search_element 同源(role+name+序号),默认 focused tab、无条件注册 */
+export function createPageActionTools(): AgentTool[] {
+  return [
+    createClickElementToolDefinition(),
+    createFillElementToolDefinition(),
+    createScrollPageToolDefinition(),
+  ];
+}
+
 /** 网页抓取组(safe):fetch_url 自主取回任意公开 URL 的正文(无需 tab 引用) */
 export function createFetchTools(): AgentTool[] {
   return [createFetchUrlToolDefinition()];
@@ -78,13 +91,14 @@ export function createUtilityTools(onCompactContext?: () => void): AgentTool[] {
   ];
 }
 
-/** 最终工具数组——唯一组装点(顺序:utility → web → read → discovery → fetch → gated) */
+/** 最终工具数组——唯一组装点(顺序:utility → web → read → discovery → action → fetch → gated) */
 export function getTools(options: GetToolsOptions): AgentTool[] {
   return [
     ...createUtilityTools(options.onCompactContext),
     ...createWebSearchTools(options.webSearch),
     ...createPageReadTools(options),
     ...createPageDiscoveryTools(),
+    ...createPageActionTools(),
     ...createFetchTools(),
     ...createGatedTools(options),
   ];

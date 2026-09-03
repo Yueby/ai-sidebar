@@ -14,6 +14,10 @@ export type GateRequest =
       summary: string;
       detail?: string;
       toolCallId?: string;
+      /** 会话级 grant:传了 grantScope 才允许用户勾“本会话内允许此类操作” */
+      grantable?: boolean;
+      /** grant 免确认范围键(如 `click_element@12`,工具+tab 粒度;由调用方在解析出真实目标后计算) */
+      grantScope?: string;
     }
   | {
       kind: 'ask';
@@ -23,12 +27,18 @@ export type GateRequest =
     };
 
 export type GateResponse =
-  | { kind: 'confirm'; approved: boolean }
+  | { kind: 'confirm'; approved: boolean; /** 用户勾了会话级 grant(UI 侧应只在 grantable 时提供) */ grant?: boolean }
   | { kind: 'ask'; answer: string; cancelled?: boolean };
 
 export type GateHandler = (req: GateRequest) => Promise<GateResponse>;
 
 let activeHandler: GateHandler | null = null;
+
+/**
+ * 会话级 grant 记录(工具+tab 粒度,如 `click_element@12`)。
+ * 模块级 Set 存活于侧边栏 JS 上下文:面板关闭即整体失效(拍板语义,无需持久化)。
+ */
+const grantedScopes = new Set<string>();
 
 interface PendingGate {
   req: GateRequest;
@@ -59,15 +69,27 @@ export function flushPendingGates(): void {
 /**
  * 发起门控请求并等待 UI 应答(挂起 agent 工具循环属预期行为,无超时)。
  * handler 未注册或执行抛异常 → 按 deny/cancelled 快速返回。
+ * 会话级 grant:命中已记录 scope 时直接 approved(不弹卡、不经 handler);
+ * 应答携带 grant 时记录 scope,供同类后续调用短路。
  */
 export function requestGate(req: GateRequest): Promise<GateResponse> {
+  if (req.kind === 'confirm') {
+    const scope = req.grantScope;
+    if (scope && grantedScopes.has(scope)) {
+      return Promise.resolve({ kind: 'confirm', approved: true });
+    }
+  }
   const h = activeHandler;
   if (!h) return Promise.resolve(denyResponse(req));
   return new Promise<GateResponse>((resolve) => {
     const entry: PendingGate = { req, resolve };
     pending.add(entry);
     h(req)
-      .then(resolve)
+      .then((res) => {
+        const scope = req.kind === 'confirm' ? req.grantScope : undefined;
+        if (res.kind === 'confirm' && res.grant && scope) grantedScopes.add(scope);
+        resolve(res);
+      })
       .catch(() => resolve(denyResponse(req)))
       .finally(() => pending.delete(entry));
   });

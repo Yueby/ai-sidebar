@@ -68,6 +68,9 @@ export const TOOL_LABELS: Record<string, string> = {
   compact_context: '压缩上下文',
   search_web: '网络搜索',
   search_element: '查找交互元素',
+  click_element: '点击页面元素',
+  fill_element: '填写页面元素',
+  scroll_page: '滚动页面',
 };
 
 /** 取工具展示文案:未知工具名原样返回 */
@@ -213,5 +216,7 @@ export const PICK_ELEMENT_MESSAGE = 'ai-sidebar/pick-element' as const;
 export const PICK_ELEMENT_RESULT_MESSAGE = 'ai-sidebar/pick-element-result' as const;
 /** 交互元素清单应答(search_element 发现层,content 侧用 dom-accessibility-api 计算) */
 export const SEARCH_ELEMENT_MESSAGE = 'ai-sidebar/search-element' as const;
+/** 页面动作消息协议:action 'resolve' 解析 locator,'click'/'fill'/'scroll' 执行动作(三期步②) */
+export const PAGE_ACTION_MESSAGE = 'ai-sidebar/page-action' as const;
 /** 交互元素清单输出上限(全量计数后截断;content.ts 与 search_element 工具共用,单一来源) */
 export const SEARCH_ELEMENT_LIMIT = 80;

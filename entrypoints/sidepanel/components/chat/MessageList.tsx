@@ -98,6 +98,8 @@ export function MessageList({
   // 或非程序性 scroll 事件落在离底 > 阈值处(滚动条拖动/惯性滚动;程序性滚动一律直达底部);
   // 视口/内容的程序性尺寸变化不改变跟底状态——挂起前若在跟底,尺寸变化后重新贴底
   const userScrolledUpRef = useRef(false);
+  // 最近一次程序性钉底时间(RO 兑底/强制钉底):钉底后的滚动事件是布局抖动,不视为用户上翻
+  const lastProgrammaticPinRef = useRef(0);
   // 程序性 smooth 滚动进行中:吞掉中途 scroll 事件(落底前距离必然 > 阈值),防止误判挂起
   const programmaticScrollRef = useRef(false);
   // 时间盒:smooth 途中用户拖滚动条时事件被吞、标记无法经"落底"清除 → 350ms 兜底复位
@@ -118,6 +120,8 @@ export function MessageList({
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+    // 钉底瞬间(卡片弹出/消失挤压视口)产生的滚动事件是布局抖动,不据此挂起跟底
+    if (performance.now() - lastProgrammaticPinRef.current < 150) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     if (programmaticScrollRef.current) {
       if (distance <= 80) programmaticScrollRef.current = false; // 已落底
@@ -220,6 +224,7 @@ export function MessageList({
         const el = scrollRef.current;
         if (el) {
           el.scrollTop = el.scrollHeight;
+          lastProgrammaticPinRef.current = performance.now();
         }
       }
     });
@@ -229,6 +234,18 @@ export function MessageList({
     return () => observer.disconnect();
     // isEmpty 翻转时空态/消息态子树切换,contentRef 挂载/卸载需要重新挂观察器
   }, [isEmpty]);
+
+  // 1.6 审批卡挂载/卸载会挤压/还原视口,锚点与 RO 在布局抖动瞬间可能失效:提交后强制钉底一次。
+  // 跟底挂起状态尊重用户阅读位置,不强制。
+  useEffect(() => {
+    if (!userScrolledUpRef.current) {
+      const el = scrollRef.current;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+        lastProgrammaticPinRef.current = performance.now();
+      }
+    }
+  }, [gateRequest, messages.length]);
 
   // 1.5 会话切换检测:首条消息身份变化 → 重置跟底状态并立即贴底(切会话/新会话置底)。
   // 流式期间首条消息恒定,不误触发
