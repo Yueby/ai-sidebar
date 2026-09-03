@@ -195,15 +195,22 @@ export function usePageContextRefs(params: {
   useEffect(() => {
     if (typeof browser === 'undefined' || !browser.tabs?.onActivated) return;
     const onActivated = (info: { tabId: number }) => void switchRefGroup(info.tabId);
+    const onUpdated = (tabId: number, ci: { url?: string }) => {
+      // 聚焦 tab 导航到可引用网址(如从新标签页进入真实网站)时立即建组/恢复组——
+      // 否则非 http 阶段的早退没有重试机会,要切走再切回才识别
+      if (ci.url && tabId === focusedTabIdRef.current) void switchRefGroup(tabId);
+    };
     const onFocused = async (windowId: number) => {
       if (windowId === browser.windows.WINDOW_ID_NONE) return;
       const [tab] = await browser.tabs.query({ active: true, windowId }).catch(() => []);
       if (tab?.id != null) void switchRefGroup(tab.id);
     };
     browser.tabs.onActivated.addListener((info) => onActivated(info));
+    browser.tabs.onUpdated.addListener(onUpdated);
     browser.windows.onFocusChanged.addListener((wid) => void onFocused(wid));
     return () => {
       browser.tabs.onActivated.removeListener(onActivated);
+      browser.tabs.onUpdated.removeListener(onUpdated);
       browser.windows.onFocusChanged.removeListener(onFocused);
     };
   }, [switchRefGroup]);
