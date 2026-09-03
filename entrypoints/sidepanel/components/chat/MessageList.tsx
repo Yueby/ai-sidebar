@@ -17,6 +17,8 @@ import { MessageItem } from './MessageItem';
 import { Button } from '@/components/ui/button';
 
 interface MessageListProps {
+  /** 所属会话标识:透传 MessageItem 作为入场动画抑制的重估边界 */
+  sessionKey: string;
   messages: ChatMessage[];
   isStreaming?: boolean;
   streamingContent?: string;
@@ -79,6 +81,7 @@ export function MessageList({
   pendingGateTotal,
   quietTailCount,
   compaction,
+  sessionKey,
   isCancelled,
   errorMessage,
   onDismissError,
@@ -425,6 +428,7 @@ export function MessageList({
                 activeGateRequest={gateRequest}
                 pendingGateTotal={pendingGateTotal}
                 suppressEntryAnimation={i >= quietFrom}
+                sessionKey={sessionKey}
                 compactionInfo={
                   compaction && msg.timestamp === compaction.summaryTimestamp
                     ? { tokensBefore: compaction.tokensBefore }
@@ -452,6 +456,7 @@ export function MessageList({
                 toolResults={toolResultsByCallId}
                 activeGateRequest={gateRequest}
                 pendingGateTotal={pendingGateTotal}
+                sessionKey={sessionKey}
               />
             )}
           </div>

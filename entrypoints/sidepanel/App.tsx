@@ -314,6 +314,7 @@ export default function App() {
             gateRequest={gate.activeGate?.request ?? null}
             pendingGateTotal={gatePagination.total}
             quietTailCount={quietTailCount}
+            sessionKey={currentSession?.id ?? 'empty'}
             compaction={
               currentSession?.compaction
                 ? {

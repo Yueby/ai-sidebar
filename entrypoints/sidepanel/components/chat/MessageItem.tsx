@@ -43,8 +43,11 @@ interface MessageItemProps {
   pendingGateTotal?: number;
   /** 压缩摘要标记:此消息是 Session.compaction 指向的摘要 user 消息 → 渲染分隔线卡 */
   compactionInfo?: { tokensBefore: number } | null;
+  /** 所属会话标识:入场动画抑制的重估边界(跨会话实例复用时解冻) */
+  sessionKey: string;
   /** 跳过入场动画:该消息刚从 live 流式气泡接管(内容此前已可见),重播入场动画会"闪一下"。
-      实例内冻结(useRef 取首帧值)——finalize 后同 key 实例复用,保持不动画,避免二次闪烁 */
+      会话为界的实例内冻结——同会话内 live→物化→finalize 的对象替换不重估,抑制态保持;
+      跨会话实例复用时按新会话重估,入场动画正常播放 */
   suppressEntryAnimation?: boolean;
 }
 
@@ -385,16 +388,17 @@ export function MessageItem({
   activeGateRequest,
   pendingGateTotal,
   compactionInfo,
+  sessionKey,
   suppressEntryAnimation,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
-  // 入场动画抑制:随消息身份重估——同位置实例在 live→物化→finalize 间复用(key 稳定),
-  // 抑制态冻结可避免 finalize 的 class 翻转闪烁;会话切换(消息对象全变)时重读 prop,
-  // 入场动画按新会话正常播放
+  // 入场动画抑制:重估以会话为界——同会话内 live→物化→finalize 的对象替换不重估
+  // (抑制态冻结,避免 finalize 时抑制解除导致动画重播闪烁);跨会话实例复用
+  // (位置键跨会话命中)时按新会话重估,入场动画正常播放
   const suppressAnimRef = useRef(Boolean(suppressEntryAnimation));
-  const lastMessageRef = useRef(message);
-  if (lastMessageRef.current !== message) {
-    lastMessageRef.current = message;
+  const lastSessionKeyRef = useRef(sessionKey);
+  if (lastSessionKeyRef.current !== sessionKey) {
+    lastSessionKeyRef.current = sessionKey;
     suppressAnimRef.current = Boolean(suppressEntryAnimation);
   }
 
