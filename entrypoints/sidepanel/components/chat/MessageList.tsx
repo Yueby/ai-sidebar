@@ -103,8 +103,6 @@ export function MessageList({
   // 时间盒:smooth 途中用户拖滚动条时事件被吞、标记无法经"落底"清除 → 350ms 兜底复位
   const programmaticScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartYRef = useRef<number | null>(null);
-  const scrollRafId = useRef<number | null>(null);
-  const lastScrollTimeRef = useRef<number>(0);
   // 首条消息身份(会话切换检测用)
   const firstMessageKeyRef = useRef<string | null>(null);
 
@@ -150,15 +148,12 @@ export function MessageList({
     setShowScrollBottom(false);
   }, []);
 
-  const smoothScrollToBottom = useCallback(() => {
-    scrollToBottom(true);
-  }, [scrollToBottom]);
-
   const handleManualScrollToBottom = useCallback(() => {
     userScrolledUpRef.current = false;
     setShowScrollBottom(false);
-    smoothScrollToBottom();
-  }, [smoothScrollToBottom]);
+    // 用户主动回底:smooth 只服务此场景;流式跟底由锚点钉底 + RO 瞬时贴底承接
+    scrollToBottom(true);
+  }, [scrollToBottom]);
 
   // 用户主动滚动手势:wheel 向上 / touch 下拖(仅当确实可向上滚时)
   const handleWheel = useCallback(
@@ -204,8 +199,17 @@ export function MessageList({
     [suspendFollow]
   );
 
-  // 1. ResizeObserver: 同时观察内容容器与视口容器。跟底状态下任何尺寸变化(内容跳变、
-  // 审批槽位弹出/消失挤压视口)都重新贴底;挂起状态不动作,保持用户阅读位置
+  const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
+  // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(随消息身份重估)
+  const quietFrom = Math.max(0, messages.length - (quietTailCount ?? 0));
+  // 键 = 过滤后位置(msg-${i})。live 槽键 = 其「未来物化位置」——message_end 时
+  // in-flight 消息顶替 live 槽实例(零重挂载,MarkdownView memo 复用),finalize 后索引不变、
+  // 实例跨转录落盘持续复用,全程无 class/实例翻转 → 肉眼无闪烁
+  const filteredMessages = messages.filter((m) => m.role !== 'toolResult');
+
+  // 1. ResizeObserver(兜底钉底): 同时观察内容容器与视口容器。跟底状态下任何尺寸变化(内容跳变、
+  //    审批槽位弹出/消失挤压视口)都瞬时贴底(无动画);挂起状态不动作,保持用户阅读位置。
+  //    流式增长的常规钉底由列表末尾锚点(overflow-anchor)承接,本观察器是锚点失效时的 JS 兜底。
   useEffect(() => {
     const contentEl = contentRef.current;
     const scrollEl = scrollRef.current;
@@ -223,7 +227,8 @@ export function MessageList({
     observer.observe(contentEl);
     if (scrollEl) observer.observe(scrollEl);
     return () => observer.disconnect();
-  }, []);
+    // isEmpty 翻转时空态/消息态子树切换,contentRef 挂载/卸载需要重新挂观察器
+  }, [isEmpty]);
 
   // 1.5 会话切换检测:首条消息身份变化 → 重置跟底状态并立即贴底(切会话/新会话置底)。
   // 流式期间首条消息恒定,不误触发
@@ -241,41 +246,6 @@ export function MessageList({
       firstMessageKeyRef.current = firstKey;
     }
   }, [messages]);
-
-  // 2. 状态依赖监听 (涵盖发送瞬间、isStreaming 切换、内容追加、工具标签变更、轮次提交、Gate 请求出现)
-  useEffect(() => {
-    if (userScrolledUpRef.current) return;
-
-    const now = performance.now();
-    // 节流平滑滚动 (~80ms)，避免高频 token 动画排队打断
-    if (now - lastScrollTimeRef.current > 80) {
-      lastScrollTimeRef.current = now;
-      smoothScrollToBottom();
-    } else if (!scrollRafId.current) {
-      scrollRafId.current = requestAnimationFrame(() => {
-        scrollRafId.current = null;
-        lastScrollTimeRef.current = performance.now();
-        if (!userScrolledUpRef.current) {
-          smoothScrollToBottom();
-        }
-      });
-    }
-
-    return () => {
-      if (scrollRafId.current) {
-        cancelAnimationFrame(scrollRafId.current);
-        scrollRafId.current = null;
-      }
-    };
-  }, [
-    messages,
-    isStreaming,
-    streamingContent,
-    streamingThinking,
-    activeToolLabels,
-    gateRequest,
-    smoothScrollToBottom,
-  ]);
 
   const toolResultsByCallId = useMemo(() => {
     const map = new Map<string, ToolResultMessage>();
@@ -300,14 +270,6 @@ export function MessageList({
     }
     return activeToolLabels.filter((n) => !materialized.has(n));
   }, [messages, activeToolLabels, toolResultsByCallId]);
-
-  const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
-  // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(随消息身份重估)
-  const quietFrom = Math.max(0, messages.length - (quietTailCount ?? 0));
-  // 键 = 过滤后位置(msg-${i})。live 槽键 = 其「未来物化位置」——message_end 时
-  // in-flight 消息顶替 live 槽实例(零重挂载,MarkdownView memo 复用),finalize 后索引不变、
-  // 实例跨转录落盘持续复用,全程无 class/实例翻转 → 肉眼无闪烁
-  const filteredMessages = messages.filter((m) => m.role !== 'toolResult');
 
   return (
     <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-background">
@@ -343,7 +305,7 @@ export function MessageList({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onKeyDown={handleListKeyDown}
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 pt-2.5 pb-2.5"
+        className="messages-viewport flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 pt-2.5 pb-2.5"
       >
         {isEmpty ? (
           <div className="flex min-h-full flex-col justify-center px-3 py-6 text-center animate-in fade-in-0 duration-150 motion-reduce:animate-none">
@@ -459,6 +421,9 @@ export function MessageList({
                 sessionKey={sessionKey}
               />
             )}
+            {/* 钉底锚点:overflow-anchor 让浏览器在内容增长时保持本元素视口位置不变
+                (跟底零位移);用户上翻挂起时锚点离开视口,浏览器自动停止锚定 */}
+            <div aria-hidden className="messages-anchor h-px shrink-0" />
           </div>
         )}
       </div>
