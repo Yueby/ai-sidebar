@@ -129,7 +129,9 @@ export function useChatTurn(params: {
         ...session,
         title: nextTitle,
         messages: messagesWithUser,
-        draft: { input: '', refTabs: [], pickedElements: [] },
+        // 发送后保留 refTabs:会话的引用上下文跨消息存活(决策 13 修订;参考 google/llm-sidebar-with-context 的 pin 模型);
+        // 输入与框选元素照常清空(元素是一次性指代,持续重发是噪音)
+        draft: { input: '', refTabs: session.draft?.refTabs ?? [], pickedElements: [] },
         updatedAt: Date.now(),
       };
       const nextSessions = allSessions.map((s) => (s.id === session!.id ? updatedSession : s));

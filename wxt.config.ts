@@ -25,5 +25,7 @@ export default defineConfig({
     resolve: {
       alias: { '@': path.resolve() },
     },
+    // dev server 层的文件监听同样强制轮询(watchOptions 只覆盖部分监听层)
+    server: { watch: { usePolling: true, interval: 500 } },
   }),
 });
