@@ -14,7 +14,7 @@
 
 - MVP(已完成,待手动回归):sidePanel 聊天(流式/Markdown/工具卡片/思考折叠区/token 脚注/多会话/会话草稿)+ 读取当前网页(`read_page`/`read_element` 工具按需读取,框选元素 + vision 读图)+ BYOK 多提供商(三种协议)
 - 二期:划词快捷提问、多模型快捷切换、会话重命名/导出
-- 三期:agent 页面操作工具层(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;browser-use/Stagehand/LaVague 服务端形态不可用)
+- 三期(规格 v2,见 §8.4):ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;未实施
 
 ## 2. 技术栈与硬约定
 
@@ -45,7 +45,7 @@
 7. **历史会话 = Header 内 DropdownMenu**(非 Dialog);页面上下文**默认开启**,引用 chip 在 Composer 上方管理;模型/思考等级切换在 Composer 内;Composer 工具栏 `[+ ▾]` = 框选元素/引用页面统一入口;tab chip 带元素 DropdownMenu。
 8. **UI 禁用紫色/violet,一律 shadcn 默认中性样式**;严禁自定义组件/样式/变体(button.tsx 曾被加 xs/icon-xs,已重置;`components/ui/` 必须保持官方原样)。
 9. **UI 由 designer 角色负责,主 agent 不擅自设计**(设计稿先行、确认后再实现;§5 保留当年的设计稿仅作历史参考,实际实现以代码为准)。
-10. **agent 编排用 pi-agent-core**(`Agent` + `streamSimple`),页面操作工具自研(AgentTool);三期参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖。
+10. **agent 编排用 pi-agent-core**(`Agent` + `streamSimple`),页面操作工具自研(AgentTool);三期规格 v2 = ARIA 定位与页面动作原语(见 §8.4),chrome.debugger 仅条件触发、不排期。
 11. 聊天页功能基线(回归清单,不可丢):流式输出、停止按钮(取消保留已生成部分)、Enter 发送/Shift+Enter 换行/IME 组合词不误发、历史会话切换/删除/新建、消息复制、自动滚动(用户上翻不打断)、错误/取消的 UI 呈现、工具调用卡片、思考折叠区、token 脚注、会话草稿。
 12. **引用架构定稿 = `<page-refs>` 块**:引用元数据发送时序列化进 user 消息 content,此后永不改变;无 refSnapshot 字段、无 convertToLlm、system prompt 不注入引用目录(只放协议常量规则);`ChatMessage` 回归纯 pi 联合,零自定义字段。
 13. **会话草稿**:`Session.draft { input, refTabs, pickedElements }` 随会话持久化(IndexedDB 防抖落盘);新会话自动引用当前页;空会话离开即回收;发送即清空草稿。
@@ -396,7 +396,22 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome 加载扩展):重点 = 普通对话、read_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移;另过一遍设置页全流程(添加提供商→测试→拉模型→同步→改参数→设为当前→聊天)。
 2. websearch / fetch_url 工具(读链接目标内容)。
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)。
-4. 三期页面操作:screenshot → scripting 写动作 → 反馈闭环 → debugger 最后手段(参考 Nanobrowser 的 chrome.debugger/CDP 动作层,只借鉴不依赖;execute_js 已完成)。
+4. **三期规格 v2:ARIA 定位与页面动作原语**(原"页面操作"粗粒度条目替换;chrome.debugger 条件触发行保留,见 ⑤):
+   - **引库决策**:唯一新依赖 `dom-accessibility-api`(~12KB gzip,零依赖,114M/周)——getRole(含隐式 role,原生反射不算)/computeAccessibleName(AccName 全算法)/isDisabled;aria-query/axe-core/@testing-library/原生反射全否决;交互判定白名单自研 ~30 行(button/link/input/select/textarea/combobox/slider/tab 等 role 子集 + tabIndex≥0)
+   - **五个新工具**(命名矩阵内):
+     1. `search_element`(safe,发现层):交互元素清单,ARIA role+可访问名称+disabled+可见性,重名 `[2]` 序号消歧,截断 80 条;**返回格式 = AI 友好紧凑行式**(`- button "Sign in" [enabled, visible]`,AhYi8/ariaSnapshot 系已验证对 LLM 最优);实现 = dom-accessibility-api + content script 侧计算(无 CDP/无新权限)
+     2. `click_element`(confirm+会话 grant):合成事件序列(untrusted;React/Vue 兼容) + 遮挡命中检测 + 固定 fallback 序列;受控组件 fill 法(focus→全选→native setter→flush input/change)
+     3. `fill_element`(confirm+会话 grant):分类 fill(text/select/checkbox/toggle,照 AhYi8 actions.ts:250-518 模式)
+     4. `scroll_page`(safe):scrollBy/scrollIntoView
+     5. `screenshot_page`(confirm,视觉反馈):captureVisibleTab(仅活动 tab,明示限制)
+   - **时序等待**:不设独立工具——动作内置有界 settle(readyState+rAF settle ≤3s;MutationObserver 100ms 静默 + 3s 天花板模式,参考 AhYi8 waitForStableDom)
+   - **反馈**:动作返回 Before/After 段(元素文本 delta/可见性),结构化错误前缀(`tab_closed:`/`element_not_found:`/`ambiguous_locator (N matches):`/`navigation_started:`)
+   - **会话级 grant 扩展**(gate.ts):confirm 卡加"本会话内允许此类操作"复选框 → grant 存运行时切片(面板关闭即失效);requestGate 查 grant 短路;execute_js 永不可 grant
+   - **动作前反馈**:目标元素 400ms 轮廓闪烁(高亮)
+   - **寻址双轨**:用户框选 = CSS selector(picked-element 块,不变);模型动作 = ARIA role+name locator(新);默认目标 = focused tab(tabId 可选)
+   - **实施序列**:①search_element → ②click/fill + scroll + grant 扩展 + 高亮 → ③screenshot_page → ④返回模板 v2(Before/After) → ⑤chrome.debugger(条件触发:isTrusted 拒绝率构成实际阻断或 closed shadow DOM 真实需求;不排期)
+   - **参考**:AhYi8/browser-ai-assistant(CDP 驱动,特权层不可移植;可搬=AX 行格式/噪点过滤/预算截断/受控 fill 法/遮挡检测/wait_for_state 有界轮询/fail-closed 校验——克隆在 `.slim/clonedeps/repos/AhYi8__browser-ai-assistant`,只读)
+   - **验收标尺**:模型经 search→click 链完成真实登录页填字点按钮,全程零手写 JS
 5. 发布:图标 + `wxt zip`。
 
 > 已完成(2026-09-02):`err: any` → `unknown`(lib/utils.ts `getErrorMessage` helper,App/SettingsMainView/ProviderDialog 5 处收窄);dev 可观测性(content.ts 对未知 `ai-sidebar/` 消息 DEV 下 console.warn)。用户拍板不做:highlight.js 语言包裁剪(本地加载 941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
