@@ -26,10 +26,10 @@ function FaviconIcon({ url, className = 'size-3.5' }: { url: string; className?:
 }
 
 /**
- * 标签页引用区 (参考 Gemini 侧边栏三态设计):
- * 1. 单引用态: 正在引用「页面标题」标签页 + X 移除
+ * 标签页引用区 (独立小控件，位于输入框卡片上方，底部被输入框压住呈现 Gemini 式层叠):
+ * 1. 单引用态: 独立小卡片，顶部圆角 + 边框，底部留出空间由输入框卡片向上负 margin 压住
  * 2. 多引用折叠态: 多个网站 favicon + 正在引用 N 个标签页 + 展开箭头
- * 3. 展开态: 标题条 + 逐行引用列表(favicon + 标题 + X), hover 悬浮
+ * 3. 展开态: 标题条 + 逐行引用列表(favicon + 标题 + X)
  */
 export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
   const [expanded, setExpanded] = useState(false);
@@ -38,13 +38,13 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
 
   const count = refTabs.length;
 
-  // 1. 单引用态: 极简通栏条目
+  // 1. 单引用态: 独立卡片控件，底部垫高 pb-3 供输入框 -mt-2 压住
   if (count === 1) {
     const tab = refTabs[0]!;
     return (
-      <div className="w-full select-none animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+      <div className="relative z-0 w-full select-none animate-in fade-in-0 duration-150 motion-reduce:animate-none">
         <div
-          className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-t-lg border-b border-border/50 bg-muted/40 text-xs text-foreground group/single transition-colors hover:bg-muted/60"
+          className="flex items-center justify-between gap-2 px-2.5 pt-1.5 pb-3 rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground group/single transition-colors hover:bg-muted/60"
           title={tab.url}
         >
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -76,13 +76,15 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
     );
   }
 
-  // 2 & 3. 多引用态 (折叠 / 展开)
+  // 2 & 3. 多引用态 (折叠 / 展开): 独立卡片控件
   return (
-    <div className="w-full select-none rounded-t-lg border-b border-border/50 bg-muted/40 text-xs text-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+    <div className="relative z-0 w-full select-none rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
       {/* 头部摘要栏 (点击可展开/收起) */}
       <div
         onClick={() => setExpanded((prev) => !prev)}
-        className="flex items-center justify-between gap-2 px-2.5 py-1.5 cursor-pointer hover:bg-muted/60 transition-colors"
+        className={`flex items-center justify-between gap-2 px-2.5 pt-1.5 cursor-pointer hover:bg-muted/60 transition-colors ${
+          expanded ? 'pb-1.5' : 'pb-3'
+        }`}
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {/* 多 Favicon 紧凑堆叠 / 并排 */}
@@ -122,7 +124,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
 
       {/* 展开列表 */}
       {expanded && (
-        <div className="px-1.5 pb-1.5 pt-0.5 space-y-0.5 max-h-40 overflow-y-auto border-t border-border/30 animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
+        <div className="px-1.5 pb-3 pt-0.5 space-y-0.5 max-h-40 overflow-y-auto border-t border-border/30 animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
           {refTabs.map((t, idx) => (
             <div
               key={t.id}

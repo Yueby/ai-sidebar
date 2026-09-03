@@ -475,11 +475,16 @@ export function ChatInput({
   );
 
   return (
-    <div className="bg-background p-2.5 space-y-1.5 shrink-0">
-      {/* Input container (内嵌顶部的标签页引用区 + TipTap 编辑器 + 底部工具栏) */}
-      <div className="relative flex flex-col rounded-lg border bg-background focus-within:ring-1 focus-within:ring-ring overflow-hidden">
-        {/* 标签页引用区 (参考 Gemini: 单引用通栏 / 多引用折叠与展开列表) */}
-        <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
+    <div className="bg-background p-2.5 shrink-0">
+      {/* 标签页引用区 (独立小控件, 位于输入框卡片上方, 底部被输入框轻微压住层叠) */}
+      <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
+
+      {/* Input container (TipTap 编辑器 + 底部工具栏) */}
+      <div
+        className={`relative z-10 flex flex-col rounded-lg border bg-background shadow-xs focus-within:ring-1 focus-within:ring-ring ${
+          refTabs && refTabs.length > 0 ? '-mt-2' : ''
+        }`}
+      >
 
         {/* 斜杠命令浮层:输入框上方 */}
         {slashOpen && onCommand && (
