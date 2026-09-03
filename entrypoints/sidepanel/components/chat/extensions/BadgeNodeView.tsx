@@ -8,12 +8,14 @@ import { Link, SquareMousePointer, X } from 'lucide-react';
  * url 徽章用 Link 图标、element 徽章用框选图标;handleUnlink/URL 菜单按移植清单省略。
  */
 export function BadgeNodeView({ node, editor, getPos, deleteNode }: NodeViewProps) {
-  const { label, title, badgeType } = node.attrs as {
+  const { label, badgeType, elementId, selector } = node.attrs as {
     label: string;
-    title: string;
     badgeType: string;
+    elementId: number;
+    selector: string;
   };
   const Icon = badgeType === 'url' ? Link : SquareMousePointer;
+  const title = badgeType === 'url' ? label : `#${elementId} · ${selector}`;
 
   /** 整块删除:节点 + 紧随其后的一个空白字符(若为文本且以空白开头) */
   const deleteBadgeWithSpace = (event: React.MouseEvent) => {

@@ -15,50 +15,25 @@ import { normalizeBaseUrl } from './providers';
 import type { RefTab } from './pageContext';
 import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
 import { getTools } from './tools/registry';
-import { collectPageRefs, ELEMENT_PREVIEW_LIMIT, PAGE_REFS_TAG, parsePageRefs } from './pageRefs';
+import { collectPageRefs, PAGE_REFS_TAG, parsePageRefs, renderPageRefsBlock } from './pageRefs';
 
 export type { AgentEvent } from '@earendil-works/pi-agent-core';
 
-// ── 请求时元素内容内嵌:存储仍为 [element:N] 标记 + refs 块,LLM 请求副本原位展开 ──────────────────
-
-const ELEMENT_MARKER_TEST_RE = /\[(?:element|元素):\d+\]/;
-const ELEMENT_MARKER_GLOBAL_RE = /\[(?:element|元素):(\d+)\]/g;
-
-type RefElement = PageRefs['elements'][number];
+// ── 元素引用单一表示:存储 user content 内嵌自闭合 <picked-element …/> 块,LLM 视图与存储一致 ──
 
 /**
- * user 消息文本段 → LLM 请求文本:元素标记([element:N],兼容旧 [元素:N])用该消息
- * 自身 refs 块中对应元素**原位展开**为 <picked-element> 块,展开体 = preview(发送时
- * 采集的 300 字 excerpt,达上限追加 [...truncated]);无对应 id 的伪造/悬空标记剥除。
- * 只处理 <page-refs> 之前的文本段,refs JSON 原样保留(元数据 + 工具白名单语义)。
+ * user 消息 LLM 请求副本:refs 块剥除 elements 数组(元素已由消息文本内的
+ * <picked-element …/> 块内联承载,元数据仅存储层/UI 需要,块内只留 tabs);
+ * 无块/无元素的纯文本消息原样返回(保持引用稳定,避免无谓副本)。
  */
-function toLlmUserText(content: string): string {
-  if (!ELEMENT_MARKER_TEST_RE.test(content)) return content;
-  const blockStart = content.indexOf(`<${PAGE_REFS_TAG}>`);
-  const textPart = blockStart >= 0 ? content.slice(0, blockStart) : content;
-  const blockPart = blockStart >= 0 ? content.slice(blockStart) : '';
-  const elementsById = new Map<number, RefElement>();
-  for (const e of parsePageRefs(content)?.elements ?? []) {
-    elementsById.set(e.id, e);
-  }
-  const expanded = textPart.replace(ELEMENT_MARKER_GLOBAL_RE, (marker, idStr: string) => {
-    const el = elementsById.get(parseInt(idStr, 10));
-    if (!el) return ''; // 伪造/悬空标记:剥除
-    const preview = el.preview ?? '';
-    // 属性转义:防病态 selector/tagName 中的引号破坏 picked-element 标签结构
-    const esc = (v: string) => v.replace(/"/g, '&quot;');
-    const body = preview
-      ? `${preview}${preview.length >= ELEMENT_PREVIEW_LIMIT ? '\n[...truncated]' : ''}`
-      : '';
-    return `<picked-element tabId="${el.tabId}" selector="${esc(el.selector)}" tagName="${esc(el.tagName)}">\n${body}\n</picked-element>`;
-  });
-  return expanded + blockPart;
-}
-
-/** user 消息请求副本:仅变换文本段,不改消息形状;转录外副本,持久化仍是标记 + refs 块 */
 function toLlmMessage(m: ChatMessage): ChatMessage {
   if (m.role !== 'user' || typeof m.content !== 'string') return m;
-  return { ...m, content: toLlmUserText(m.content) };
+  const blockStart = m.content.indexOf(`<${PAGE_REFS_TAG}>`);
+  if (blockStart < 0) return m;
+  const refs = parsePageRefs(m.content);
+  if (!refs || refs.elements.length === 0) return m;
+  const text = m.content.slice(0, blockStart).replace(/\n+$/, '');
+  return { ...m, content: text + renderPageRefsBlock({ tabs: refs.tabs, elements: [] }) };
 }
 
 const API_IMPLEMENTATIONS = {
@@ -119,7 +94,7 @@ export function buildSystemPrompt(): string {
     '',
     'User messages may carry a <page-refs> block — the browser context referenced at send time:',
     '- tabs lists referenced tabs; tabId is the read handle; focused = the tab the user was viewing (context, not the referent).',
-    "- <picked-element …> blocks in message text embed a picked element's preview at the point of reference; attributes (tabId/selector) are the re-read handle via read_element. Previews are excerpts; full-page content is read via read_page.",
+    "- <picked-element …> blocks in message text mark an element the user deliberately picked; their attributes (tabId/selector) are the handle — call read_element with them to read the element's content when your answer needs it. Full-page content is read via read_page.",
     '- Inline tokens like [url: example.com] are URLs the user pasted as references — self-describing; treat them as plain links, not element markers.',
     '- Tool results are live and win over the block metadata when they conflict.',
   );

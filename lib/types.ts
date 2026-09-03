@@ -112,20 +112,6 @@ export interface PageRefs {
 }
 
 /**
- * 元素内嵌标记(协议英文,#294 延伸):`[element:N]`(N 为 1 起整数,按消息内框选顺序,
- * 与 <page-refs> 块 elements[].id 对应)。标记出现在用户消息文本原位,模型直接可见,
- * 不做剥离/转义;UI 永远渲染为内容预览徽章,不向用户暴露原文。
- */
-export function makeElementMarker(id: number): string {
-  return `[element:${id}]`;
-}
-export const ELEMENT_MARKER_RE = /\[element:(\d+)\]/g;
-/** 旧消息渲染兼容:协议英文化前的中文标记 */
-export const LEGACY_ELEMENT_MARKER_RE = /\[元素:(\d+)\]/g;
-/** 新旧标记合并匹配(旧会话渲染/剥离兼容) */
-export const ANY_ELEMENT_MARKER_RE = /\[(?:element|元素):(\d+)\]/g;
-
-/**
  * 会话消息 = pi-ai 消息联合,直接按 pi 形状持久化。
  * 好处:agent 回放零转换;assistant 消息自带 thinking 块/toolCall/usage。
  * 旧版 {id, role:'user'|'assistant', content, createdAt} 结构由 storage.sanitizeMessage 迁移;

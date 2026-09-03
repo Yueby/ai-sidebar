@@ -6,17 +6,10 @@ import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
 import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
-import { resolveElement, getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
-import { ELEMENT_PREVIEW_LIMIT } from '@/lib/pageRefs';
+import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
 import { normalizePickedElements } from '@/lib/types';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
-
-/** html → 纯文本:DOM 解析取 textContent,空白折叠(元素实时预览采集用) */
-function htmlToPlainText(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  return (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
-}
 
 /**
  * 对话轮次域 hook(编排层):handleSendMessage(唯一发送入口)/handleStopGeneration。
@@ -47,17 +40,12 @@ export function useChatTurn(params: {
   // turn 身份守卫:打断重发后旧 turn 的拆卸链与新 turn 并发,seq 不匹配者不得触碰共享状态
   const turnSeqRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
-  // 发送解析窗口守卫:resolveElement 期间(非流式)防双击双发
-  const sendInFlightRef = useRef(false);
   // AI 自主压缩标记:compact_context 工具 execute 只置位;轮末由本 hook 消费
   const compactRequestedRef = useRef(false);
 
   // AI Chat & Agent Loop
   const handleSendMessage = useCallback(
     async (userText: string) => {
-      // resolve 解析窗口防双击:窗口内(非流式)的第二次点击静默忽略,
-      // 避免 resolveElement 耗时期间双发(BYOK 双倍计费);流式中的打断重发不受影响
-      if (sendInFlightRef.current) return;
       const store = useAppStore.getState();
       // 若当前正在流式/有 pending 门控/压缩中，按发送视为用户打断当前轮次
       if (isStreaming || hasPendingGate || isCompacting) {
@@ -107,24 +95,14 @@ export function useChatTurn(params: {
           ...(t.id === focusedTabId ? { focused: true } : {}),
         }));
         // id = 数据侧 elementId(与 ChatInput 插入的 [element:N] 标记永久对齐)。
-        // 发送时采集元素实时预览(resolveElement 与 read_element 同源):html 剥标签取
-        // textContent 截 ELEMENT_PREVIEW_LIMIT 字;失败沿用框选时的存量 preview,不阻塞发送。
-        // 解析窗口置位守卫,完成后立即复位(此后由 isStreaming 接管)
-        sendInFlightRef.current = true;
-        const resolved = await Promise.all(
-          snapElements.map(async (e) => {
-            const el = await resolveElement(e.tabId, e.selector).catch(() => null);
-            const text = el ? htmlToPlainText(el.html) : '';
-            return { element: e, preview: text.slice(0, ELEMENT_PREVIEW_LIMIT) || e.preview };
-          }),
-        );
-        sendInFlightRef.current = false;
-        const elements = resolved.map(({ element, preview }) => ({
-          id: element.elementId,
-          tabId: element.tabId,
-          selector: element.selector,
-          tagName: element.tagName,
-          preview,
+        // 元素内容不随消息携带:模型按 refs 块内 tabId+selector 调 read_element 获取;
+        // preview 保持框选时的 100 字存量(仅 UI chip label 用)
+        const elements = snapElements.map((e) => ({
+          id: e.elementId,
+          tabId: e.tabId,
+          selector: e.selector,
+          tagName: e.tagName,
+          preview: e.preview,
         }));
         pageRefs = { tabs, elements };
       }
@@ -251,7 +229,9 @@ export function useChatTurn(params: {
           // 直接落 result.messages 会丢被压缩截断的前缀消息)
           const finalizedSession: Session = {
             ...latest,
-            messages: [...session.messages, ...result.newMessages],
+          // B-1 修复:落盘用原始 userMessage(newMessages[0] 是 toLlmMessage 剥过
+          // elements 的请求副本,泄入存储会丢 refs.elements——引用列表消失+白名单退化)
+          messages: [...session.messages, userMessage, ...result.newMessages.slice(1)],
             updatedAt: Date.now(),
           };
           dropPendingDraftSave(finalizedSession.id);

@@ -3,18 +3,20 @@ import { NodeSelection, Plugin, PluginKey, TextSelection } from '@tiptap/pm/stat
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { BadgeNodeView } from './BadgeNodeView';
+import { serializePickedElementBlock } from './editorSerialize';
 
 const badgeSelectionKey = new PluginKey('inlineBadgeSelection');
 
 export interface InlineBadgeAttrs {
-  badgeType: 'url' | 'path' | 'image' | 'element';
-  identity: string;
+  badgeType: 'url' | 'element';
+  /** element 徽章:数据侧标记号(与 refs.elements[].id 一致) */
+  elementId: number;
+  tabId: number;
+  selector: string;
+  tagName: string;
   label: string;
-  kind: string;
+  /** 消息文本内的自闭合块字符串(单一表示;extract 直接消费) */
   serialized: string;
-  referenceData: string;
-  imageBadgeId: string | null;
-  title: string;
 }
 
 export const InlineBadge = Node.create({
@@ -28,22 +30,37 @@ export const InlineBadge = Node.create({
   addAttributes() {
     return {
       badgeType: { default: 'element' },
-      identity: { default: '' },
+      elementId: { default: 0 },
+      tabId: { default: 0 },
+      selector: { default: '' },
+      tagName: { default: '' },
       label: { default: '' },
-      kind: { default: '' },
       serialized: { default: '' },
-      referenceData: { default: '' },
-      imageBadgeId: { default: null },
-      title: { default: '' },
     };
   },
 
   parseHTML() {
-    return [{ tag: 'span[data-inline-badge]' }];
+    return [
+      {
+        tag: 'picked-element',
+        getAttrs: (el) => {
+          const e = el as HTMLElement;
+          const attrs = {
+            badgeType: 'element' as const,
+            elementId: parseInt(e.getAttribute('elementId') ?? '', 10) || 0,
+            tabId: parseInt(e.getAttribute('tabId') ?? '', 10) || 0,
+            selector: e.getAttribute('selector') ?? '',
+            tagName: e.getAttribute('tagName') ?? '',
+            label: e.getAttribute('label') ?? '',
+          };
+          return { ...attrs, serialized: serializePickedElementBlock(attrs) };
+        },
+      },
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['span', mergeAttributes(HTMLAttributes, { 'data-inline-badge': '' })];
+    return ['picked-element', mergeAttributes(HTMLAttributes)];
   },
 
   addNodeView() {

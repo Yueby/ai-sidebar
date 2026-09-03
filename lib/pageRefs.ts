@@ -9,9 +9,6 @@ export const PAGE_REFS_TAG = 'page-refs';
 
 const BLOCK_RE = /<page-refs>\n([\s\S]*?)\n<\/page-refs>/;
 
-/** 元素预览字符上限(refs 块随消息持久化,展开体按此判 [...truncated]) */
-export const ELEMENT_PREVIEW_LIMIT = 300;
-
 /** 渲染为可直接追加到消息文本尾部的块(前导空行);JSON 单行紧凑 */
 export function renderPageRefsBlock(refs: PageRefs): string {
   const tabs = refs.tabs.map((t) => ({

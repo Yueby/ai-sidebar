@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
+import { elementChipLabel } from '@/lib/elementLabel';
 import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
@@ -33,7 +34,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ContextPanel, type RoleShares } from './ContextPanel';
 import { SlashMenu } from './SlashMenu';
 import { InlineBadge } from './extensions/InlineBadge';
-import { buildBadgeAttrs, buildUrlBadgeAttrs, extractEditorState, isSingleUrlText } from './extensions/editorSerialize';
+import { buildBadgeAttrs, buildUrlBadgeAttrs, extractEditorState, isSingleUrlText, serializePickedElementBlock } from './extensions/editorSerialize';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -97,7 +98,7 @@ export function ChatInput({
   onCompact,
   onCommand,
 }: ChatInputProps) {
-  // 提取文本内部 state:由编辑器 onUpdate 驱动(序列化含 [元素:N] 原文),
+  // 提取文本内部 state:由编辑器 onUpdate 驱动(序列化含 <picked-element …/> 块原文),
   // 挂载时用会话草稿 seed(App 以 key=sessionId 重挂载),变化经 onInputChange 写回草稿。
   const [text, setText] = useState(initialInput);
   const [activeTabMeta, setActiveTabMeta] = useState<RefTab | null>(null);
@@ -258,7 +259,7 @@ export function ChatInput({
       },
     },
     onUpdate: ({ editor: ed }) => {
-      // 序列化文本含 [元素:N] 原文 → reportText 同步 state + 草稿链
+      // 序列化文本含 <picked-element …/> 块原文 → reportText 同步 state + 草稿链
       reportText(extractEditorState(ed).text);
     },
     // 中文 IME:ProseMirror 原生处理 composition,无需任何自定义代码
@@ -283,32 +284,29 @@ export function ChatInput({
     }
   }, [pickedElements, editor]);
 
-  // 草稿恢复双载:setContent 纯文本(剥离新旧标记原文)+ 仅重插文本中
-  // 标记号命中的徽章(nonce 重挂载注入预设问题时,不凭空多出草稿元素的徽章);
-  // 徽章 serialized 序列化回 [element:N](新协议英文化;旧草稿 [元素:N] 兼容剥离),
-  // 协议零变化。key=sessionId 重挂载保证会话切换重建。
+  // 草稿恢复:setContent(含 <picked-element …/> 块的草稿文本)→ parseHTML 自动还原徽章节点;
+  // 旧协议草稿([element:N] / [元素:N])按 elementId 转换为块形式(无对应元素的悬空标记剥离);
+  // key=sessionId 重挂载保证会话切换重建。
   useEffect(() => {
     if (!editor || restoredRef.current) return;
     restoredRef.current = true;
-    const markerIds = new Set<number>();
-    const markerRe = /\[(?:element|元素):(\d+)\]/g;
-    let m: RegExpExecArray | null;
-    while ((m = markerRe.exec(initialInput)) !== null) {
-      const id = parseInt(m[1]!, 10);
-      if (Number.isFinite(id)) markerIds.add(id);
-    }
-    const stripped = initialInput
-      .replace(/\s*\[element:\d+\]/g, '')
-      .replace(/\s*\[元素:\d+\]/g, '');
-    if (stripped.trim()) {
-      editor.commands.setContent(stripped);
-    }
-    for (const element of pickedElements) {
-      if (!markerIds.has(element.elementId)) continue;
-      editor.chain().focus('end').insertContent([
-        { type: 'inlineBadge', attrs: buildBadgeAttrs(element) },
-        { type: 'text', text: ' ' },
-      ]).run();
+    const withBlocks = initialInput.replace(
+      /\[(?:element|元素):(\d+)\]/g,
+      (marker, idStr: string) => {
+        const el = pickedElements.find((p) => p.elementId === parseInt(idStr, 10));
+        return el
+          ? serializePickedElementBlock({
+              elementId: el.elementId,
+              tabId: el.tabId,
+              selector: el.selector,
+              tagName: el.tagName,
+              label: elementChipLabel(el),
+            })
+          : '';
+      },
+    );
+    if (withBlocks.trim()) {
+      editor.commands.setContent(withBlocks);
     }
     if (initialInput) {
       editor.commands.focus('end');

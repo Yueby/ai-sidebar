@@ -1,19 +1,30 @@
 import type { Editor } from '@tiptap/core';
 import type { PickedElement } from '@/lib/types';
-import { makeElementMarker } from '@/lib/types';
 import { elementChipLabel } from '@/lib/elementLabel';
 import type { InlineBadgeAttrs } from './InlineBadge';
 
 /**
  * TipTap 编辑器状态序列化(单遍遍历):
- * 徽章 → computeBadgeTag 文本(协议 = [元素:N],与 useChatTurn refs.elements 组装、
- * ELEMENT_MARKER_RE 消费完全一致);hardBreak → \n;段落尾追加 \n。
+ * inlineBadge → serialized(消息文本内的自闭合 <picked-element …/> 块,单一表示);
+ * hardBreak → \n;段落尾追加 \n。
  */
 
-/** 徽章 → 文本标记:element 输出 [element:N],url 输出 [url: {label}](模型侧自描述) */
-export function computeBadgeTag(attrs: { badgeType: string; label: string; elementId?: number }): string {
-  if (attrs.badgeType === 'url') return `[url: ${attrs.label}]`;
-  return makeElementMarker(attrs.elementId ?? 0);
+/** 属性值 HTML 转义:防 selector/label 中的引号/尖括号破坏块结构与气泡渲染正则 */
+function escapeAttr(value: string): string {
+  return value.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** 元素徽章的消息文本表示(自闭合块;与 InlineBadge parseHTML/renderHTML 同标签) */
+export function serializePickedElementBlock(attrs: {
+  elementId: number;
+  tabId: number;
+  selector: string;
+  tagName: string;
+  label: string;
+}): string {
+  return `<picked-element elementId="${attrs.elementId}" tabId="${attrs.tabId}" selector="${escapeAttr(
+    attrs.selector,
+  )}" tagName="${escapeAttr(attrs.tagName)}" label="${escapeAttr(attrs.label)}" />`;
 }
 
 export interface ExtractedEditorState {
@@ -28,7 +39,7 @@ function extractFromNode(node: unknown, state: ExtractedEditorState): void {
     type?: string;
     text?: string;
     content?: unknown[];
-    attrs?: { serialized?: string; identity?: string };
+    attrs?: { serialized?: string; elementId?: number };
   };
   if (n.type === 'text') {
     state.text += n.text || '';
@@ -40,8 +51,8 @@ function extractFromNode(node: unknown, state: ExtractedEditorState): void {
   }
   if (n.type === 'inlineBadge') {
     if (n.attrs) {
-      const id = Number(n.attrs.identity);
-      if (Number.isFinite(id)) state.elementIds.add(id);
+      const id = Number(n.attrs.elementId);
+      if (Number.isFinite(id) && id > 0) state.elementIds.add(id);
       state.text += n.attrs.serialized || '';
     }
     return;
@@ -60,18 +71,20 @@ export function extractEditorState(editor: Editor | null): ExtractedEditorState 
   return state;
 }
 
-/** 由框选元素构造徽章 attrs(label = 内容预览;title = #{N} · selector;referenceData 存 PickedElement 全量) */
+/** 由框选元素构造徽章 attrs(label = 内容预览;serialized = 自闭合块字符串) */
 export function buildBadgeAttrs(element: PickedElement): InlineBadgeAttrs {
   const label = elementChipLabel(element);
+  const core = {
+    elementId: element.elementId,
+    tabId: element.tabId,
+    selector: element.selector,
+    tagName: element.tagName,
+    label,
+  };
   return {
     badgeType: 'element',
-    identity: String(element.elementId),
-    label,
-    kind: '元素',
-    serialized: computeBadgeTag({ badgeType: 'element', label, elementId: element.elementId }),
-    referenceData: JSON.stringify(element),
-    imageBadgeId: null,
-    title: `#${element.elementId} · ${element.selector}`,
+    ...core,
+    serialized: serializePickedElementBlock(core),
   };
 }
 
@@ -82,17 +95,16 @@ export function isSingleUrlText(text: string): boolean {
   return URL_PATTERN.test(text.trim());
 }
 
-/** 由粘贴的 URL 构造 url 徽章 attrs(label = 去协议名/尾斜杠的展示名,referenceData 存完整 URL) */
+/** 由粘贴的 URL 构造 url 徽章 attrs(label = 去协议名/尾斜杠的展示名) */
 export function buildUrlBadgeAttrs(url: string): InlineBadgeAttrs {
   const label = url.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   return {
     badgeType: 'url',
-    identity: url.trim().toLowerCase(),
+    elementId: 0,
+    tabId: 0,
+    selector: '',
+    tagName: '',
     label,
-    kind: 'URL',
-    serialized: computeBadgeTag({ badgeType: 'url', label }),
-    referenceData: JSON.stringify({ type: 'url', url }),
-    imageBadgeId: null,
-    title: url,
+    serialized: `[url: ${label}]`,
   };
 }
