@@ -32,7 +32,7 @@
 |---|---|
 | 框架 | WXT 0.21 + React 19 + TypeScript,包管理 pnpm |
 | 样式 | Tailwind v4(`@tailwindcss/vite`)+ shadcn/ui,token 在 `sidepanel/style.css` |
-| 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`(components.json 已配好,已装 button/input/textarea/dialog/dropdown-menu/scroll-area/select/separator/switch/tooltip/badge/label/checkbox) |
+| 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`(components.json 已配好,已装 badge/button/checkbox/dialog/dropdown-menu/input/label/popover/scroll-area/select/separator/switch/textarea/tooltip) |
 | AI 请求 | **`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(同版本 ^0.84.4),严禁手写 SSE/协议适配;`lib/agent.ts` 的 `runAgentTurn()` 是唯一发送入口(工具调用循环/abort/事件透出);唯一例外是"拉模型列表"两个 GET(在 `lib/models.ts`) |
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`,manifest 已加 `unlimitedStorage`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,用 `idb`,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化,旧扁平结构由 `sanitizeSessions/sanitizeMessage` 迁移 |
 | 页面提取 | 引用元数据以 `<page-refs>{JSON}</page-refs>` 块(tabs)与 `<picked-element …/>` 自闭合块(元素引用单一表示,`elementId/tabId/selector/tagName/label` 属性,内容预览)内嵌 user 消息 content,草稿/存储/LLM 三处同串(唯一差异 = LLM 请求副本把 refs 块剥 elements 留 tabs,`lib/agent.ts toLlmMessage`);内容按需经 `read_page`(tabId 句柄读整页正文)/`read_element`(CSS selector 句柄,返回 outerHTML 12000 字符截断;tab 级白名单=草稿∪历史块)读取;消息协议 `ai-sidebar/read-page`、`ai-sidebar/pick-element(-result)` 由 content.ts 应答(常量单一来源 `lib/types.ts`,content.ts 只 import 纯常量);图像经 `lib/imageFetch.ts`(fetch 主取 + captureVisibleTab 裁剪兜底 + canvas 降采样) |
@@ -70,7 +70,7 @@ lib/
   providers.ts        # DEFAULT_SETTINGS/API_TYPE_OPTIONS(三协议+默认 baseUrl)、normalizeBaseUrl(anthropic 剥尾 /v1)、getModelReasoningLevels/resolveReasoningLevel
   agent.ts            # pi-agent-core 桥接:runAgentTurn(唯一发送入口)/toLlmMessage(refs 剥 elements)/toPiModel/buildSystemPrompt(压缩版)
   models.ts           # fetchProviderModels/fetchModelsDevMeta/applyModelMeta/syncModelsWithModelsDev/testConnection
-  pageRefs.ts         # renderPageRefsBlock/parsePageRefs/stripPageRefs/collectPageRefs(纯函数,<page-refs> 块;ELEMENT_PREVIEW_LIMIT)
+  pageRefs.ts         # renderPageRefsBlock/parsePageRefs/stripPageRefs/collectPageRefs(纯函数,<page-refs> 块)
   elementLabel.ts     # elementChipLabel/elementListLabel(元素预览 chip label,CJK 视觉宽度加权)
   pageContext.ts      # tab 级读取原语(getActiveTabMeta/getTabMeta/listCandidateTabs/extractFromTab/renderPageContext)+ startPickElement/resolveElement(框选/元素解析)
   fetchPage.ts        # fetch_url 抓取管线:直连 GET + Readability 提取(私有内网拒绝+重定向复检;2MB/12000 上限;错误前缀族)
