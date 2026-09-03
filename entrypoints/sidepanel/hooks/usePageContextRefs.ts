@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { Settings, Session, SessionDraft } from '@/lib/types';
+import type { PickedElement, Settings, Session, SessionDraft } from '@/lib/types';
 import { PICK_ELEMENT_RESULT_MESSAGE } from '@/lib/types';
 import {
   getActiveTabMeta,
@@ -139,45 +139,80 @@ export function usePageContextRefs(params: {
     [patchActiveDraft, handleTogglePageContext]
   );
 
-  // 自动「当前页」芯片(决策 13 修订):随焦点更新、透明可移除——芯片在即发送,移除即不发送。
-  // 触发器:焦点切换 / 聚焦页导航(url 变化)/ 会话切换 / 总开关开启;总开关关闭时不注入。
-  const refreshAutoChip = useCallback(async () => {
-    const st = useAppStore.getState();
-    if (!st.settings.includePageContext) return;
-    if (!st.activeSessionId || !st.sessions.some((s) => s.id === st.activeSessionId)) return;
-    const meta = await getActiveTabMeta().catch(() => null);
-    if (!meta) return;
-    const current = selectCurrentSession(st);
-    if ((current?.draft?.refTabs ?? []).some((t) => t.id === meta.id)) return;
-    addRefTab(meta);
-  }, [addRefTab]);
+  // ===== 引用组(决策 26):每个 tab 记住它所属的引用工作集,焦点切换即切换工作集。
+  // 非破坏:切走的工作集存档于旧焦点页,切回即恢复;组快照为面板生命周期(tab 关闭即清理)。
+  const groupMapRef = useRef<Map<number, { refTabs: RefTab[]; pickedElements: PickedElement[] }>>(new Map());
+  const focusedTabIdRef = useRef<number | null>(null);
 
+  const activeDraftRefTabs = useAppStore((s) => selectCurrentSession(s)?.draft?.refTabs ?? null);
+  const activeDraftPicked = useAppStore((s) => selectCurrentSession(s)?.draft?.pickedElements ?? null);
+  const includePageContext = useAppStore((s) => s.settings.includePageContext);
+  // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆)
+  useEffect(() => {
+    if (!activeDraftRefTabs) return;
+    const ids = new Set(activeDraftRefTabs.map((t) => t.id));
+    if (focusedTabIdRef.current !== null) ids.add(focusedTabIdRef.current);
+    for (const id of ids) {
+      groupMapRef.current.set(id, {
+        refTabs: activeDraftRefTabs,
+        pickedElements: activeDraftPicked ?? [],
+      });
+    }
+  }, [activeDraftRefTabs, activeDraftPicked]);
+
+  const switchRefGroup = useCallback(
+    async (tabId: number) => {
+      if (!includePageContext) return; // 总开关关闭:冻结切换,什么都不发
+      const prev = focusedTabIdRef.current;
+      if (prev === tabId) return;
+      focusedTabIdRef.current = tabId;
+      const meta = await getTabMeta(tabId).catch(() => null);
+      if (!meta) return; // 非 http(s) 页(如 chrome://):不建组,工作集维持原状
+      if (focusedTabIdRef.current !== tabId) return; // 快速连切竞态:焦点已再变,本次作废
+      const st = useAppStore.getState();
+      const current = selectCurrentSession(st);
+      if (!current) return;
+      const snapshot = groupMapRef.current.get(tabId);
+      if (snapshot) {
+        // 恢复该 tab 所属引用组(引用 + 框选元素整组还原)
+        patchActiveDraft((d) => ({
+          ...d,
+          refTabs: snapshot.refTabs,
+          pickedElements: snapshot.pickedElements,
+        }));
+        return;
+      }
+      // 新页无组:隐式「当前页」芯片入住并自动跟随焦点(旧工作集已由成员同步存档,非破坏);
+      // 之后用户手动添加引用才会固定为一组
+      const self = { id: tabId, title: meta.title, url: meta.url };
+      groupMapRef.current.set(tabId, { refTabs: [self], pickedElements: [] });
+      patchActiveDraft((d) => ({ ...d, refTabs: [self], pickedElements: [] }));
+    },
+    [includePageContext, patchActiveDraft]
+  );
+
+  // 焦点变化触发组切换(dock 侧边栏的主窗口内切换;多窗口经 windows.onFocusChanged 兜底)
   useEffect(() => {
     if (typeof browser === 'undefined' || !browser.tabs?.onActivated) return;
-    const onActivated = () => void refreshAutoChip();
-    const onUpdated = async (tabId: number, ci: { url?: string }) => {
-      if (!ci.url) return;
-      // 仅聚焦 tab 的导航触发重估(后台 tab 的导航与用户注意力无关)
-      try {
-        const tab = await browser.tabs.get(tabId);
-        if (tab.active) void refreshAutoChip();
-      } catch {
-        /* tab 已关闭 */
-      }
+    const onActivated = (info: { tabId: number }) => void switchRefGroup(info.tabId);
+    const onFocused = async (windowId: number) => {
+      if (windowId === browser.windows.WINDOW_ID_NONE) return;
+      const [tab] = await browser.tabs.query({ active: true, windowId }).catch(() => []);
+      if (tab?.id != null) void switchRefGroup(tab.id);
     };
-    browser.tabs.onActivated.addListener(onActivated);
-    browser.tabs.onUpdated.addListener(onUpdated);
+    browser.tabs.onActivated.addListener((info) => onActivated(info));
+    browser.windows.onFocusChanged.addListener((wid) => void onFocused(wid));
     return () => {
       browser.tabs.onActivated.removeListener(onActivated);
-      browser.tabs.onUpdated.removeListener(onUpdated);
+      browser.windows.onFocusChanged.removeListener(onFocused);
     };
-  }, [refreshAutoChip]);
-
-  const activeSessionId = useAppStore((s) => s.activeSessionId);
-  const includePageContext = useAppStore((s) => s.settings.includePageContext);
+  }, [switchRefGroup]);
+  // 总开关开启时立即切回当前焦点页的组
   useEffect(() => {
-    void refreshAutoChip();
-  }, [refreshAutoChip, activeSessionId, includePageContext]);
+    if (includePageContext && focusedTabIdRef.current !== null) {
+      void switchRefGroup(focusedTabIdRef.current);
+    }
+  }, [includePageContext, switchRefGroup]);
 
   // 元素框选模式:不带 tabId 时作用于当前活动标签页;带 tabId 时先激活该标签页(框选必须可见)
   const handleStartPickElement = useCallback(

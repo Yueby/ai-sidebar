@@ -70,7 +70,7 @@
 23. **动作遮挡 = fallback 直接在元素上派发事件序列并注明**(2026-09,三期步②):scrollIntoView 居中重试仍被遮挡时不中断动作链,结果注记被何元素遮挡;untrusted 合成事件,chrome.debugger 特权层条件触发不排期。
 24. **search_element query 支持单串或数组 OR**(2026-09):role/可访问名称大小写不敏感子串,任一命中即保留,过滤先于 80 条预算;截断注记引导用 query;定位/验证元素优先用 search_element 而非 execute_js(描述双向引导)。
 25. **权限架构 = 全部随安装授予,无运行时授权流程**(2026-09,步③;曾实施 optional_host_permissions+request/remove 后回退——content_scripts 关联 origins 本就随安装授予,运行时授权只门槛截图且安装警告无差异):host **`<all_urls>`** 为 screenshot_page(captureVisibleTab)硬要求;设置「权限」页签 = 透明说明(网页访问/6 项安装权限用途 + userScripts 开关状态检测与直达详情页引导——Chrome 无 API 可代开)。
-26. **当前页引用 = 动态芯片,透明可移除**(2026-09,取代注意力驱动的隐式注入):usePageContextRefs 随焦点/导航自动维护「当前页」芯片(用户不加也在引用栏,跟随焦点切换);移除后面板生命周期内不再自动引用该 tab(手动添加可覆盖);refs 块 focused 标记发送时刻的活动 tab;总开关关闭 = 什么都不发。
+26. **引用组 = 随焦点切换的工作集**(2026-09,取代隐式注意力注入与累积式自动芯片;借鉴 Gemini 标签页组模型适配 agent):每个 tab 记住其所属引用组快照(refTabs+pickedElements,面板生命周期);焦点切换即恢复该 tab 所属组;**未分组页 = 隐式「当前页」芯片自动跟随焦点**(单例,切页即更新);用户手动添加引用才固定为一组(加/删引用即改当前组并同步组内成员);refs 块 focused 标记发送时刻活动 tab;总开关关闭冻结切换。
 
 ## 4. 当前代码状态
 
@@ -493,7 +493,10 @@ captureVisibleForModel(tabId): Promise<CaptureVisibleResult>      // screenshot_
 >
 > 已完成批次(2026-09,三期步③):**screenshot_page + 权限架构定案**——screenshot_page(confirm+grant,仅 vision 模型注册,captureVisibleTab 仅活动 tab 可视区,错误原文透传 Browser said);host <all_urls> 随安装授予(截图硬要求;曾试 optional_host_permissions 运行时授权后回退——content_scripts 关联 origins 本就随安装授予,安装警告无差异);设置「权限」页签(透明说明+userScripts 开关检测与详情页引导,designer);lib/permissions.ts;工具结果即时入 in-flight(toolResult message_end 处理,quietTailCount 过滤);截图视觉地标测试区(fixture 第 8 节)。
 >
-> 已完成批次(2026-09,三期步②):**页面动作原语**——click_element/fill_element(confirm+会话级 grant,工具+tab 粒度,面板生命周期)/scroll_page(safe)三工具 + registry action 组;content.ts 动作执行器(locator 解析同源 search_element、400ms 高亮、遮挡 fallback 直发、受控填充原生 setter、settle、navigation_started);gate.ts grantedScopes 短路 + grantable/grantScope 契约;search_element query 数组 OR 与 [type=x]/placeholder 名称兑底;流式 50ms 节流(STREAM_FLUSH_INTERVAL_MS)+ MessageItem rAF 平滑揭示(designer);卡片期跟底修复(强制钉底+抖动忽略);12 项提示词回归 + 真实登录页验收(零手写 JS)通过。
+> 
+>
+> 已完成批次(2026-09,引用组):参考 Gemini 标签页组模型适配 agent——每个 tab 记住所属引用工作集(refTabs+pickedElements 快照,面板生命周期),焦点切换即非破坏恢复(切未引用页=新单例、切组成员=恢复组、手动引用=入组);refs 块所见即所发(focused 标记活动 tab);多窗口 windows.onFocusChanged 兑底;switchRefGroup 快速连切竞态守卫。
+已完成批次(2026-09,三期步②):**页面动作原语**——click_element/fill_element(confirm+会话级 grant,工具+tab 粒度,面板生命周期)/scroll_page(safe)三工具 + registry action 组;content.ts 动作执行器(locator 解析同源 search_element、400ms 高亮、遮挡 fallback 直发、受控填充原生 setter、settle、navigation_started);gate.ts grantedScopes 短路 + grantable/grantScope 契约;search_element query 数组 OR 与 [type=x]/placeholder 名称兑底;流式 50ms 节流(STREAM_FLUSH_INTERVAL_MS)+ MessageItem rAF 平滑揭示(designer);卡片期跟底修复(强制钉底+抖动忽略);12 项提示词回归 + 真实登录页验收(零手写 JS)通过。
 
 ## 9. 环境备注
 

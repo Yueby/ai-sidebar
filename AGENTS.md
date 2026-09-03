@@ -58,7 +58,7 @@ entrypoints/
   sidepanel/          # 侧边栏 UI(index.html / main.tsx / theme.ts / style.css)
     App.tsx             # 组合层:store selector 订阅 + 五域编排 hook 组装 + 视图骨架(481 行,无业务逻辑)
     store/              # zustand v5 单 store 五切片:gateSlice/errorSlice/sessionSlice(含草稿防抖队列模块级)/settingsSlice/chatSlice;devtools 仅 DEV 构建
-    hooks/              # 编排层(状态在 store):useGate(切片消费)/ useSessionManager(增删切+AI 命名+原子 init)/ useChatTurn(发送/停止+turnSeq 守卫)/ usePageContextRefs(引用+框选)/ useCompact(压缩)
+    hooks/              # 编排层(状态在 store):useGate(切片消费)/ useSessionManager(增删切+AI 命名+原子 init)/ useChatTurn(发送/停止+turnSeq 守卫)/ usePageContextRefs(引用组随焦点切换+框选)/ useCompact(压缩)
     components/chat/      # ChatHeader / MessageList / MessageItem(分段渲染+ToolCallCard/思考折叠)/ MarkdownView / ChatInput(TipTap)/ ApprovalSection(审批槽位)/ CompactionRow(压缩摘要卡)/ SlashMenu(斜杠命令)/ ContextRing+ContextPanel(上下文占用)/ elementMarkerText(chip 渲染)/ extensions/(InlineBadge+BadgeNodeView+editorSerialize)
     components/settings/  # SettingsMainView(提供商/搜索/关于)/ ProviderDialog / ModelConfigDialog / SearchSettingsView(十源搜索配置)
   background.ts       # 点击工具栏图标打开侧边栏
