@@ -150,28 +150,26 @@ function sanitizeDraft(v: unknown): SessionDraft | undefined {
       })
     : [];
   const pickedElements = Array.isArray(d.pickedElements)
-    ? (() => {
-        // elementId 回填累进 max+1(而非 idx+1):避免回填值与同批已分配的新批 elementId 撞号
-        let maxSoFar = 0;
-        return d.pickedElements.flatMap((p): PickedElement[] => {
-          if (!p || typeof p !== 'object') return [];
-          const x = p as Record<string, unknown>;
-          if (typeof x.selector !== 'string' || typeof x.tabId !== 'number') return [];
-          const elementId =
-            typeof x.elementId === 'number' && Number.isInteger(x.elementId) && x.elementId > 0
-              ? x.elementId
-              : ++maxSoFar;
-          maxSoFar = Math.max(maxSoFar, elementId);
-          return [{
-            id: typeof x.id === 'string' ? x.id : `${x.tabId}:${x.selector}`,
-            elementId,
-            tabId: x.tabId,
-            selector: x.selector,
-            tagName: typeof x.tagName === 'string' ? x.tagName : '',
-            preview: typeof x.preview === 'string' ? x.preview : '',
-          }];
-        });
-      })()
+    ? d.pickedElements.flatMap((p): PickedElement[] => {
+        if (!p || typeof p !== 'object') return [];
+        const x = p as Record<string, unknown>;
+        if (typeof x.selector !== 'string' || typeof x.tabId !== 'number') return [];
+        if (
+          typeof x.elementId !== 'number' ||
+          !Number.isInteger(x.elementId) ||
+          x.elementId <= 0
+        ) {
+          return []; // 旧格式元素(无 elementId)直接丢弃
+        }
+        return [{
+          id: typeof x.id === 'string' ? x.id : `${x.tabId}:${x.selector}`,
+          elementId: x.elementId,
+          tabId: x.tabId,
+          selector: x.selector,
+          tagName: typeof x.tagName === 'string' ? x.tagName : '',
+          preview: typeof x.preview === 'string' ? x.preview : '',
+        }];
+      })
     : [];
   return { input: typeof d.input === 'string' ? d.input : '', refTabs, pickedElements };
 }

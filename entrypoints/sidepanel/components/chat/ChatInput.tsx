@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
-import { elementChipLabel } from '@/lib/elementLabel';
 import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
@@ -34,7 +33,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ContextPanel, type RoleShares } from './ContextPanel';
 import { SlashMenu } from './SlashMenu';
 import { InlineBadge } from './extensions/InlineBadge';
-import { buildBadgeAttrs, buildUrlBadgeAttrs, extractEditorState, isSingleUrlText, serializePickedElementBlock } from './extensions/editorSerialize';
+import { buildBadgeAttrs, buildUrlBadgeAttrs, extractEditorState, isSingleUrlText } from './extensions/editorSerialize';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -268,7 +267,7 @@ export function ChatInput({
   editorRef.current = editor;
 
   // 侦测框选完成:新元素在光标处插入徽章节点 + 尾随空格(替代旧文本标记插入;
-  // onUpdate 自动把 serialized [元素:N] 同步进 text/草稿,协议不变)
+  // onUpdate 自动把 serialized(自闭合块)同步进 text/草稿,协议不变)
   useEffect(() => {
     const prev = prevPickedRef.current;
     prevPickedRef.current = pickedElements;
@@ -285,28 +284,15 @@ export function ChatInput({
   }, [pickedElements, editor]);
 
   // 草稿恢复:setContent(含 <picked-element …/> 块的草稿文本)→ parseHTML 自动还原徽章节点;
-  // 旧协议草稿([element:N] / [元素:N])按 elementId 转换为块形式(无对应元素的悬空标记剥离);
-  // key=sessionId 重挂载保证会话切换重建。
+  // 旧协议草稿的标记文本直接剥离(旧数据可弃);key=sessionId 重挂载保证会话切换重建。
   useEffect(() => {
     if (!editor || restoredRef.current) return;
     restoredRef.current = true;
-    const withBlocks = initialInput.replace(
-      /\[(?:element|元素):(\d+)\]/g,
-      (marker, idStr: string) => {
-        const el = pickedElements.find((p) => p.elementId === parseInt(idStr, 10));
-        return el
-          ? serializePickedElementBlock({
-              elementId: el.elementId,
-              tabId: el.tabId,
-              selector: el.selector,
-              tagName: el.tagName,
-              label: elementChipLabel(el),
-            })
-          : '';
-      },
-    );
-    if (withBlocks.trim()) {
-      editor.commands.setContent(withBlocks);
+    const cleaned = initialInput
+      .replace(/\s*\[element:\d+\]/g, '')
+      .replace(/\s*\[元素:\d+\]/g, '');
+    if (cleaned.trim()) {
+      editor.commands.setContent(cleaned);
     }
     if (initialInput) {
       editor.commands.focus('end');

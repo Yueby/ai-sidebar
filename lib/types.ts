@@ -166,22 +166,13 @@ export interface PageContext {
 /** 用户在页面上框选的元素引用(selector 由 @medv/finder 生成,保证唯一) */
 export interface PickedElement {
   id: string;
-  /** 元素标记号(1 起单调递增,随草稿持久化,页面刷新后继续递增;与文本内嵌 [元素:N] 标记一致;存量数据读取时按数组序补齐) */
+  /** 元素标记号(1 起单调递增,随草稿持久化,页面刷新后继续递增;与文本内嵌 <picked-element> 块的 elementId 一致) */
   elementId: number;
   tabId: number;
   selector: string;
   tagName: string;
   /** 元素可见文本预览(截 100 字) */
   preview: string;
-}
-
-/** 旧草稿存量兼容:无 elementId(或非法)的框选元素按数组序补 1..n(消费入口统一调用) */
-export function normalizePickedElements(picked: PickedElement[]): PickedElement[] {
-  return picked.map((e, i) =>
-    typeof e.elementId === 'number' && Number.isInteger(e.elementId) && e.elementId > 0
-      ? e
-      : { ...e, elementId: i + 1 },
-  );
 }
 
 /** 消息协议常量单一来源(与 entrypoints/content.ts 对应,content.ts 只 import 纯常量) */

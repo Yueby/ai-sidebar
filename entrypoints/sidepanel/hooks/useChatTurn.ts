@@ -7,7 +7,6 @@ import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
-import { normalizePickedElements } from '@/lib/types';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 
@@ -77,9 +76,8 @@ export function useChatTurn(params: {
       // 「发送时刻活动且在该引用列表内」的 tab;无引用则消息与朴素文本逐字节一致。
       const draftAtSend = session.draft ?? EMPTY_DRAFT;
       const snapTabs = store.settings.includePageContext ? draftAtSend.refTabs : [];
-      // 存量草稿兼容(无 elementId 按数组序补齐),编号单源于数据侧
       const snapElements = store.settings.includePageContext
-        ? normalizePickedElements(draftAtSend.pickedElements)
+        ? draftAtSend.pickedElements
         : [];
       let refreshedTabs = snapTabs;
       let pageRefs: PageRefs | undefined;

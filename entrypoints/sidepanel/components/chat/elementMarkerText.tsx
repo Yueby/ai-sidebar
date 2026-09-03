@@ -5,8 +5,7 @@ import { SquareMousePointer } from 'lucide-react';
 
 /**
  * 用户消息内元素引用的 chip 渲染:
- * - 新协议:<picked-element …/> 自闭合块(单一表示),label 取块属性;
- * - 旧消息兜底:[element:N] / [元素:N] 标记,经 refs 元数据查 label;
+ * - <picked-element …/> 自闭合块(单一表示),label 取块属性;
  * - 查无数据(伪造/悬空)→ 灰样式兜底,不猜内容。
  */
 
@@ -54,29 +53,22 @@ export function renderMarkersInText(
   elementById: Map<number, RefElementMeta> | null | undefined,
 ): ReactNode[] {
   const parts: ReactNode[] = [];
-  const regex = /<picked-element\s+[^>]*>|\[(?:element|元素):(\d+)\]/g;
+  const regex = /<picked-element\s+[^>]*>/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    const token = match[0];
-    if (token.startsWith('<picked-element')) {
-      const parsed = parsePickedElementBlock(token);
-      const legacy = parsed ? undefined : /(?:element|元素):(\d+)/.exec(token);
-      const el = parsed ? elementById?.get(parsed.elementId) : undefined;
-      parts.push(
-        renderChip(
-          `elem-${match.index}`,
-          parsed?.label ?? `元素 ${legacy?.[1] ?? '?'}`,
-          el,
-          parsed?.elementId ?? Number(legacy?.[1] ?? 0),
-        ),
-      );
-    } else {
-      const id = parseInt(match[1]!, 10);
-      const el = elementById?.get(id);
-      parts.push(renderChip(`elem-${id}-${match.index}`, `元素 ${id}`, el, id));
+    const parsed = parsePickedElementBlock(match[0]);
+    if (!parsed) {
+      // 结构残缺的块:按原样保留为文本,不渲染 chip
+      parts.push(match[0]);
+      lastIndex = regex.lastIndex;
+      continue;
     }
+    const el = elementById?.get(parsed.elementId);
+    parts.push(
+      renderChip(`elem-${parsed.elementId}-${match.index}`, parsed.label, el, parsed.elementId),
+    );
     lastIndex = regex.lastIndex;
   }
   if (lastIndex < text.length) parts.push(text.slice(lastIndex));

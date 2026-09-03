@@ -8,7 +8,6 @@ import {
   type RefTab,
 } from '@/lib/pageContext';
 import { useAppStore, selectCurrentSession } from '../store';
-import { normalizePickedElements } from '@/lib/types';
 
 /**
  * 页面引用域 hook(编排层):refTabs/pickedElements 读写(经 store patchActiveDraft)、
@@ -235,8 +234,8 @@ export function usePageContextRefs(params: {
           return;
         }
         // 「引用页面 + 元素 chip」一次性写入当前会话草稿(原子,避免两次 commit)。
-        // elementId 由草稿数据侧分配:先按数组序补齐存量(旧数据兼容,顺手持久化补齐值),
-        // 再取 max+1 单调递增;存 draft 即随草稿持久化,页面刷新后继续递增
+        // elementId 单调递增:取现有元素与草稿文本内块标记号的最大值 +1(防撞号);
+        // 存 draft 即随草稿持久化,页面刷新后继续递增
         patchActiveDraft((d) => {
           const refTabs = d.refTabs.some((t) => t.id === tabId)
             ? d.refTabs
@@ -244,13 +243,20 @@ export function usePageContextRefs(params: {
           const alreadyPicked = d.pickedElements.some(
             (p) => p.tabId === tabId && p.selector === selector
           );
-          const normalized = normalizePickedElements(d.pickedElements);
           const nextElementId =
-            normalized.reduce((m, p) => Math.max(m, p.elementId), 0) + 1;
+            Math.max(
+              0,
+              ...d.pickedElements.map((p) =>
+                typeof p.elementId === 'number' && p.elementId > 0 ? p.elementId : 0,
+              ),
+              ...Array.from(d.input.matchAll(/elementId="(\d+)"/g), (m) =>
+                parseInt(m[1]!, 10),
+              ),
+            ) + 1;
           const pickedElements = alreadyPicked
-            ? normalized
+            ? d.pickedElements
             : [
-                ...normalized,
+                ...d.pickedElements,
                 {
                   id: `${tabId}:${selector}`,
                   elementId: nextElementId,
