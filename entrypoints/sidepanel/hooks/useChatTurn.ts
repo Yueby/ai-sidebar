@@ -80,7 +80,8 @@ export function useChatTurn(params: {
       const isFirstMessage = session.messages.length === 0 || session.title === '新会话';
       // 发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。
       // 逐 tab 刷新元信息(getTabMeta 失败回退草稿值,绝不丢引用);focused 仅标注
-      // 「发送时刻活动且在该引用列表内」的 tab;无引用则消息与朴素文本逐字节一致。
+      // 「发送时刻活动且在该引用列表内」的 tab。此外每次发送都注入当前聚焦 tab(用户拍板:
+      // 模型开启即知用户在看哪个页;仅入本轮 refs 块与工具白名单,不入 draft,composer 零变化)。
       const draftAtSend = session.draft ?? EMPTY_DRAFT;
       const snapTabs = store.settings.includePageContext ? draftAtSend.refTabs : [];
       const snapElements = store.settings.includePageContext
@@ -88,8 +89,11 @@ export function useChatTurn(params: {
         : [];
       let refreshedTabs = snapTabs;
       let pageRefs: PageRefs | undefined;
-      if (snapTabs.length > 0 || snapElements.length > 0) {
-        const focusedTabId = (await getActiveTabMeta().catch(() => null))?.id;
+      const focused = store.settings.includePageContext
+        ? await getActiveTabMeta().catch(() => null)
+        : null;
+      if (snapTabs.length > 0 || snapElements.length > 0 || focused) {
+        const focusedTabId = focused?.id;
         refreshedTabs = await Promise.all(
           snapTabs.map(async (t) => (await getTabMeta(t.id).catch(() => null)) ?? t)
         );
@@ -99,6 +103,11 @@ export function useChatTurn(params: {
           url: t.url,
           ...(t.id === focusedTabId ? { focused: true } : {}),
         }));
+        // 聚焦 tab 不在引用内 → 追加为 focused 条目(非 http(s) 页 getActiveTabMeta 已返回 null 跳过)
+        if (focused && !refreshedTabs.some((t) => t.id === focused.id)) {
+          tabs.push({ tabId: focused.id, title: focused.title, url: focused.url, focused: true });
+          refreshedTabs = [...refreshedTabs, focused];
+        }
         // id = 数据侧 elementId(与 ChatInput 插入的 [element:N] 标记永久对齐)。
         // 元素内容不随消息携带:模型按 refs 块内 tabId+selector 调 read_element 获取;
         // preview 保持框选时的 100 字存量(仅 UI chip label 用)
