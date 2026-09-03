@@ -33,8 +33,8 @@ export const useAppStore = create<AppStore>()(
 /**
  * gate handler 模块级注册(去 React 化):
  * - setGateHandler 为覆盖式注册,handler 是纯 store 调用,StrictMode 双挂载天然免疫;
- * - 原 useGate effect 的卸载清理(setGateHandler(null) + flushPendingGates)随面板销毁
- *   无观察差异,不再保留。
+ * - 无卸载清理(setGateHandler(null) + flushPendingGates 均省去):面板销毁即整层失效,
+ *   清理无观察差异。
  */
 setGateHandler((req: GateRequest) => {
   return new Promise<GateResponse>((resolve) => {

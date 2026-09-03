@@ -284,7 +284,7 @@ export function ChatInput({
   }, [pickedElements, editor]);
 
   // 草稿恢复:setContent(含 <picked-element …/> 块的草稿文本)→ parseHTML 自动还原徽章节点;
-  // 旧协议草稿的标记文本直接剥离(旧数据可弃);key=sessionId 重挂载保证会话切换重建。
+  // 历史草稿的标记文本 [element:N]/[元素:N] 直接剥离(旧数据可弃);key=sessionId 重挂载保证会话切换重建。
   useEffect(() => {
     if (!editor || restoredRef.current) return;
     restoredRef.current = true;

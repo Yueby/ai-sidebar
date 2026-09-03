@@ -275,7 +275,7 @@
   fill: var(--popover);
 }
 
-/* ---- Composer TipTap 编辑器(替代 textarea+镜像 overlay) ---- */
+/* ---- Composer TipTap 编辑器 ---- */
 .composer-editor {
   min-height: 52px;
   max-height: 144px;

@@ -227,7 +227,7 @@ export function useChatTurn(params: {
           // 直接落 result.messages 会丢被压缩截断的前缀消息)
           const finalizedSession: Session = {
             ...latest,
-          // B-1 修复:落盘用原始 userMessage(newMessages[0] 是 toLlmMessage 剥过
+          // 落盘用原始 userMessage(newMessages[0] 是 toLlmMessage 剥过
           // elements 的请求副本,泄入存储会丢 refs.elements——引用列表消失+白名单退化)
           messages: [...session.messages, userMessage, ...result.newMessages.slice(1)],
             updatedAt: Date.now(),

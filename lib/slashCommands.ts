@@ -1,6 +1,6 @@
 /**
  * 斜杠命令目录(UI 消费;description 为 UI 显示文案,保持中文)。
- * 具体执行由 UI 车道对接;compact 的补充重点参数透传 runCompact.customInstructions。
+ * 具体执行由 UI 层对接;compact 的补充重点参数透传 runCompact.customInstructions。
  */
 export interface SlashCommand {
   name: string;

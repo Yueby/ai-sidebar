@@ -167,7 +167,7 @@ export function usePageContextRefs(params: {
         setErrorMessage('当前页面不是普通网页,无法框选元素');
         return;
       }
-      // 启动时不再自动加引用;框选成功返回时才「引用页面 + 元素 chip」
+      // 框选启动时不自动加引用;框选成功返回时才「引用页面 + 元素 chip」
       try {
         await startPickElement(meta.id);
         pendingPickRef.current = { tabId: meta.id, meta };

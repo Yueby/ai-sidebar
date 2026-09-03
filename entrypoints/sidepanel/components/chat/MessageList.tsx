@@ -284,8 +284,8 @@ export function MessageList({
     return map;
   }, [messages]);
 
-  // live 执行卡去重:toolCall 块已随 message_end 物化进转录(in-flight)后,同一调用不再以
-  // live 卡重复渲染——否则门控挂起期间同一调用会同时出现「等待确认」块卡与「执行中」live 卡
+  // live 执行卡去重:toolCall 块已随 message_end 物化进转录(in-flight)后,同一调用即从
+  // live 卡剔除——否则门控挂起期间同一调用会同时出现「等待确认」块卡与「执行中」live 卡
   const liveToolLabels = useMemo(() => {
     if (!activeToolLabels || activeToolLabels.length === 0) return activeToolLabels ?? [];
     const materialized = new Set<string>();
