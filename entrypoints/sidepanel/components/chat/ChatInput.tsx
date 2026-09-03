@@ -505,7 +505,7 @@ export function ChatInput({
         {/* Toolbar row inside composer */}
         <div className="flex items-center justify-between px-2 pb-2 pt-0.5 gap-1">
           {/* Left: [+] Add menu (Far left), Model Switcher, Reasoning Level, Context Ring */}
-          <div className="@container flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
+          <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
             {/* 1. Permanent Unified Add [+] Menu on far left */}
             <DropdownMenu onOpenChange={handleDropdownOpenChange}>
               <DropdownMenuTrigger asChild>
@@ -603,8 +603,8 @@ export function ChatInput({
                     title={`思考深度: ${currentReasoningShort}`}
                   >
                     <Brain className="size-3.5 shrink-0" />
-                    <span className="@max-[285px]:hidden">思考: {currentReasoningShort}</span>
-                    <ChevronDown className="size-3 shrink-0 opacity-50 @max-[285px]:hidden" />
+                    <span>{currentReasoningShort}</span>
+                    <ChevronDown className="size-3 shrink-0 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-36">
