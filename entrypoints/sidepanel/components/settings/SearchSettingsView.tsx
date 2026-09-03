@@ -168,20 +168,6 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
           </div>
         )}
       </div>
-
-      {/* Card: 说明 */}
-      <div className="rounded-lg border bg-card p-3.5 space-y-1.5">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <Globe className="size-3.5 text-muted-foreground" />
-          <span>说明</span>
-        </div>
-        {selectedOption?.hint && (
-          <p className="text-[11px] text-muted-foreground leading-relaxed">{selectedOption.hint}</p>
-        )}
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
-          搜索请求由浏览器直接发起,不经过任何中间服务器。
-        </p>
-      </div>
     </div>
   );
 }
