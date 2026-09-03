@@ -12,6 +12,8 @@
 
 开源 **BYOK 浏览器 AI 侧边栏扩展**(Chromium:Chrome/Edge/Brave),对标 Chrome 内置 Gemini 侧边栏,用用户自己的 API Key。`ai-sidebar` 是永久内部代号(目录/包名不改,改的只是产品名)。
 
+**产品北极星:浏览器 Agentic 侧边栏**——从聊天助手演进为能在浏览器里自治完成多步任务的 agent。六大支柱:感知(read_page/read_element/框选→三期 search_element/screenshot/页面版本指纹)、动作(execute_js→三期 click/fill/scroll)、自治(gate→会话级 grant)、获取(→websearch/fetch_url)、记忆(compact_context→便签)、底座(i18n/发布)。
+
 - MVP(已完成,待手动回归):sidePanel 聊天(流式/Markdown/工具卡片/思考折叠区/token 脚注/多会话/会话草稿)+ 读取当前网页(`read_page`/`read_element` 工具按需读取,框选元素 + vision 读图)+ BYOK 多提供商(三种协议)
 - 二期:划词快捷提问、多模型快捷切换、会话重命名/导出
 - 三期(规格 v2,见 §8.4):ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;未实施
