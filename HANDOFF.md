@@ -57,7 +57,7 @@
 10. **agent 编排用 pi-agent-core**(`Agent` + `streamSimple`),页面操作工具自研(AgentTool);三期规格 v2 = ARIA 定位与页面动作原语(见 §8.4),chrome.debugger 仅条件触发、不排期。
 11. 聊天页功能基线(回归清单,不可丢):流式输出、停止按钮(取消保留已生成部分)、Enter 发送/Shift+Enter 换行/IME 组合词不误发、历史会话切换/删除/新建、消息复制、自动滚动(用户上翻不打断)、错误/取消的 UI 呈现、工具调用卡片、思考折叠区、token 脚注、会话草稿。
 12. **引用架构定稿 = `<page-refs>` 块**:引用元数据发送时序列化进 user 消息 content,此后永不改变;无 refSnapshot 字段、无 convertToLlm、system prompt 不注入引用目录(只放协议常量规则);`ChatMessage` 回归纯 pi 联合,零自定义字段。
-13. **会话草稿**:`Session.draft { input, refTabs, pickedElements }` 随会话持久化(IndexedDB 防抖落盘);新会话自动引用当前页;空会话离开即回收;发送即清空草稿。
+13. **会话草稿**:`Session.draft { input, refTabs, pickedElements }` 随会话持久化(IndexedDB 防抖落盘);~~新会话自动引用当前页~~(2026-09 修订:发送时聚焦注入取代之——引用栏仅承载用户主动策展的持久引用,聚焦 tab 每次发送隐式附带,不入 draft);空会话离开即回收;发送即清空草稿。
 14. **工具安全边界 = tab 级白名单**(tabId ∈ 草稿引用 ∪ 历史 `<page-refs>` 块);selector 不设白名单(框选元素是提示,AI 可在引用页内自行探索);vision 门控:`model.input` 含 image 才产 ImageContent 块;工具中文文案单一来源 `TOOL_LABELS`(读取网页内容/读取页面元素)。
 15. **工具命名规范 = `<动词>_<域词>`**:动词集 {read, search, fetch, click, fill, scroll, screenshot, execute, ask} × 域词集 {page, element, url, web, js, user, time},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key extract_page 兼容历史会话 ToolCallCard)。协议字符串已随名同步(`ai-sidebar/read-page` 等,常量单一来源 lib/types.ts,content.ts 只 import 纯常量)。
 16. **模型可见文本一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支文本、非 vision 图片描述、system prompt 全文;UI 显示文案保持中文(TOOL_LABELS 中文值、ToolCallCard 等),以后收敛 i18n。

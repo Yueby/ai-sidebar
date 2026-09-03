@@ -3,11 +3,10 @@ import { createModels, type AssistantMessage, type Context, type SimpleStreamOpt
 import type { Session, SessionDraft, Settings } from '@/lib/types';
 import { settingsItem, activeSessionIdItem, sanitizeSettings, createSession } from '@/lib/storage';
 import { migrateLegacySessions, saveSession, deleteSession } from '@/lib/sessionStore';
-import { getActiveTabMeta } from '@/lib/pageContext';
 import { findActiveModel } from '@/lib/providers';
 import { buildProvider } from '@/lib/agent';
 import { useAppStore } from '../store';
-import { cloneEmptyDraft, flushDraftSaves, dropPendingDraftSave } from '../store/sessionSlice';
+import { flushDraftSaves, dropPendingDraftSave } from '../store/sessionSlice';
 
 /** AI 标题生成 System Prompt (Model-facing 英文规范) */
 const TITLE_GENERATION_SYSTEM_PROMPT = `You are a concise title generator. Generate a very short title (max 20 characters) for a conversation based on the user's initial messages and assistant's response.
@@ -83,16 +82,11 @@ async function generateTitleWithAi(
   return raw.length > 20 ? `${raw.slice(0, 20)}…` : raw;
 }
 
-/** 新会话草稿预填(规则 1):includePageContext 开启时自动引用当前活动标签页 */
-async function buildInitialDraft(includePageContext: boolean): Promise<SessionDraft | undefined> {
-  if (!includePageContext) return undefined;
-  const meta = await getActiveTabMeta().catch(() => null);
-  return meta ? { input: '', refTabs: [meta], pickedElements: [] } : undefined;
-}
-
 /**
  * 会话域 hook(编排层):会话增删切/AI 命名/重命名 + 原子 init effect
  * (storage 读取+迁移+watch 注册时序原样保留,watch 回调接 store action)。
+ * 注:新会话不再预填当前页——每次发送时聚焦 tab 由 useChatTurn 注入 refs 块(决策 13 修订),
+ * 引用栏仅承载用户主动策展的持久引用。
  * sessions/activeSessionId/loaded 状态与草稿防抖队列在 store/sessionSlice。
  *
  * 域服务边界:store=共享状态唯一家(sessions/activeSessionId/loaded 在 sessionSlice,
@@ -130,8 +124,8 @@ export function useSessionManager() {
       let initialActiveId = rawActiveId;
 
       if (initialSessions.length === 0) {
-        // 首个会话 = 新会话:草稿预填当前活动页(规则 1)
-        const newSess = createSession('新会话', await buildInitialDraft(cleanSettings.includePageContext));
+        // 首个会话 = 新会话(当前页由发送时聚焦注入承载,决策 13 修订)
+        const newSess = createSession('新会话');
         initialSessions = [newSess];
         initialActiveId = newSess.id;
         await saveSession(newSess);
@@ -141,20 +135,8 @@ export function useSessionManager() {
         await activeSessionIdItem.setValue(initialActiveId);
       }
 
-      // 启动时活动会话仍为空(上次没发消息):补引用当前活动页
+      // 启动时活动会话仍为空:不再预填当前页(当前页由发送时聚焦注入承载,决策 13 修订)
       const initialActive = initialSessions.find((s) => s.id === initialActiveId);
-      if (
-        initialActive &&
-        initialActive.messages.length === 0 &&
-        cleanSettings.includePageContext &&
-        (initialActive.draft?.refTabs.length ?? 0) === 0
-      ) {
-        const meta = await getActiveTabMeta().catch(() => null);
-        if (meta) {
-          initialActive.draft = { ...(initialActive.draft ?? cloneEmptyDraft()), refTabs: [meta] };
-          await saveSession(initialActive);
-        }
-      }
 
       setSessions(initialSessions);
       setActiveSessionId(initialActiveId);
@@ -295,11 +277,8 @@ export function useSessionManager() {
     // 新建会话冲销所有 pending 门控
     resetGates();
     flushDraftSaves();
-    // 规则 1:新会话草稿预填当前活动页
-    const newSess = createSession(
-      '新会话',
-      await buildInitialDraft(useAppStore.getState().settings.includePageContext)
-    );
+    // 删空后自动补一个新会话(当前页由发送时聚焦注入承载)
+    const newSess = createSession('新会话');
     const next = [newSess, ...useAppStore.getState().sessions];
     setSessions(next);
     setActiveSessionId(newSess.id);
@@ -324,11 +303,8 @@ export function useSessionManager() {
         if (remaining.length > 0) {
           nextActiveId = remaining[0]!.id;
         } else {
-          // 删空后自动补一个新会话(规则 2),并按规则 1 预填当前活动页
-          const fresh = createSession(
-            '新会话',
-            await buildInitialDraft(useAppStore.getState().settings.includePageContext)
-          );
+          // 删空后自动补一个新会话(当前页由发送时聚焦注入承载)
+          const fresh = createSession('新会话');
           remaining.push(fresh);
           nextActiveId = fresh.id;
           await saveSession(fresh);
