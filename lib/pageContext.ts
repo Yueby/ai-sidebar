@@ -1,5 +1,5 @@
 import type { PageContext } from './types';
-import { PICK_ELEMENT_MESSAGE, READ_PAGE_MESSAGE } from './types';
+import { PICK_ELEMENT_MESSAGE, READ_PAGE_MESSAGE, SEARCH_ELEMENT_MESSAGE } from './types';
 
 /**
  * content 侧提取应答:PageContext + 截断标记。
@@ -246,4 +246,82 @@ export async function resolveElement(
     // 该页没有 content script(如导航中/chrome:// 页)或读取失败
     return null;
   }
+}
+
+// ===== 交互元素发现(search_element;三期步① ARIA 定位发现层)=====
+
+/** search_element 清单条目(ARIA role+可访问名称+状态;步② click/fill 的 locator 以此为寻址协议) */
+export interface InteractiveElementInfo {
+  /** 生效 ARIA role(getRole 显式+隐式;password 等无隐式 role 的 input 与 contenteditable 兑底 textbox) */
+  role: string;
+  /** 可访问名称(AccName 全算法,空白已坍缩;可为空串) */
+  name: string;
+  /** 同 role+name 组内 1 起文档序序号(首现 1 不输出,后续输出 [2]/[3]);全量计数与输出截断解耦 */
+  ordinal: number;
+  disabled: boolean;
+  /** 未被 AX 排除且渲染可见且非零尺寸(不可见时输出 [hidden] 旗标) */
+  visible: boolean;
+}
+
+/** content.ts 交互元素清单应答载荷 */
+export interface SearchElementsResult {
+  url: string;
+  title: string;
+  /** 全量交互元素数(截断前真实总数) */
+  total: number;
+  truncated: boolean;
+  /** content 侧收集耗时(ms;性能打点,工具日志用) */
+  durationMs: number;
+  elements: InteractiveElementInfo[];
+}
+
+/**
+ * 列出指定标签页的交互元素清单(search_element 底层)。
+ * 失败返回 null(不可达/非 http(s)/导航中/无 content script 且补注入失败);
+ * content script 不在(扩展加载前已存在的标签页)时补注入后重试一次(动作链路健壮性)。
+ */
+export async function searchElementsInTab(tabId: number): Promise<SearchElementsResult | null> {
+  let url: string;
+  try {
+    const tab = await browser.tabs.get(tabId);
+    if (!tab?.url?.startsWith('http')) return null;
+    url = tab.url;
+  } catch {
+    return null;
+  }
+  const request = async (): Promise<SearchElementsResult | { error: string } | undefined> => {
+    const res = (await browser.tabs.sendMessage(tabId, { type: SEARCH_ELEMENT_MESSAGE })) as
+      | SearchElementsResult
+      | { error: string }
+      | undefined;
+    return res;
+  };
+  let res = await request().catch(() => undefined);
+  if (!res) {
+    const injected = await ensureContentScript(tabId);
+    if (!injected) return null;
+    res = await request().catch(() => undefined);
+  }
+  if (!res || typeof res !== 'object' || 'error' in res || !Array.isArray(res.elements)) return null;
+  const elements = res.elements.flatMap((e): InteractiveElementInfo[] => {
+    if (!e || typeof e !== 'object') return [];
+    const x = e as unknown as Record<string, unknown>;
+    if (typeof x.role !== 'string' || x.role.length === 0) return [];
+    return [{
+      role: x.role,
+      name: typeof x.name === 'string' ? x.name : '',
+      ordinal:
+        typeof x.ordinal === 'number' && Number.isInteger(x.ordinal) && x.ordinal > 0 ? x.ordinal : 1,
+      disabled: x.disabled === true,
+      visible: x.visible !== false,
+    }];
+  });
+  return {
+    url: typeof res.url === 'string' ? res.url : url,
+    title: typeof res.title === 'string' ? res.title : '',
+    total: typeof res.total === 'number' ? res.total : elements.length,
+    truncated: res.truncated === true,
+    durationMs: typeof res.durationMs === 'number' && res.durationMs >= 0 ? res.durationMs : 0,
+    elements,
+  };
 }

@@ -2,7 +2,11 @@ import {
   PICK_ELEMENT_MESSAGE,
   PICK_ELEMENT_RESULT_MESSAGE,
   READ_PAGE_MESSAGE,
+  SEARCH_ELEMENT_MESSAGE,
+  SEARCH_ELEMENT_LIMIT,
 } from '@/lib/types';
+// type-only:编译期擦除,不引入运行时代码(载荷形状与 sidepanel 侧同源)
+import type { SearchElementsResult } from '@/lib/pageContext';
 
 export default defineContentScript({
   matches: ['http://*/*', 'https://*/*'],
@@ -512,6 +516,174 @@ export default defineContentScript({
       window.addEventListener('resize', updateBox, { passive: true });
     }
 
+    // ===== 交互元素发现(search_element;三期步① ARIA 定位发现层)=====
+
+    /** 交互 ARIA role 白名单(规格 8.4 自研 role 子集;自定义 listbox 的 li[role=option] 亦在此) */
+    const INTERACTIVE_ROLES = new Set([
+      'button',
+      'link',
+      'textbox',
+      'searchbox',
+      'combobox',
+      'checkbox',
+      'radio',
+      'switch',
+      'slider',
+      'spinbutton',
+      'tab',
+      'menuitem',
+      'menuitemcheckbox',
+      'menuitemradio',
+      'option',
+      'treeitem',
+      'listbox',
+    ]);
+
+    /** 不下钻的子树:原生 <select>/<datalist> 的选项由外层 combobox 代表,避免吃掉预算 */
+    const SEARCH_SKIP_SUBTREE_SELECTOR = 'option, optgroup, datalist';
+
+    /** dom-accessibility-api 模块类型(运行时经动态导入加载,冷启动零成本) */
+    type AccessibilityLibs = typeof import('dom-accessibility-api');
+
+    /** 可访问性库缓存:加载失败则缓存降级(之后一直返回错误载荷) */
+    let accessibilityLibsPromise: Promise<AccessibilityLibs | null> | null = null;
+
+    function loadAccessibilityLibs(): Promise<AccessibilityLibs | null> {
+      if (!accessibilityLibsPromise) {
+        accessibilityLibsPromise = import('dom-accessibility-api').catch(() => null);
+      }
+      return accessibilityLibsPromise;
+    }
+
+    /** DOM 标签启发:getRole 未映射但可交互的 HTML(input 含 password/date 等无隐式 ARIA role 的类型) */
+    function isDomInteractive(el: Element): boolean {
+      switch (el.localName) {
+        case 'input': {
+          const type = (el as HTMLInputElement).type;
+          return type !== 'hidden' && type !== 'file';
+        }
+        case 'textarea':
+        case 'select':
+        case 'button':
+        case 'summary':
+          return true;
+        case 'a':
+        case 'area':
+          return el.hasAttribute('href');
+        default:
+          return (el as HTMLElement).isContentEditable;
+      }
+    }
+
+    /** 候选判定:DOM 标签启发 ∪ tabIndex≥0(规格白名单语义,自定义可焦容器) ∪ 交互 role 白名单 */
+    function isInteractiveCandidate(el: Element, getRole: AccessibilityLibs['getRole']): boolean {
+      if (isDomInteractive(el)) return true;
+      const tabIndex = (el as HTMLElement).tabIndex;
+      if (typeof tabIndex === 'number' && tabIndex >= 0) return true;
+      // ARIA role 大小写不敏感;库对显式 role 属性原样返回,统一小写后匹配
+      const role = getRole(el)?.toLowerCase() ?? null;
+      return role !== null && INTERACTIVE_ROLES.has(role);
+    }
+
+    /**
+     * 生效 role = getRole(显式 role 属性 + 隐式映射),另兑底无隐式 ARIA role 的交互 HTML
+     * (password/date 等文本类 input、contenteditable → textbox);presentation/none 与 file
+     * input 视为不可寻址直接丢弃;tabIndex-only 纯容器 → generic。
+     * 步② click/fill 的 locator 解析必须复用同一函数,保证 [N] 序号与 role 值可重现。
+     */
+    function effectiveRole(el: Element, getRole: AccessibilityLibs['getRole']): string | null {
+      // ARIA role 大小写不敏感;库对显式 role 属性原样返回,统一小写(白名单匹配与输出同此)
+      const role = getRole(el)?.toLowerCase() ?? null;
+      if (role === 'presentation' || role === 'none') return null;
+      if (role) return role;
+      if ((el as HTMLElement).isContentEditable) return 'textbox';
+      if (el.localName === 'input') {
+        // file input 无法以 role+name 语义寻址,兑现“不可寻址直接丢弃”(否则 tabIndex 分支会把它
+        // 以假 textbox 入列,污染无名文本框序号组)
+        return (el as HTMLInputElement).type === 'file' ? null : 'textbox';
+      }
+      if (el.localName === 'textarea') return 'textbox';
+      return 'generic';
+    }
+
+    /** 可见性 = 未被 AX 排除(aria-hidden 子树)+ 渲染可见(checkVisibility:display:none 祖先/visibility/opacity)+ 非零尺寸 */
+    function isElementVisible(el: Element): boolean {
+      if (el.closest('[aria-hidden="true"]')) return false;
+      // checkVisibility 自 Chrome 105 起可用(manifest 已钉 135+):覆盖 display:none 祖先/visibility/opacity
+      if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 || rect.height > 0;
+    }
+
+    /** 收集 body + 开放 shadow root 内的全部元素(文档序;跳过 option/optgroup/datalist 子树,iframe 内容不穿透) */
+    function collectWalkableElements(): Element[] {
+      const out: Element[] = [];
+      const visit = (root: ParentNode): void => {
+        const scope = root === document ? document.body : root;
+        if (!scope) return;
+        for (const el of scope.querySelectorAll('*')) {
+          if (el.closest(SEARCH_SKIP_SUBTREE_SELECTOR)) continue;
+          out.push(el);
+          if (el.shadowRoot) visit(el.shadowRoot);
+        }
+      };
+      visit(document);
+      return out;
+    }
+
+    /**
+     * 交互元素清单(search_element 内容侧计算):
+     * 全量遍历 → 候选过滤 → 生效 role/可访问名称/状态 → 同 role+name 组内文档序编号(序号在截断前
+     * 按全量计数,保证输出 [N] 与步② locator 解析一致)→ 截前 SEARCH_ELEMENT_LIMIT 条。
+     */
+    async function collectInteractiveElements(): Promise<SearchElementsResult | { error: string }> {
+      const libs = await loadAccessibilityLibs();
+      if (!libs) return { error: 'Failed to load the accessibility analysis library.' };
+      const { getRole, computeAccessibleName, isDisabled } = libs;
+
+      const computeStartedAt = performance.now();
+      const ordinals = new Map<string, number>();
+      const elements: SearchElementsResult['elements'] = [];
+      for (const el of collectWalkableElements()) {
+        if (!isInteractiveCandidate(el, getRole)) continue;
+        const role = effectiveRole(el, getRole);
+        if (!role) continue;
+        let name = '';
+        try {
+          name = computeAccessibleName(el) ?? '';
+        } catch {
+          name = '';
+        }
+        name = name.replace(/\s+/g, ' ').trim();
+        // 降噪:非交互 role 且无名且非 DOM 交互标签(tabIndex≥0 带进来的纯容器)对 role+name 寻址无意义
+        if (!INTERACTIVE_ROLES.has(role) && !name && !isDomInteractive(el)) continue;
+        const key = `${role}\u0000${name}`;
+        const ordinal = (ordinals.get(key) ?? 0) + 1;
+        ordinals.set(key, ordinal);
+        elements.push({
+          role,
+          name,
+          ordinal,
+          disabled: isDisabled(el),
+          visible: isElementVisible(el),
+        });
+      }
+      const total = elements.length;
+      // 预算优先给可见元素(隐藏项多为折叠菜单/重复入口,行动价值低;序号已在全量上计数,选集不 影响 [N] 寻址),组内保持文档序
+      const visibleFirst = [
+        ...elements.filter((e) => e.visible),
+        ...elements.filter((e) => !e.visible),
+      ];
+      return {
+        url: location.href,
+        title: document.title,
+        total,
+        truncated: total > SEARCH_ELEMENT_LIMIT,
+        durationMs: Math.round(performance.now() - computeStartedAt),
+        elements: visibleFirst.slice(0, SEARCH_ELEMENT_LIMIT),
+      };
+    }
+
     browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message?.type === PICK_ELEMENT_MESSAGE) {
         if (message.action === 'start') {
@@ -520,6 +692,13 @@ export default defineContentScript({
           sendResponse(resolveElementPayload(message.selector));
         }
         return;
+      }
+      if (message?.type === SEARCH_ELEMENT_MESSAGE) {
+        // 异步计算(动态导入 dom-accessibility-api):返回 true 保持消息通道开放
+        collectInteractiveElements()
+          .then(sendResponse)
+          .catch(() => sendResponse({ error: 'Unexpected failure while collecting interactive elements.' }));
+        return true;
       }
       if (message?.type !== READ_PAGE_MESSAGE) {
         // dev 可观测性:未知协议消息告警,便于排查协议漂移(生产零开销)

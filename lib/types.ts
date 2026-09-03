@@ -67,6 +67,7 @@ export const TOOL_LABELS: Record<string, string> = {
   execute_js: '执行页面脚本',
   compact_context: '压缩上下文',
   search_web: '网络搜索',
+  search_element: '查找交互元素',
 };
 
 /** 取工具展示文案:未知工具名原样返回 */
@@ -210,3 +211,7 @@ export const READ_PAGE_MESSAGE = 'ai-sidebar/read-page' as const;
 export const PICK_ELEMENT_MESSAGE = 'ai-sidebar/pick-element' as const;
 /** content script 框选完成后的结果广播(经 runtime.sendMessage 发给 sidepanel) */
 export const PICK_ELEMENT_RESULT_MESSAGE = 'ai-sidebar/pick-element-result' as const;
+/** 交互元素清单应答(search_element 发现层,content 侧用 dom-accessibility-api 计算) */
+export const SEARCH_ELEMENT_MESSAGE = 'ai-sidebar/search-element' as const;
+/** 交互元素清单输出上限(全量计数后截断;content.ts 与 search_element 工具共用,单一来源) */
+export const SEARCH_ELEMENT_LIMIT = 80;

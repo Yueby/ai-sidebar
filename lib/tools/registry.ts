@@ -3,6 +3,7 @@ import type { PickedElement, WebSearchConfig } from '../types';
 import type { RefTab } from '../pageContext';
 import { createReadPageToolDefinition } from './read-page';
 import { createReadElementToolDefinition } from './read-element';
+import { createSearchElementToolDefinition } from './search-element';
 import { createFetchUrlToolDefinition } from './fetch-url';
 import { createWebSearchToolDefinition } from './web-search';
 import { isWebSearchConfigured } from '../webSearch';
@@ -45,6 +46,12 @@ export function createPageReadTools(options: GetToolsOptions): AgentTool[] {
   return tools;
 }
 
+/** 页面发现组(safe):search_element 列交互元素清单 —— 动作支柱的 ARIA 定位发现层;
+ *  寻址 = 默认 focused tab、tabId 可选(用户拍板:自动化任务可不引用页),故不设 tab 白名单、无条件注册 */
+export function createPageDiscoveryTools(): AgentTool[] {
+  return [createSearchElementToolDefinition()];
+}
+
 /** 网页抓取组(safe):fetch_url 自主取回任意公开 URL 的正文(无需 tab 引用) */
 export function createFetchTools(): AgentTool[] {
   return [createFetchUrlToolDefinition()];
@@ -71,12 +78,13 @@ export function createUtilityTools(onCompactContext?: () => void): AgentTool[] {
   ];
 }
 
-/** 最终工具数组——唯一组装点(顺序:utility → web → read → fetch → gated) */
+/** 最终工具数组——唯一组装点(顺序:utility → web → read → discovery → fetch → gated) */
 export function getTools(options: GetToolsOptions): AgentTool[] {
   return [
     ...createUtilityTools(options.onCompactContext),
     ...createWebSearchTools(options.webSearch),
     ...createPageReadTools(options),
+    ...createPageDiscoveryTools(),
     ...createFetchTools(),
     ...createGatedTools(options),
   ];
