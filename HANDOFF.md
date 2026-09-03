@@ -68,7 +68,7 @@
 
 ## 4. 当前代码状态
 
-lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_element/框选、vision 读图、websearch 十源、fetch_url、compact_context);已提交至 `8d3e67d`(websearch 十源)。
+lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_element/框选、vision 读图、websearch 十源、fetch_url、compact_context);已提交至 `0b515b3`(websearch 十源 + 后续 UI 精修)。
 
 | 文件 | 状态 | 说明 |
 |---|---|---|
@@ -465,7 +465,7 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
 
 > 已完成(2026-09-02):`err: any` → `unknown`(lib/utils.ts `getErrorMessage` helper,App/SettingsMainView/ProviderDialog 5 处收窄);dev 可观测性(content.ts 对未知 `ai-sidebar/` 消息 DEV 下 console.warn)。用户拍板不做:highlight.js 语言包裁剪(本地加载 941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
 >
-> 已完成批次(2026-09,交接前):fetch_url 工具(`1422168`/`b7d0dd0`);**元素引用统一为 `<picked-element …/>` 块协议**(`f4f9ea3`,标记层废除);token 瘦身(`5f7d549`,块内嵌 300 字 preview → 后续收敛为 chip label,system prompt/工具描述压缩,单轮 ~17000→~500 token);兼容层删除(`1e5f5a2`,旧数据可弃);finalize 入场动画闪烁修复(`eadae82`,重估以 sessionKey 为界);流式跟底重做(`2213d61`,overflow-anchor 钉底为主);websearch 十源(`4f87b51`/`8d3e67d`);注释叙事清扫(`80145bf`)。
+> 已完成批次(2026-09,交接前):fetch_url 工具(`1422168`/`b7d0dd0`);**元素引用统一为 `<picked-element …/>` 块协议**(`f4f9ea3`,标记层废除);token 瘦身(`5f7d549`,块内嵌 300 字 preview → 后续收敛为 chip label,system prompt/工具描述压缩,单轮 ~17000→~500 token);兼容层删除(`1e5f5a2`,旧数据可弃);finalize 入场动画闪烁修复(`eadae82`,重估以 sessionKey 为界);流式跟底重做(`2213d61`,overflow-anchor 钉底为主);websearch 十源(`4f87b51`/`8d3e67d`);注释叙事清扫(`80145bf`);UI 精修(`b7d0dd0`/`595b242`/`2bf6f2e`/`c4ee901`/`e160214`:registry fetch 组重组/徽章 label 裸名/hint 精简/说明卡删除/思考菜单排序);交接文档基线 `0b515b3`。
 
 ## 9. 环境备注
 
