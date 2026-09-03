@@ -4,7 +4,7 @@
 
 ## 0. 三句话速读
 
-1. **UI 已全部实现,agent 运行时已升级到 pi-agent-core,引用架构为 `<page-refs>` 元数据块 + `read_page`/`read_element` 工具按需读取**;聊天组件在 `entrypoints/sidepanel/components/chat/`,设置组件在 `components/settings/`,务必先做用户手动回归(见 §8)。
+1. **UI 已全部实现,agent 运行时为 pi-agent-core,引用架构 = `<page-refs>` 元数据块(tabs)+ 消息文本内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ `read_page`/`read_element`/`fetch_url`/`search_web` 工具**;聊天组件在 `entrypoints/sidepanel/components/chat/`,设置组件在 `components/settings/`(提供商/搜索/关于三页签),务必先做用户手动回归(见 §8)。
 2. **AI 通信一律走 `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(同版本 ^0.84.4),严禁手写 SSE/协议适配;`lib/agent.ts` 的 `runAgentTurn()` 是唯一发送入口;唯一例外是"拉模型列表"两个 GET(已在 `lib/models.ts`)。
 3. 每步验收:`pnpm compile && pnpm build` 必须全绿;改 content.ts/消息协议/权限后必须完整重启 `pnpm dev` 并刷新页面(见 §9)。
 
@@ -12,9 +12,10 @@
 
 开源 **BYOK 浏览器 AI 侧边栏扩展**(Chromium:Chrome/Edge/Brave),对标 Chrome 内置 Gemini 侧边栏,用用户自己的 API Key。`ai-sidebar` 是永久内部代号(目录/包名不改,改的只是产品名)。
 
-**产品北极星:浏览器 Agentic 侧边栏**——从聊天助手演进为能在浏览器里自治完成多步任务的 agent。六大支柱:感知(read_page/read_element/框选→三期 search_element/screenshot/页面版本指纹)、动作(execute_js→三期 click/fill/scroll)、自治(gate→会话级 grant)、获取(→websearch/fetch_url)、记忆(compact_context→便签)、底座(i18n/发布)。
+**产品北极星:浏览器 Agentic 侧边栏**——从聊天助手演进为能在浏览器里自治完成多步任务的 agent。六大支柱:感知(read_page/read_element/框选→三期 search_element/screenshot/页面版本指纹)、动作(execute_js→三期 click/fill/scroll)、自治(gate→会话级 grant)、获取(**websearch 十源 + fetch_url 已落地**)、记忆(compact_context 已落地)、底座(i18n/发布)。
 
-- MVP(已完成,待手动回归):sidePanel 聊天(流式/Markdown/工具卡片/思考折叠区/token 脚注/多会话/会话草稿)+ 读取当前网页(`read_page`/`read_element` 工具按需读取,框选元素 + vision 读图)+ BYOK 多提供商(三种协议)
+- MVP(已完成,待手动回归):sidePanel 聊天(流式/Markdown/工具卡片/思考折叠区/token 脚注/多会话/会话草稿/上下文占用环)+ 读取当前网页(`<page-refs>` 块 + 消息内 `<picked-element …/>` 块 + `read_page`/`read_element` 按需读取,框选元素 + vision 读图)+ BYOK 多提供商(三种协议)
+- 增补批次(已完成):websearch 十源(设置页"搜索"页签,search_web 条件注册)、fetch_url(自主取回任意公开 URL)、compact_context(模型申请压缩)
 - 二期:划词快捷提问、多模型快捷切换、会话重命名/导出
 - 三期(规格 v2,见 §8.4):ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;未实施
 
@@ -28,7 +29,7 @@
 | 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`;已装:badge/button/checkbox/dialog/dropdown-menu/input/label/scroll-area/select/separator/switch/textarea/tooltip;**`components/ui/` 保持官方原样,严禁自定义组件/样式/变体** |
 | AI 请求 | **`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(见 §6/§7),sidepanel 直连,BYOK |
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,`idb` 封装,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat;devtools 仅 DEV 构建),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化 |
-| 页面引用 | 引用元数据 = user 消息 content 内嵌 `<page-refs>{JSON}</page-refs>` 块(唯一事实源:LLM 直读 + UI 解析同源,`lib/pageRefs.ts`);实时内容经 `read_page`(tabId 句柄读整页正文)/`read_element`(引用页内任意 CSS selector,返回 outerHTML)工具按需读取 |
+| 页面引用 | **元素引用单一表示 = 自闭合 `<picked-element elementId tabId selector tagName label />` 块**,草稿(TipTap 原子徽章节点)/存储消息/LLM 视图三处同串(属性值经 `&quot;` 转义);`<page-refs>{JSON}</page-refs>` 块仅承载 tabs 元数据(LLM 视图剥 elements 留 tabs,存储层保留供 UI chip 查表),两块皆在发送时序列化进 user content 此后不可变(`lib/pageRefs.ts`);元素内容按需经 `read_element`(块属性 tabId+selector 即句柄)获取 |
 | manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts`(+ host_permissions http/https);`minimum_chrome_version: "135"`(userScripts.execute 门槛;Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight + highlight.js(样式已在 style.css 引入) |
 | 路径别名 | `@/*` → 项目根 |
@@ -56,40 +57,47 @@
 16. **模型可见文本一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支文本、非 vision 图片描述、system prompt 全文;UI 显示文案保持中文(TOOL_LABELS 中文值、ToolCallCard 等),以后收敛 i18n。
 17. **工具门控契约 = `lib/gate.ts`**:`GateRequest`(confirm 弹卡 / ask 提问)+ `setGateHandler`(App 注册 UI 处理器;**未注册时门控请求快速 deny/cancelled,安全默认**)、`flushPendingGates`(停止/中止生成时冲销 pending)、`requestGate`(handler 抛异常按 deny);`createGatedTool(tool, summary, detail?, detailFromArgs?)` 为 confirm 路径包装,detail 支持按调用参数动态生成(`detailFromArgs(args): string`,空串回退静态 detail,execute_js 用它预览待执行代码),denied 返回英文 "User denied permission to run this tool."(正常 tool result,模型可继续);ask_user 走 ask 路径,挂起阻塞工具循环属预期(无超时)。
 18. **execute_js = userScripts.execute 主路线 + scripting MAIN world 兜底**(`lib/pageScripting.ts`):Chrome 135+ 才有 `chrome.userScripts.execute`(manifest 已设 `minimum_chrome_version: "135"`);Chrome 138+ 需用户在扩展详情页开启 **Allow User Scripts**(未开时命名空间缺失或 getScripts() throw);userScripts 不可用时降级 `scripting.executeScript` MAIN world(func 包装 eval,严格 CSP 站点会失败),降级在返回文本里注明、全链失败返回可行动英文错误文本;结果 JSON.stringify 后截断 8000 字符;一切错误转英文文本不 throw。
+19. **元素引用 = 单一表示 `<picked-element …/>` 块**(标记协议 [element:N]/[元素:N] 已废除):块在消息文本内**原位**承载引用,草稿/存储/LLM 三处同串零转换;块属性 = elementId(1 起单调递增,随草稿持久化)+ tabId/selector/tagName/label(内容预览截断 ~24 视觉单位,`lib/elementLabel.ts`);LLM 请求副本仅把 refs 块剥 elements 留 tabs(`agent.ts toLlmMessage`);兼容层已删——normalizePickedElements/旧双正则/旧草稿转换全移除,**旧格式元素丢弃、旧标记按裸文本显示**(dev 阶段未发布,数据可弃;发布前如需兼容再补)。
+20. **websearch 十源 + fetch_url**:源集 = duckduckgo/searxng(免费)/brave/tavily/bocha/serper/exa/zhipu/metaso(API Key)/bing(无 Key HTML 抓取,稳定性不保证),设置页"搜索"页签配置,`search_web` 仅在源可用时注册(守卫单一来源 `isWebSearchConfigured`);统一结果形状 `{title,url,snippet}[]`,错误前缀 `search_failed:`/`not_configured:`;`fetch_url` = sidepanel 直连 GET + Readability 提取(与 content.ts 同库),**私有/内网地址拒绝且重定向复检**(防提示注入探测内网),2MB/12000 字上限,错误前缀 `fetch_failed:`/`http_error:`/`not_html:`/`too_large:`/`extract_failed:`。
 
 ## 4. 当前代码状态
 
-lib 层 + sidepanel 全部 UI 已完成(含 page-refs 引用架构、read_element/框选、vision 读图);已提交 `485b5a3`(工作树干净)。
+lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_element/框选、vision 读图、websearch 十源、fetch_url、compact_context);已提交至 `8d3e67d`(websearch 十源)。
 
 | 文件 | 状态 | 说明 |
 |---|---|---|
-| `lib/types.ts` | ✅ 完成 | `ApiType`/`ModelConfig`(含 `reasoningLevels`)/`ReasoningLevel`(`REASONING_LEVELS`/`REASONING_LEVEL_LABELS`)/`TOOL_LABELS`+`toolLabel`(中文单一来源)/`Settings`(含 `reasoningLevel`)/`RefTabMeta`/`RefElementMeta`/`PageRefs`/`ChatMessage`(纯 pi 联合)/`SessionDraft`/`Session`(含 draft)/`PickedElement`/`READ_PAGE_MESSAGE`+`PICK_ELEMENT_MESSAGE`+`PICK_ELEMENT_RESULT_MESSAGE`(消息协议常量单一来源) |
-| `lib/providers.ts` | ✅ 完成 | `API_TYPE_OPTIONS`(三协议+默认 baseUrl)、`normalizeBaseUrl`(anthropic 剥尾 /v1)、`apiTypeLabel`、`createProviderDraft`、`findActiveModel`、`getModelReasoningLevels`(空回退 low/medium/high)、`resolveReasoningLevel` |
-| `lib/storage.ts` | ✅ 完成 | `settingsItem`/`activeSessionIdItem` + `sanitizeSettings`/`sanitizeSessions`(旧扁平消息结构按 pi 形状迁移)+ `uid/createSession(含 draft)/createUserMessage(text, refs?)/messageText/titleFromText/EMPTY_USAGE` |
+| `lib/types.ts` | ✅ 完成 | `ApiType`/`ModelConfig`(含 `reasoningLevels`)/`ReasoningLevel`(`REASONING_LEVELS`/`REASONING_LEVEL_LABELS`)/`TOOL_LABELS`+`toolLabel`(中文单一来源)/`WebSearchProvider`+`WebSearchConfig`/`Settings`(含 `reasoningLevel`+`webSearch`)/`RefTabMeta`/`RefElementMeta`(id/tabId/selector/tagName/preview)/`PageRefs`/`ChatMessage`(纯 pi 联合)/`SessionDraft`/`Session`(含 draft+compaction)/`PickedElement`(含 elementId)/`READ_PAGE_MESSAGE`+`PICK_ELEMENT_MESSAGE`+`PICK_ELEMENT_RESULT_MESSAGE`(消息协议常量单一来源) |
+| `lib/providers.ts` | ✅ 完成 | `API_TYPE_OPTIONS`(三协议+默认 baseUrl)、`normalizeBaseUrl`(anthropic 剥尾 /v1)、`apiTypeLabel`、`createProviderDraft`、`findActiveModel`、`getModelReasoningLevels`(空回退 low/medium/high)、`resolveReasoningLevel`、`DEFAULT_SETTINGS`(含 webSearch 默认) |
+| `lib/storage.ts` | ✅ 完成 | `settingsItem`/`activeSessionIdItem` + `sanitizeSettings`(含 `sanitizeWebSearch`:provider 白名单 11 值)/`sanitizeSessions`(旧扁平消息结构按 pi 形状迁移)+ `uid/createSession(含 draft)/createUserMessage(text, refs?)/messageText/titleFromText/EMPTY_USAGE`;sanitizeDraft 丢弃无 elementId 的旧格式元素 |
 | `lib/sessionStore.ts` | ✅ 完成 | 会话历史唯一读写层(IndexedDB,`idb` 封装):`listSessions`(按 updatedAt 降序)/`saveSession`/`deleteSession`/`migrateLegacySessions`(旧 `local:sessions` 一次性迁移后删除旧 key);草稿随 Session 一起存 |
-| `lib/pageRefs.ts` | ✅ 完成 | `<page-refs>` 块纯函数:`renderPageRefsBlock`(序列化拼进 user content)/`parsePageRefs`(UI 解析渲染)/`stripPageRefs`(展示时剥块)/`collectPageRefs`(聚合历史块引用,做工具白名单) |
-| `lib/agent.ts` | ✅ 完成(224 行) | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;工具数组经 `tools/registry.ts` 的 `getTools` 组装)、`toPiModel`、`buildSystemPrompt()`(身份/语言 + 本地日期时间行 + navigator.language + `<page-refs>` 协议常量规则,不注入引用目录);工具工厂已全部移至 `lib/tools/` |
+| `lib/pageRefs.ts` | ✅ 完成 | `<page-refs>` 块纯函数:`renderPageRefsBlock`(序列化拼进 user content;elements 含 id/preview)/`parsePageRefs`(UI 解析渲染,旧消息无 id 按数组序补齐)/`stripPageRefs`(展示时剥块)/`collectPageRefs`(聚合历史块引用,做工具白名单);`ELEMENT_PREVIEW_LIMIT` 常量 |
+| `lib/agent.ts` | ✅ 完成 | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;工具数组经 `tools/registry.ts` 的 `getTools` 组装;**LLM 请求副本 `toLlmMessage` 把 refs 块剥 elements 留 tabs** —— `<picked-element>` 块已是元素内容载体,存储/LLM 同串)、`toPiModel`、`buildSystemPrompt()`(身份 + 本地日期时间行 + 压缩版 `<page-refs>` 协议规则,不注入引用目录);工具工厂已全部移至 `lib/tools/` |
 | `lib/models.ts` | ✅ 完成 | `fetchProviderModels`(openai 兼容 Bearer / anthropic x-api-key+version,路径 openai=`/models`、anthropic=`/v1/models`)、`fetchModelsDevMeta`、`applyModelMeta`、`syncModelsWithModelsDev`(「同步」按钮:为已有模型补全参数)、`testConnection` |
 | `lib/pageContext.ts` | ✅ 完成 | tab 级读取原语(仅读取,不含工具工厂):`getActiveTabMeta`/`getTabMeta`/`listCandidateTabs`/`extractFromTab`/`renderPageContext`(content.ts 截 12000 字,本层透传);框选与元素解析:`startPickElement`(`ai-sidebar/pick-element`)、`resolveElement`(复用 `ai-sidebar/pick-element` + `action:'resolve'`,返回 outerHTML+truncated+preview+images+dpr) |
 | `lib/imageFetch.ts` | ✅ 完成 | read_element 取图管道:`fetchImageForModel`(fetch 主取)→ `captureCropForModel`(captureVisibleTab 按 rect×DPR 裁剪兜底,防盗链/403);canvas 降采样对齐 pi 上游:≤2000×2000、JPEG q0.8 起逐级降质、PNG/JPEG 取小、base64 ≤4.5MB |
 | `lib/gate.ts` | ✅ 完成 | 工具门控契约:`GateRequest`(confirm/ask)/`GateResponse`、`setGateHandler`(未注册=快速 deny/cancelled,安全默认)、`flushPendingGates`(停止/中止冲销 pending)、`requestGate`(handler 异常按 deny)、`createGatedTool`(confirm 包装,detail 支持按参数动态生成,denied 英文拒绝文本;execute_js 已用) |
 | `lib/pageScripting.ts` | ✅ 完成 | execute_js 注入原语:`isUserScriptsAvailable`(userScripts 存在 + getScripts() 探测不 throw)、`executePageScript(tabId, code, world)`(userScripts.execute 主路线 → scripting.executeScript MAIN world func 包装兜底,JSON.stringify 后 8000 字符截断,降级在返回文本注明,一切错误转英文不 throw) |
-| `lib/tools/` | ✅ 完成 | 工具注册表(pi 一工具一文件 + 集合函数):`registry.ts` = 唯一组装点 `getTools(GetToolsOptions{refTabs,pickedElements,canUseImage})`,组装序 utility→read_page→read_element→execute_js;`read-page`/`read-element`/`execute-js`/`read-time`/`ask-user` 各导出 `createXxxToolDefinition`(旧 createReadPageTool 等工厂名已废);`time.ts` = 本地时间助手 `localDate`/`localTime`/`utcOffsetLabel`/`weekdayName` |
-| `lib/utils.ts` | ✅ 完成 | cn() |
+| `lib/fetchPage.ts` | ✅ 完成 | fetch_url 抓取管线:sidepanel 直连 GET + 动态 `@mozilla/readability` 提取(与 content.ts 同库);**私有/内网地址拒绝 + 重定向复检**(防提示注入探测内网);2MB(Content-Length 与读入后双检)/content-type 限 HTML/正文 12000 字截断;错误英文文本规范化前缀 `fetch_failed:`/`http_error:`/`not_html:`/`too_large:`/`extract_failed:` |
+| `lib/webSearch.ts` | ✅ 完成 | websearch 十源适配器(duckduckgo/searxng HTML 解析 + brave/tavily/bocha/serper/exa/zhipu/metaso JSON API + bing 无 Key HTML 抓取):统一 `{title,url,snippet}[]`、10s 超时、截 8 条、错误 throw `search_failed:` 前缀族;`isWebSearchConfigured`(注册/运行守卫单一来源)、`searchWeb(config, query)` 分发 |
+| `lib/elementLabel.ts` | ✅ 完成 | 元素 chip label 构造:`elementChipLabel`(24 视觉单位,chip/气泡)/`elementListLabel`(48 视觉单位,引用列表);CJK 视觉宽度加权,空 preview 回退 `<tagName>`→"页面元素" |
+| `lib/compaction.ts` | ✅ 完成 | compact_context 压缩管线:生效历史序列化 → pi completeSimple 生成结构化摘要(KEEP_RECENT_TOKENS=12000 与 read_element 截断同值);`findCutIndex`/`runCompact`;摘要消息由调用方拼装落盘 |
+| `lib/tools/` | ✅ 完成 | 工具注册表(pi 一工具一文件 + 集合函数):`registry.ts` = 唯一组装点 `getTools(GetToolsOptions{refTabs,pickedElements,canUseImage,onCompactContext,webSearch})`,组装序 **utility(read_time/ask_user/compact_context)→ web(search_web 条件)→ read(read_page/read_element)→ fetch(fetch_url)→ gated(execute_js)**;`read-page`/`read-element`/`fetch-url`/`web-search`/`compact-context`/`execute-js`/`read-time`/`ask-user` 各导出 `createXxxToolDefinition`;`time.ts` = 本地时间助手 |
+| `lib/utils.ts` | ✅ 完成 | cn()/getErrorMessage |
 | `entrypoints/content.ts` | ✅ 完成 | 结构化提取(article/main/[role=main] 优先,截 12000 字)+ 框选元素模式(@medv/finder 生成唯一 selector,结果经 `ai-sidebar/pick-element-result` 广播)+ 元素解析应答(`pick-element` 消息 `action:'resolve'`) |
 | `entrypoints/background.ts` | ✅ 完成 | 点击图标打开侧边栏 |
 | `entrypoints/sidepanel/App.tsx` | ✅ 完成(组合层) | store selector 订阅 + 五域编排 hook 组装(useGate/useSessionManager/useChatTurn/usePageContextRefs/useCompact)+ ChatView ⇄ Settings 视图骨架 + gatePagination/quietTailCount/contextData 派生(useMemo 就地);无业务逻辑 |
 | `entrypoints/sidepanel/store/` | ✅ 完成 | zustand v5 单 store(单一状态树按域分组,非分列 store)五切片:`gateSlice`(activeGate/resolvedGateCount/pushGate/4 应答/dismissPendingGates/resetGates;handler 模块级注册,StrictMode 免疫)、`errorSlice`(errorMessage)、`sessionSlice`(sessions/activeSessionId/loaded/commitSessions/patchDraftOf/patchActiveDraft + 草稿防抖队列模块级 flushDraftSaves/dropPendingDraftSave)、`settingsSlice`(settings/setSettings/updateSettings)、`chatSlice`(isStreaming/streamingContent/streamingThinking/activeToolNames/isCancelled/inFlight);devtools 仅 `wxt dev` 运行模式(构建产物恒为零引入;devtools 面板需装 Redux DevTools 浏览器扩展手动冒烟验证一次) |
 | `entrypoints/sidepanel/hooks/` | ✅ 完成(编排层,状态全在 store) | `useGate`(gateSlice 消费层:4 应答回调薄层/dismiss/resetGates)、`useSessionManager`(增删切/AI 命名/重命名 + 原子 init:storage 读取+迁移+watch 接 store action)、`useChatTurn`(send/stop 编排:turnSeqRef R-1 守卫/abortControllerRef/compactRequestedRef ephemeral ref;B-1 生效历史/非破坏落盘语义原样)、`usePageContextRefs`(refTabs/pickedElements 读写经 patchActiveDraft、tabs.onUpdated/onRemoved 同步、框选 startPickElement+pendingPick、runtime.onMessage 框选结果回传)、`useCompact`(压缩编排:互斥守卫/非破坏落盘);跨域归属备案:gatePagination/quietTailCount/contextData 留 App 组合层 useMemo,runtime.onMessage 框选监听归 usePageContextRefs;三边界:store=共享状态唯一家 / 编排 hook=异步流程+ephemeral ref / 派生=消费点就地 useMemo |
-| `entrypoints/sidepanel/components/chat/` | ✅ 完成 | ChatHeader(模型/历史 DropdownMenu/设置入口)、MessageList(ResizeObserver 自动跟底)、MessageItem(引用 chip 解析渲染 `parsePageRefs`、ToolCallCard 四态+参数/结果展开、思考折叠区默认折叠+最新3行预览+思考中动画、token 脚注)、MarkdownView、ChatInput(Composer `[+ ▾]` 框选/引用入口、tab chip 带元素 DropdownMenu、模型+思考等级切换) |
-| `entrypoints/sidepanel/components/settings/` | ✅ 完成 | SettingsMainView(提供商列表/关于)、ProviderDialog(增改提供商 + 内联拉取勾选导入 + 「同步」按钮)、ModelConfigDialog |
-| `entrypoints/sidepanel/style.css` | ✅ 完成 | 主题 token + markdown 排版(`.md-*`)+ hljs 主题 + 6px 细滚动条 |
+| `entrypoints/sidepanel/components/chat/` | ✅ 完成 | ChatHeader(模型/历史 DropdownMenu/设置入口)、MessageList(**overflow-anchor 哨兵钉底为主 + RO 瞬时兜底**;空态/错误横幅/锚点)、MessageItem(分段渲染:思考/文本/工具卡按 content 块序;ToolCallCard 四态+参数/结果展开;用户消息 chip = `<picked-element>` 块解析渲染 + 旧标记裸文本兜底;token 脚注)、MarkdownView、CompactionRow(压缩摘要分隔线卡)、SlashMenu(斜杠命令浮层)、ApprovalSection(审批槽位,唯一交互渲染位)、elementMarkerText(chip 渲染 helper)、extensions/(TipTap InlineBadge 原子徽章节点 + BadgeNodeView + editorSerialize 序列化) |
+| `entrypoints/sidepanel/components/chat/ChatInput.tsx` | ✅ 完成 | **Composer = TipTap 3**(inlineBadge 原子节点:框选完成 insertContent;删除=叉号整块删/PM 原生退格;粘贴=纯文本/单一 URL 转 url 徽章;草稿恢复=setContent+parseHTML 还原);斜杠命令(/compact /clear /help,浮层+键位导航);上下文占用环 ContextRing/详情 ContextPanel(压缩入口);tab chip 带元素 DropdownMenu + 清除已选元素;模型+思考等级切换 |
+| `entrypoints/sidepanel/components/settings/` | ✅ 完成 | SettingsMainView(提供商/搜索/关于三页签)、SearchSettingsView(搜索源 Select + 条件字段:searxng 实例地址/各 API Key 密码输入 + 申请地址;修改即 updateSettings 持久化)、ProviderDialog(增改提供商 + 内联拉取勾选导入 + 「同步」按钮)、ModelConfigDialog |
+| `entrypoints/sidepanel/style.css` | ✅ 完成 | 主题 token + markdown 排版(`.md-*`)+ hljs 主题 + 6px 细滚动条 + element-chip 族(元素预览 chip)+ messages-anchor/viewport(跟底锚点)+ composer-editor(TipTap) |
 | `entrypoints/sidepanel/theme.ts` / `main.tsx` / `index.html` | ✅ 完成 | 不用动 |
 | `components/ui/` | ✅ shadcn 官方原样 | **严禁自定义**;button.tsx 曾被加 xs/icon-xs,已重置 |
 
 UI 细节基调:顶/底渐变遮罩衔接滚动区、用户气泡 `bg-secondary`、三点打字动画。
 
-依赖:`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`(^0.84.4)、`@medv/finder`(框选 selector)、`highlight.js`(11.x)、`idb`。pnpm 曾提示 `@google/genai`/`protobufjs` 构建脚本被忽略,无害。
+依赖:`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`(^0.84.4)、`@tiptap/*` v3.31(Composer)、`@mozilla/readability` + `dom-to-semantic-markdown`(提取,content.ts 与 fetchPage 共用)、`@medv/finder`(框选 selector)、`highlight.js`(11.x)、`idb`、`zustand` v5。pnpm 曾提示 `@google/genai`/`protobufjs` 构建脚本被忽略,无害。
 
 ## 5. UI 设计稿(designer 当年产出的历史稿,实际实现以代码为准)
 
@@ -269,23 +277,28 @@ type ApiType = 'openai-completions' | 'openai-responses' | 'anthropic-messages';
 type ReasoningLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 const REASONING_LEVELS: ReasoningLevel[];              // off~max 全档
 const REASONING_LEVEL_LABELS: Record<ReasoningLevel, { short: string; full: string }>;
-const TOOL_LABELS: Record<string, string>;             // 工具中文名单一来源(read_page=读取网页内容, 旧 key extract_page 兼容历史会话, read_element=读取页面元素)
+const TOOL_LABELS: Record<string, string>;             // 工具中文名单一来源(read_page=读取网页内容, 旧 key extract_page 兼容历史会话, read_element/fetch_url=抓取网页内容/search_web=网络搜索/execute_js/compact_context/read_time/ask_user)
 interface ModelConfig { id: string; displayName?: string; contextWindow?: number;
   maxTokens?: number; tools?: boolean; vision?: boolean; reasoning?: boolean;
   reasoningLevels?: ReasoningLevel[];                  // 该模型支持的档位(不含 off;空回退 low/medium/high)
   prefilled?: boolean; }
 interface ProviderConfig { id: string; name: string; api: ApiType; baseUrl: string;
   apiKey: string; models: ModelConfig[]; }
+type WebSearchProvider = 'none' | 'duckduckgo' | 'searxng' | 'brave' | 'tavily'
+  | 'bocha' | 'serper' | 'exa' | 'zhipu' | 'bing' | 'metaso';
+interface WebSearchConfig { provider: WebSearchProvider; searxngBaseUrl: string; apiKey: string }
 interface Settings { providers: ProviderConfig[]; activeProviderId: string | null;
-  activeModelId: string | null; includePageContext: boolean; reasoningLevel: ReasoningLevel; }
-// 引用元数据(user 消息 content 内嵌 <page-refs> 块的 JSON,发送后不可变):
+  activeModelId: string | null; includePageContext: boolean; reasoningLevel: ReasoningLevel;
+  webSearch: WebSearchConfig; }
+// 引用元数据(user 消息 content 内嵌 <page-refs> 块的 JSON,发送后不可变;LLM 视图剥 elements 留 tabs):
 interface RefTabMeta { tabId: number; title: string; url: string; focused?: boolean }
-interface RefElementMeta { tabId: number; selector: string; tagName: string; preview: string }
+interface RefElementMeta { id: number; tabId: number; selector: string; tagName: string; preview: string }
 interface PageRefs { tabs: RefTabMeta[]; elements: RefElementMeta[] }
 type ChatMessage = UserMessage | AssistantMessage | ToolResultMessage;  // 纯 pi 联合,零自定义字段
 interface SessionDraft { input: string; refTabs: RefTab[]; pickedElements: PickedElement[] }
-interface Session { id; title; messages: ChatMessage[]; createdAt; updatedAt; draft?: SessionDraft }
-interface PickedElement { id; tabId; selector; tagName; preview }       // 框选元素(@medv/finder 唯一 selector)
+interface Session { id; title; messages: ChatMessage[]; createdAt; updatedAt; draft?: SessionDraft;
+  compaction?: { summaryTimestamp; tokensBefore; compactedAt } }
+interface PickedElement { id; elementId; tabId; selector; tagName; preview }  // elementId 随草稿持久化,与块属性一致
 
 // lib/providers.ts
 API_TYPE_OPTIONS: { value: ApiType; label: string; defaultBaseUrl: string }[]
@@ -297,19 +310,24 @@ getModelReasoningLevels(m: ModelConfig): ReasoningLevel[]   // 空/缺省回退 
 resolveReasoningLevel(m: ModelConfig, level: ReasoningLevel): ReasoningLevel
 
 // lib/storage.ts(wxt storage item)
-settingsItem        // 'local:settings',fallback DEFAULT_SETTINGS
+settingsItem        // 'local:settings',fallback DEFAULT_SETTINGS(含 webSearch)
 activeSessionIdItem // 'local:activeSessionId'
-sanitizeSettings(unknown): Settings
+sanitizeSettings(unknown): Settings                // 含 sanitizeWebSearch(provider 白名单 11 值)
 sanitizeSessions(unknown): Session[]            // 旧扁平消息 {id,role,content} → pi 形状(sessionStore 迁移用)
 uid(): string; createSession(title?, draft?); createUserMessage(text, refs?): UserMessage  // refs 序列化进 <page-refs> 块
 messageText(m: ChatMessage): string             // 提取纯文本(各消息类型归一;UI 展示文本用 stripPageRefs 再剥块)
 titleFromText(text): string; EMPTY_USAGE
 
-// lib/pageRefs.ts(<page-refs> 块纯函数,唯一事实源)
-renderPageRefsBlock(refs: PageRefs): string     // 拼进 user content 的 JSON 块
-parsePageRefs(content: unknown): PageRefs | null // UI 解析渲染 chip
+// lib/pageRefs.ts(<page-refs> 块纯函数;ELEMENT_PREVIEW_LIMIT=300)
+renderPageRefsBlock(refs: PageRefs): string     // 拼进 user content 的 JSON 块(elements 含 id/preview)
+parsePageRefs(content: unknown): PageRefs | null // UI 解析渲染 chip;旧消息无元素 id 按数组序补齐
 stripPageRefs(content: string): string          // 展示时剥块
-collectPageRefs(messages): PageRefs             // 聚合历史块引用 → 工具 tab 白名单
+collectPageRefs(messages): PageRefs             // 聚合历史块引用(同字段后者覆盖前者)→ 工具 tab 白名单
+
+// ── 元素引用协议(单一表示):user 消息文本内嵌自闭合块,三处同串 ──
+// <picked-element elementId="N" tabId="N" selector="…" tagName="…" label="预览截断24视觉单位" />
+// 属性值经 &quot;/&lt;/&gt; 转义;序列化 = extensions/editorSerialize.ts serializePickedElementBlock
+// LLM 请求副本(agent.ts toLlmMessage)把 refs 块剥 elements 留 tabs,块原样保留(存储/LLM 同串)
 
 // lib/sessionStore.ts —— 会话历史唯一读写层(IndexedDB 'ai-sidebar' / store 'sessions',idb 封装;草稿随 Session 存)
 listSessions(): Promise<Session[]>              // getAll,按 updatedAt 降序
@@ -318,24 +336,45 @@ deleteSession(id: string)                       // delete
 migrateLegacySessions(): Promise<Session[]>     // 旧 local:sessions 非空则清洗写入后删旧 key(只迁一次)
 // 注意:IndexedDB 无跨上下文 watch;sidepanel 是会话历史唯一写方
 
-// lib/agent.ts —— 发消息唯一入口(224 行;工具组装已移至 lib/tools/registry.ts)
+// lib/agent.ts —— 发消息唯一入口(工具组装已移至 lib/tools/registry.ts)
 toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi>   // 缺失参数保守默认(128000/4096)
-buildSystemPrompt(): string                     // 身份/语言 + <page-refs> 协议常量规则(不注入引用目录)
-runAgentTurn({ provider; modelId; history: ChatMessage[]; userMessage: UserMessage;  // content 已内嵌 <page-refs> 块
+buildSystemPrompt(): string                     // 身份 + 本地日期行 + 压缩版 <page-refs> 协议规则(不注入引用目录)
+runAgentTurn({ provider; modelId; history: ChatMessage[]; userMessage: UserMessage;  // content 已内嵌块
   refTabs?: RefTab[]; pickedElements?: PickedElement[];                              // 当前草稿引用(App 已按开关过滤)
   thinkingLevel: ReasoningLevel; sessionId?; signal?; onEvent?: (e: AgentEvent) => void;
-}): Promise<RunAgentResult>                     // 对外签名不变;内部经 getTools 拿最终工具数组
+  onCompactContext?: () => void; webSearch?: WebSearchConfig | null;
+}): Promise<RunAgentResult>                     // LLM 请求副本经 toLlmMessage:refs 块剥 elements 留 tabs
 // RunAgentResult { messages(完整转录); newMessages(本轮新增,含 toolResult); errorMessage? }
-// 语义:工具白名单 = 草稿引用 ∪ collectPageRefs(history);tabs 非空注入 read_page + execute_js,
-// 有可读 tab 注入 read_element;内部 new Agent({ streamFn: models.streamSimple, toolExecution:'sequential' });
+// 语义:工具白名单 = 草稿引用 ∪ collectPageRefs(history);内部 new Agent({ streamFn: models.streamSimple, toolExecution:'sequential' });
 // 失败经协议事件编码(stopReason='error');中止时已生成部分保留在转录中;onEvent 透出供 UI 流式渲染
 
 // lib/tools/registry.ts —— 工具注册表(唯一组装点;一工具一文件见同目录)
-interface GetToolsOptions { refTabs?: RefTab[]; pickedElements?: PickedElement[]; canUseImage?: boolean }
-getTools(options): AgentTool[]                  // 组装序:utility(read_time/ask_user)→ read_page → read_element → execute_js
-// createPageReadTools(options) / createGatedTools(options) / createUtilityTools():分组集合函数
-// 各工具文件导出 createXxxToolDefinition(旧 createReadPageTool/createReadElementTool/createExecuteJsTool/
-// createReadTimeTool/createAskUserTool 工厂名已废);新增工具 = 新文件 + 在 registry 登记分组
+interface GetToolsOptions { refTabs?: RefTab[]; pickedElements?: PickedElement[]; canUseImage?: boolean;
+  onCompactContext?: () => void; webSearch?: WebSearchConfig | null }
+getTools(options): AgentTool[]                  // 组装序:utility(read_time/ask_user/compact_context)→ web(search_web 条件)→ read(read_page/read_element)→ fetch(fetch_url)→ gated(execute_js)
+// createWebSearchTools(config) / createPageReadTools(options) / createFetchTools() / createGatedTools(options) /
+// createUtilityTools(onCompactContext):分组集合函数(search_web 仅在 isWebSearchConfigured(config) 时注册)
+// 各工具文件导出 createXxxToolDefinition;新增工具 = 新文件 + 在 registry 登记分组
+
+// lib/fetchPage.ts(fetch_url 抓取管线)
+FETCH_CONTENT_LIMIT = 12000                     // 正文截断上限(与 read_element 同值)
+fetchAndExtractPage(url): Promise<{ok:true;page:{title;url;content;truncated}}|{ok:false;error:string}>
+// sidepanel 直连 GET + 动态 @mozilla/readability 提取;私有/内网地址拒绝+重定向复检;
+// 2MB(Content-Length+读入后双检)/content-type 限 HTML;错误前缀 fetch_failed:/http_error:/not_html:/too_large:/extract_failed:
+
+// lib/webSearch.ts(十源搜索适配器)
+isWebSearchConfigured(config): boolean          // provider 非 none 且必填字段齐备(注册/运行守卫单一来源)
+searchWeb(config, query): Promise<WebSearchResult[]>  // 统一 {title,url,snippet}[];10s 超时;截 8 条
+// duckduckgo/searxng=HTML 解析(class 名脆弱) / bing=无 Key HTML(被拦即 fail) / 其余=官方 JSON API
+// 错误 throw 'search_failed: <platform> returned <status>' / 'not_configured: …'
+
+// lib/elementLabel.ts(元素 chip label)
+elementChipLabel(el): string                    // 24 视觉单位(chip/气泡;CJK×2 加权)
+elementListLabel(el): string                    // 48 视觉单位(引用列表);空 preview 回退 <tagName>→页面元素
+
+// lib/compaction.ts(compact_context 压缩管线)
+runCompact({ provider; modelId; messages; signal?; customInstructions? }): Promise<{ summaryContent; tokensBefore }>
+findCutIndex(messages): number                  // 生效历史切点(KEEP_RECENT_TOKENS=12000)
 
 // lib/models.ts —— 模型列表/预填/同步/测试(全项目唯一手写 fetch 的地方)
 fetchProviderModels({ api, baseUrl, apiKey }, signal?): Promise<string[]>  // anthropic:x-api-key 头 + /v1/models
@@ -372,10 +411,11 @@ createGatedTool(tool, summary, detail?, detailFromArgs?)     // confirm 包装:d
 localDate(now?): string; localTime(now?): string; utcOffsetLabel(now?): string; weekdayName(now?): string
 // 'YYYY-MM-DD' / 'HH:MM:SS' / 'UTC+8' / 英文星期名
 
-// lib/tools/read-time.ts / ask-user.ts(工具定义;execute 前消费方见 registry)
+// lib/tools/read-time.ts / ask-user.ts / fetch-url.ts / web-search.ts(工具定义;组装见 registry)
 createReadTimeToolDefinition(): AgentTool             // 'read_time':date/weekday/time/timezone/iso(UTC) 英文块,免弹卡
 createAskUserToolDefinition(): AgentTool              // 'ask_user':requestGate ask 路径(≤6 options);cancelled → 'User dismissed the question (no answer).'
-// read-page/read-element/execute-js 同模式导出 createXxxToolDefinition(execute-js 经 createGatedTool confirm 包装)
+createFetchUrlToolDefinition(): AgentTool             // 'fetch_url':safe;GET 任意公开 URL → Title/URL/<content>;私有网拒绝;错误前缀族见 lib/fetchPage.ts
+createWebSearchToolDefinition(config): AgentTool      // 'search_web':safe;编号结果清单 + "Use fetch_url … follow up";错误前缀 search_failed:/not_configured:
 
 // lib/imageFetch.ts(read_element 取图管道)
 fetchImageForModel(src): Promise<ModelImage | null>            // fetch 主取
@@ -389,14 +429,14 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
 2. `createProvider({ id, name, baseUrl, auth: { apiKey: { name, resolve: async () => ({ auth: { apiKey } } }) }, models, api })`;BYOK 场景在 resolve 闭包里给 key,每次请求前重建 provider(对象创建很便宜)。
 3. `Model` 必填字段:`{ id, name, api, provider, baseUrl, reasoning, input: ('text'|'image')[], cost(全 0 即可), contextWindow, maxTokens }`——`toPiModel` 已处理缺失参数的保守默认(128000/4096);`input` 含 image 与否是 read_element 产图块的 vision 门控同源(`model.input.includes('image')`),pi-ai `downgradeUnsupportedImages` 是双保险。
 4. **agent 编排不要直接调 `models.stream`,一律走 pi-agent-core 的 `Agent`**(`streamFn: (m, ctx, o) => models.streamSimple(m, ctx, o)`);`runAgentTurn` 已封装工具调用循环/中止/事件透出,UI 只消费 `AgentEvent`。
-5. 消息历史:会话直接按 pi 消息联合(`ChatMessage`)持久化(存 IndexedDB,见 `lib/sessionStore.ts`),agent 回放零转换;引用信息不是自定义字段,而是 `<page-refs>` 块随 user content 原样抵达 LLM(无任何剥离/转换中间层);assistant 消息自带 thinking 块/toolCall/usage;旧扁平结构经 `sanitizeSessions` 在迁移时清洗(usage 补 `EMPTY_USAGE`)。
+5. 消息历史:会话直接按 pi 消息联合(`ChatMessage`)持久化(存 IndexedDB,见 `lib/sessionStore.ts`),agent 回放零转换;元素引用以 `<picked-element …/>` 块内嵌 user content 原样抵达 LLM(存储/LLM 同串,唯一差异 = LLM 请求副本把 `<page-refs>` 块剥 elements 留 tabs,`agent.ts toLlmMessage`);assistant 消息自带 thinking 块/toolCall/usage;旧扁平结构经 `sanitizeSessions` 在迁移时清洗(usage 补 `EMPTY_USAGE`)。
 6. pi-ai 内部已设 `dangerouslyAllowBrowser: true`,官方支持浏览器端;Anthropic 的 `anthropic-version` 头由 pi-ai 处理;图像编码约定对齐 pi 上游 `image-resize-core.ts`(≤2000²/q0.8 起/4.5MB)。
 7. **不要**给 pi-ai 传自定义 fetch、不要绕过它手写协议;模型列表拉取是全项目唯一手写 fetch 的地方(已在 lib/models.ts)。
 
 ## 8. 待办(按序)
 
-1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome 加载扩展):重点 = 普通对话、read_page/read_element 工具触发、框选元素 + vision 读图、思考折叠区、token 脚注、流式中途停止、旧会话数据迁移;另过一遍设置页全流程(添加提供商→测试→拉模型→同步→改参数→设为当前→聊天)。
-2. websearch / fetch_url 工具(读链接目标内容;外部实测验证:侧边栏内 agent 自评最高优先缺口——自主取回任意 URL 内容,外部 agent 对话原文可查用户会话)。
+1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome 加载扩展):重点 = 普通对话、read_page/read_element/fetch_url/search_web(需在设置"搜索"页签启用)工具触发、框选元素(TipTap 徽章)+ vision 读图、压缩摘要分隔线卡、上下文占用环、思考折叠区、token 脚注、流式中途停止、自动跟底(流式无跳动)、旧会话数据迁移(旧格式元素/标记按裸文本丢弃,dev 数据可弃);另过一遍设置页全流程(添加提供商→测试→拉模型→同步→改参数→设为当前→聊天;搜索页签四类源配置)。
+2. ~~websearch / fetch_url 工具~~ **已完成**(2026-09,十源 + fetch_url;见 §4 状态表与 §6 API 参考)。
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)。
 4. **三期规格 v2:ARIA 定位与页面动作原语**(原"页面操作"粗粒度条目替换;chrome.debugger 条件触发行保留,见 ⑤):
    - **引库决策**:唯一新依赖 `dom-accessibility-api`(~12KB gzip,零依赖,114M/周)——getRole(含隐式 role,原生反射不算)/computeAccessibleName(AccName 全算法)/isDisabled;aria-query/axe-core/@testing-library/原生反射全否决;交互判定白名单自研 ~30 行(button/link/input/select/textarea/combobox/slider/tab 等 role 子集 + tabIndex≥0)
@@ -418,6 +458,8 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
 5. 发布:图标 + `wxt zip`。
 
 > 已完成(2026-09-02):`err: any` → `unknown`(lib/utils.ts `getErrorMessage` helper,App/SettingsMainView/ProviderDialog 5 处收窄);dev 可观测性(content.ts 对未知 `ai-sidebar/` 消息 DEV 下 console.warn)。用户拍板不做:highlight.js 语言包裁剪(本地加载 941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
+>
+> 已完成批次(2026-09,交接前):fetch_url 工具(`1422168`/`b7d0dd0`);**元素引用统一为 `<picked-element …/>` 块协议**(`f4f9ea3`,标记层废除);token 瘦身(`5f7d549`,块内嵌 300 字 preview → 后续收敛为 chip label,system prompt/工具描述压缩,单轮 ~17000→~500 token);兼容层删除(`1e5f5a2`,旧数据可弃);finalize 入场动画闪烁修复(`eadae82`,重估以 sessionKey 为界);流式跟底重做(`2213d61`,overflow-anchor 钉底为主);websearch 十源(`4f87b51`/`8d3e67d`);注释叙事清扫(`80145bf`)。
 
 ## 9. 环境备注
 
