@@ -42,6 +42,17 @@ function htmlToReadableText(html: string): string {
   return lines.join('\n');
 }
 
+/** 私有/内网地址判定(localhost/环回/链路本地/内网段/.local) */
+function isPrivateHost(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname.endsWith('.local') ||
+    /^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname)
+  );
+}
+
 export interface FetchedPage {
   title: string;
   url: string;
@@ -65,14 +76,7 @@ export async function fetchAndExtractPage(url: string): Promise<FetchPageResult>
     return { ok: false, error: `fetch_failed: unsupported protocol "${parsedUrl.protocol}" — only http/https URLs can be fetched.` };
   }
   // 私有/内网地址拒绝:防提示注入诱导模型探测用户内网服务(路由器面板/localhost 端口等)
-  const host = parsedUrl.hostname;
-  if (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '::1' ||
-    host.endsWith('.local') ||
-    /^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
-  ) {
+  if (isPrivateHost(parsedUrl.hostname)) {
     return {
       ok: false,
       error: 'fetch_failed: private/internal network addresses are not allowed.',
@@ -85,6 +89,13 @@ export async function fetchAndExtractPage(url: string): Promise<FetchPageResult>
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     return { ok: false, error: `fetch_failed: ${reason}` };
+  }
+  // 重定向跟随后的终态地址复检:公开短链 302 到内网同样拦下
+  if (isPrivateHost(new URL(response.url).hostname)) {
+    return {
+      ok: false,
+      error: 'fetch_failed: redirect to a private/internal address was blocked.',
+    };
   }
 
   if (!response.ok) {

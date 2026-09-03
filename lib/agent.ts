@@ -10,7 +10,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
-import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, UserMessage } from './types';
+import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, UserMessage, WebSearchConfig } from './types';
 import { normalizeBaseUrl } from './providers';
 import type { RefTab } from './pageContext';
 import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
@@ -120,6 +120,8 @@ export interface RunAgentOptions {
   onEvent?: (event: AgentEvent) => void;
   /** compact_context 工具触发回调(模型申请压缩;轮结束后由调用方执行 runCompact 并落盘) */
   onCompactContext?: () => void;
+  /** 网络搜索源配置(设置里配置了可用搜索源才注册 search_web) */
+  webSearch?: WebSearchConfig | null;
 }
 
 export interface RunAgentResult {
@@ -184,6 +186,7 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
     pickedElements,
     canUseImage: model.input.includes('image'),
     onCompactContext: options.onCompactContext,
+    webSearch: options.webSearch ?? null,
   });
 
   const agent = new Agent({

@@ -66,6 +66,7 @@ export const TOOL_LABELS: Record<string, string> = {
   ask_user: '询问用户',
   execute_js: '执行页面脚本',
   compact_context: '压缩上下文',
+  search_web: '网络搜索',
 };
 
 /** 取工具展示文案:未知工具名原样返回 */
@@ -76,6 +77,17 @@ export function toolLabel(name: string): string {
 /** Agent 工具风险元数据:safe=直接执行;confirm=执行前需经 lib/gate.ts 发 UI 确认(如 execute_js) */
 export type ToolRisk = 'safe' | 'confirm';
 
+/** 网络搜索源:none=未启用;duckduckgo/searxng 免费;brave/tavily 需 API Key */
+export type WebSearchProvider = 'none' | 'duckduckgo' | 'searxng' | 'brave' | 'tavily';
+
+export interface WebSearchConfig {
+  provider: WebSearchProvider;
+  /** searxng 必填:实例 base_url(如 https://searx.example.org) */
+  searxngBaseUrl: string;
+  /** brave/tavily 必填:对应平台 API Key(敏感,与提供商 API Key 同级保管,不打印不上报) */
+  apiKey: string;
+}
+
 export interface Settings {
   providers: ProviderConfig[];
   activeProviderId: string | null;
@@ -84,6 +96,8 @@ export interface Settings {
   includePageContext: boolean;
   /** 思考等级,仅当激活模型 reasoning=true 时生效 */
   reasoningLevel: ReasoningLevel;
+  /** 网络搜索源配置(provider 非 none 且字段齐备时才注册 search_web 工具) */
+  webSearch: WebSearchConfig;
 }
 
 /**

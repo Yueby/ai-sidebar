@@ -24,6 +24,20 @@ export const activeSessionIdItem = storage.defineItem<string | null>(
 );
 
 /** 兼容旧版 settings 结构(旧字段直接丢弃,回退默认值) */
+const WEB_SEARCH_PROVIDERS = ['none', 'duckduckgo', 'searxng', 'brave', 'tavily'] as const;
+
+function sanitizeWebSearch(value: unknown): Settings['webSearch'] {
+  const raw = (value ?? {}) as Partial<Settings['webSearch']>;
+  const provider = WEB_SEARCH_PROVIDERS.includes(raw.provider as never)
+    ? (raw.provider as Settings['webSearch']['provider'])
+    : 'none';
+  return {
+    provider,
+    searxngBaseUrl: typeof raw.searxngBaseUrl === 'string' ? raw.searxngBaseUrl : '',
+    apiKey: typeof raw.apiKey === 'string' ? raw.apiKey : '',
+  };
+}
+
 export function sanitizeSettings(value: unknown): Settings {
   if (!value || typeof value !== 'object') return DEFAULT_SETTINGS;
   const v = value as Partial<Settings>;
@@ -35,6 +49,7 @@ export function sanitizeSettings(value: unknown): Settings {
     reasoningLevel: REASONING_LEVELS.includes(v.reasoningLevel as never)
       ? (v.reasoningLevel as Settings['reasoningLevel'])
       : 'off',
+    webSearch: sanitizeWebSearch(v.webSearch),
   };
 }
 

@@ -1,9 +1,11 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import type { PickedElement } from '../types';
+import type { PickedElement, WebSearchConfig } from '../types';
 import type { RefTab } from '../pageContext';
 import { createReadPageToolDefinition } from './read-page';
 import { createReadElementToolDefinition } from './read-element';
 import { createFetchUrlToolDefinition } from './fetch-url';
+import { createWebSearchToolDefinition } from './web-search';
+import { isWebSearchConfigured } from '../webSearch';
 import { createExecuteJsToolDefinition } from './execute-js';
 import { createReadTimeToolDefinition } from './read-time';
 import { createAskUserToolDefinition } from './ask-user';
@@ -25,6 +27,8 @@ export interface GetToolsOptions {
   canUseImage?: boolean;
   /** compact_context 触发回调(模型申请压缩 → Agent 轮结束后由调用方执行 runCompact) */
   onCompactContext?: () => void;
+  /** 网络搜索源配置(设置里 provider 非 none 且字段齐备才注册 search_web;未配置传 null) */
+  webSearch?: WebSearchConfig | null;
 }
 
 /** 页面读取组(safe):read_page + read_element(tab 级白名单;selector 不设白名单) */
@@ -46,6 +50,12 @@ export function createFetchTools(): AgentTool[] {
   return [createFetchUrlToolDefinition()];
 }
 
+/** 网络搜索组(safe):search_web,仅在设置里配置了可用搜索源时注册(未配置不占工具面);守卫判定单一来源 lib/webSearch */
+export function createWebSearchTools(config: WebSearchConfig | null | undefined): AgentTool[] {
+  if (!config || !isWebSearchConfigured(config)) return [];
+  return [createWebSearchToolDefinition(config)];
+}
+
 /** 确认型工具组(confirm):execute_js 经 createGatedTool 包装,tab 句柄同 read_page 白名单 */
 export function createGatedTools(options: GetToolsOptions): AgentTool[] {
   const refTabs = options.refTabs ?? [];
@@ -61,10 +71,11 @@ export function createUtilityTools(onCompactContext?: () => void): AgentTool[] {
   ];
 }
 
-/** 最终工具数组——唯一组装点(顺序:utility → read_page → read_element → fetch_url → execute_js) */
+/** 最终工具数组——唯一组装点(顺序:utility → web → read → fetch → gated) */
 export function getTools(options: GetToolsOptions): AgentTool[] {
   return [
     ...createUtilityTools(options.onCompactContext),
+    ...createWebSearchTools(options.webSearch),
     ...createPageReadTools(options),
     ...createFetchTools(),
     ...createGatedTools(options),

@@ -46,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   activeModelId: null,
   includePageContext: true,
   reasoningLevel: 'off',
+  webSearch: { provider: 'none', searxngBaseUrl: '', apiKey: '' },
 };
 
 export function createProviderDraft(): ProviderConfig {

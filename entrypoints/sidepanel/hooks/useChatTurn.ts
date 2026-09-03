@@ -165,6 +165,8 @@ export function useChatTurn(params: {
           thinkingLevel: resolveReasoningLevel(active.model, useAppStore.getState().settings.reasoningLevel),
           sessionId: session.id,
           signal: abortCtrl.signal,
+          // search_web 工具注册配置:设置里配置了可用搜索源才下发
+          webSearch: useAppStore.getState().settings.webSearch,
           // compact_context 工具 execute 只置标记;轮末由本 hook 消费
           onCompactContext: () => {
             compactRequestedRef.current = true;
