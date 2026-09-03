@@ -1,6 +1,6 @@
 # ai-sidebar 交接文档
 
-> 写给下一个接手的 AI agent(opencode 或其他)。本文档是当前唯一权威现状说明;根目录 `AGENTS.md` 已与本文同步。
+> 写给下一个接手的 AI agent。本文档是当前唯一权威现状说明;根目录 `AGENTS.md` 已与本文同步。
 
 ## 0. 三句话速读
 
@@ -33,7 +33,7 @@
 | manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts`(+ host_permissions http/https);`minimum_chrome_version: "135"`(userScripts.execute 门槛;Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight + highlight.js(样式已在 style.css 引入) |
 | 路径别名 | `@/*` → 项目根 |
-| Shell | Git Bash;**context-mode 工具(ctx_batch_execute)实际跑 PowerShell,POSIX 语法会炸,多命令一律用 `bash` 工具** |
+| Shell | Windows 环境;编写多命令/shell 片段时先确认实际使用的 shell 类型(POSIX vs PowerShell),语法按实际情况调整 |
 | 密钥 | 只存 `chrome.storage.local`;不打印/不提交任何 API Key |
 | 模型可见文本 | **一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支文本、非 vision 图片描述、system prompt 全文;UI 显示文案(TOOL_LABELS 中文值、ToolCallCard 等)保持中文,以后收敛 i18n |
 
@@ -47,7 +47,7 @@
 6. **设置页 = 整页视图切换**,点 Header 齿轮进入、Header 内切换 提供商/关于 两个视图(无 Tabs 组件);添加/编辑提供商 = **ProviderDialog 弹窗**(非整页 DetailView);拉取模型 = 弹窗内联勾选导入区(非独立 FetchModelsDialog)+ 独立「同步」按钮(models.dev 补全已有模型参数)。
 7. **历史会话 = Header 内 DropdownMenu**(非 Dialog);页面上下文**默认开启**,引用 chip 在 Composer 上方管理;模型/思考等级切换在 Composer 内;Composer 工具栏 `[+ ▾]` = 框选元素/引用页面统一入口;tab chip 带元素 DropdownMenu。
 8. **UI 禁用紫色/violet,一律 shadcn 默认中性样式**;严禁自定义组件/样式/变体(button.tsx 曾被加 xs/icon-xs,已重置;`components/ui/` 必须保持官方原样)。
-9. **UI 由 designer 角色负责,主 agent 不擅自设计**(设计稿先行、确认后再实现;§5 保留当年的设计稿仅作历史参考,实际实现以代码为准)。
+9. **UI 设计变更先与用户确认设计再实现**(§5 保留早期设计稿仅作历史参考,实际实现以代码为准)。
 10. **agent 编排用 pi-agent-core**(`Agent` + `streamSimple`),页面操作工具自研(AgentTool);三期规格 v2 = ARIA 定位与页面动作原语(见 §8.4),chrome.debugger 仅条件触发、不排期。
 11. 聊天页功能基线(回归清单,不可丢):流式输出、停止按钮(取消保留已生成部分)、Enter 发送/Shift+Enter 换行/IME 组合词不误发、历史会话切换/删除/新建、消息复制、自动滚动(用户上翻不打断)、错误/取消的 UI 呈现、工具调用卡片、思考折叠区、token 脚注、会话草稿。
 12. **引用架构定稿 = `<page-refs>` 块**:引用元数据发送时序列化进 user 消息 content,此后永不改变;无 refSnapshot 字段、无 convertToLlm、system prompt 不注入引用目录(只放协议常量规则);`ChatMessage` 回归纯 pi 联合,零自定义字段。
