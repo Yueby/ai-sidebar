@@ -61,6 +61,7 @@ export const TOOL_LABELS: Record<string, string> = {
   // 旧名,兼容历史会话 ToolCallCard(旧持久化消息 toolCall.name 仍是 extract_page)
   extract_page: '读取网页内容',
   read_element: '读取页面元素',
+  fetch_url: '抓取网页内容',
   read_time: '读取设备时间',
   ask_user: '询问用户',
   execute_js: '执行页面脚本',

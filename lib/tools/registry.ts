@@ -3,6 +3,7 @@ import type { PickedElement } from '../types';
 import type { RefTab } from '../pageContext';
 import { createReadPageToolDefinition } from './read-page';
 import { createReadElementToolDefinition } from './read-element';
+import { createFetchUrlToolDefinition } from './fetch-url';
 import { createExecuteJsToolDefinition } from './execute-js';
 import { createReadTimeToolDefinition } from './read-time';
 import { createAskUserToolDefinition } from './ask-user';
@@ -40,13 +41,18 @@ export function createPageReadTools(options: GetToolsOptions): AgentTool[] {
   return tools;
 }
 
+/** 网页抓取组(safe):fetch_url 自主取回任意公开 URL 的正文(无需 tab 引用) */
+export function createFetchTools(): AgentTool[] {
+  return [createFetchUrlToolDefinition()];
+}
+
 /** 确认型工具组(confirm):execute_js 经 createGatedTool 包装,tab 句柄同 read_page 白名单 */
 export function createGatedTools(options: GetToolsOptions): AgentTool[] {
   const refTabs = options.refTabs ?? [];
   return refTabs.length > 0 ? [createExecuteJsToolDefinition(refTabs)] : [];
 }
 
-/** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩 */
+/** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩;fetch_url 自主取回任意 URL */
 export function createUtilityTools(onCompactContext?: () => void): AgentTool[] {
   return [
     createReadTimeToolDefinition(),
@@ -55,11 +61,12 @@ export function createUtilityTools(onCompactContext?: () => void): AgentTool[] {
   ];
 }
 
-/** 最终工具数组——唯一组装点(顺序与重构前一致:utility → read_page → read_element → execute_js) */
+/** 最终工具数组——唯一组装点(顺序:utility → read_page → read_element → fetch_url → execute_js) */
 export function getTools(options: GetToolsOptions): AgentTool[] {
   return [
     ...createUtilityTools(options.onCompactContext),
     ...createPageReadTools(options),
+    ...createFetchTools(),
     ...createGatedTools(options),
   ];
 }
