@@ -81,6 +81,7 @@ export function usePageContextRefs(params: {
       });
     };
     const onRemoved = (tabId: number) => {
+      groupMapRef.current.delete(tabId); // tab 关闭:组记忆一并清理
       patchAllDrafts((d) => {
         if (
           !d.refTabs.some((t) => t.id === tabId) &&
@@ -123,6 +124,8 @@ export function usePageContextRefs(params: {
 
   const handleRemoveRefTab = useCallback(
     (id: number) => {
+      // 显式移除引用 = 该 tab 脱离当前引用组,组记忆一并作废
+      groupMapRef.current.delete(id);
       const currentSession = selectCurrentSession(useAppStore.getState());
       const remaining = (currentSession?.draft?.refTabs ?? []).filter((t) => t.id !== id);
       patchActiveDraft((d) => ({
@@ -147,9 +150,13 @@ export function usePageContextRefs(params: {
   const activeDraftRefTabs = useAppStore((s) => selectCurrentSession(s)?.draft?.refTabs ?? null);
   const activeDraftPicked = useAppStore((s) => selectCurrentSession(s)?.draft?.pickedElements ?? null);
   const includePageContext = useAppStore((s) => s.settings.includePageContext);
-  // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆)
+  // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆);
+  // 引用栏清空 = 重置组记忆(避免陈旧快照复活,回归纯跟随)
   useEffect(() => {
-    if (!activeDraftRefTabs) return;
+    if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) {
+      groupMapRef.current.clear();
+      return;
+    }
     const ids = new Set(activeDraftRefTabs.map((t) => t.id));
     if (focusedTabIdRef.current !== null) ids.add(focusedTabIdRef.current);
     for (const id of ids) {
