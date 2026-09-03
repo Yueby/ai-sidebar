@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Globe, ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { RefTab } from '@/lib/pageContext';
 import { faviconUrl } from '@/lib/favicon';
+import { cn } from '@/lib/utils';
 
 interface TabRefBarProps {
   refTabs: RefTab[];
@@ -123,38 +124,46 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
       </div>
 
       {/* 展开列表 */}
-      {expanded && (
-        <div className="px-1.5 pb-3 pt-0.5 space-y-0.5 max-h-40 overflow-y-auto border-t border-border/30 animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
-          {refTabs.map((t, idx) => (
-            <div
-              key={t.id}
-              className="group/item flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-background/80 transition-colors text-[11px]"
-              title={t.url}
-            >
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <FaviconIcon url={t.url} className="size-3.5" />
-                <span className="truncate font-normal text-foreground">
-                  {t.title || t.url}
-                </span>
-                {idx === 0 && (
-                  <span className="shrink-0 text-[9px] font-normal px-1 py-0.2 rounded bg-secondary text-muted-foreground">
-                    当前页
-                  </span>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onRemoveRefTab(t.id)}
-                className="opacity-60 group-hover/item:opacity-100 text-muted-foreground hover:text-foreground p-0.5 hover:bg-muted rounded transition-colors shrink-0 cursor-pointer"
-                title="移除此标签页"
+      {/* 展开列表:grid-rows 技巧实现高度双向平滑动画(条件渲染只能做进场,收起会瞬关) */}
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
+          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="px-1.5 pb-3 pt-0.5 space-y-0.5 max-h-40 overflow-y-auto border-t border-border/30">
+            {refTabs.map((t, idx) => (
+              <div
+                key={t.id}
+                className="group/item flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-background/80 transition-colors text-[11px]"
+                title={t.url}
               >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <FaviconIcon url={t.url} className="size-3.5" />
+                  <span className="truncate font-normal text-foreground">
+                    {t.title || t.url}
+                  </span>
+                  {idx === 0 && (
+                    <span className="shrink-0 text-[9px] font-normal px-1 py-0.2 rounded bg-secondary text-muted-foreground">
+                      当前页
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onRemoveRefTab(t.id)}
+                  className="opacity-60 group-hover/item:opacity-100 text-muted-foreground hover:text-foreground p-0.5 hover:bg-muted rounded transition-colors shrink-0 cursor-pointer"
+                  title="移除此标签页"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
