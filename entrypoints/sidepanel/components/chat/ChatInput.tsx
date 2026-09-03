@@ -32,8 +32,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ContextPanel, type RoleShares } from './ContextPanel';
 import { SlashMenu } from './SlashMenu';
+import { TabRefBar } from './TabRefBar';
 import { InlineBadge } from './extensions/InlineBadge';
 import { buildBadgeAttrs, buildUrlBadgeAttrs, extractEditorState, isSingleUrlText } from './extensions/editorSerialize';
+import { faviconUrl } from '@/lib/favicon';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -398,20 +400,31 @@ export function ChatInput({
             <DropdownMenuItem
               onClick={() => !isCurrentAdded && onAddCurrentTab()}
               disabled={isCurrentAdded}
-              className="flex items-start justify-between gap-1.5 text-xs cursor-pointer py-1.5"
+              className="flex items-start justify-between gap-2 text-xs cursor-pointer py-1.5"
             >
-              <div className="flex flex-col min-w-0 pr-1 text-left">
-                <div className="flex items-center gap-1 min-w-0">
-                  <span className="font-medium text-foreground truncate">
-                    {activeTabMeta.title || activeTabMeta.url}
-                  </span>
-                  <span className="shrink-0 rounded bg-secondary px-1 text-[9px] leading-[14px] text-secondary-foreground font-normal">
-                    当前
+              <div className="flex items-start gap-2 min-w-0 pr-1 text-left flex-1">
+                <img
+                  src={faviconUrl(activeTabMeta.url, 32)}
+                  alt=""
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                  className="size-3.5 rounded-[2px] shrink-0 object-contain mt-0.5"
+                  loading="lazy"
+                />
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="font-medium text-foreground truncate">
+                      {activeTabMeta.title || activeTabMeta.url}
+                    </span>
+                    <span className="shrink-0 rounded bg-secondary px-1 text-[9px] leading-[14px] text-secondary-foreground font-normal">
+                      当前
+                    </span>
+                  </div>
+                  <span className="truncate text-[10px] text-muted-foreground font-mono">
+                    {activeTabMeta.url}
                   </span>
                 </div>
-                <span className="truncate text-[10px] text-muted-foreground font-mono">
-                  {activeTabMeta.url}
-                </span>
               </div>
               {isCurrentAdded && <Check className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />}
             </DropdownMenuItem>
@@ -427,15 +440,26 @@ export function ChatInput({
             key={tab.id}
             onClick={() => !isAdded && onAddRefTab(tab)}
             disabled={isAdded}
-            className="flex items-start justify-between gap-1.5 text-xs cursor-pointer py-1.5"
+            className="flex items-start justify-between gap-2 text-xs cursor-pointer py-1.5"
           >
-            <div className="flex flex-col min-w-0 pr-1 text-left">
-              <span className="truncate max-w-[190px] font-normal text-foreground">
-                {tab.title || tab.url}
-              </span>
-              <span className="truncate max-w-[190px] text-[10px] text-muted-foreground font-mono">
-                {tab.url}
-              </span>
+            <div className="flex items-start gap-2 min-w-0 pr-1 text-left flex-1">
+              <img
+                src={faviconUrl(tab.url, 32)}
+                alt=""
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+                className="size-3.5 rounded-[2px] shrink-0 object-contain mt-0.5"
+                loading="lazy"
+              />
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="truncate max-w-[190px] font-normal text-foreground">
+                  {tab.title || tab.url}
+                </span>
+                <span className="truncate max-w-[190px] text-[10px] text-muted-foreground font-mono">
+                  {tab.url}
+                </span>
+              </div>
             </div>
             {isAdded && <Check className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />}
           </DropdownMenuItem>
@@ -452,41 +476,11 @@ export function ChatInput({
 
   return (
     <div className="bg-background p-2.5 space-y-1.5 shrink-0">
-      {/* Reference Zone: Rendered when there is at least 1 tab reference */}
-      {refTabs.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 min-h-[26px]">
-          {refTabs.map((tab) => (
-            <div
-              key={tab.id}
-              className="inline-flex items-center gap-0.5 rounded-md border bg-muted/60 pl-0.5 pr-1 py-0.5 text-xs text-foreground max-w-[240px] shrink-0 animate-in fade-in-0 duration-150 motion-reduce:animate-none transition-colors"
-              title={tab.url}
-            >
-              <div
-                className="flex items-center gap-1 min-w-0 flex-1 px-1 py-0.5 text-left select-none"
-                title={tab.url}
-              >
-                <Globe className="size-3 text-muted-foreground shrink-0" />
-                <span className="truncate text-[11px] font-normal">
-                  {tab.title || tab.url}
-                </span>
-              </div>
+      {/* Input container (内嵌顶部的标签页引用区 + TipTap 编辑器 + 底部工具栏) */}
+      <div className="relative flex flex-col rounded-lg border bg-background focus-within:ring-1 focus-within:ring-ring overflow-hidden">
+        {/* 标签页引用区 (参考 Gemini: 单引用通栏 / 多引用折叠与展开列表) */}
+        <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
 
-              {/* Remove whole tab reference */}
-              <button
-                type="button"
-                onClick={() => onRemoveRefTab(tab.id)}
-                className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors shrink-0 cursor-pointer"
-                title="移除该标签页引用"
-              >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Input container */}
-      <div className="relative flex flex-col rounded-lg border bg-background focus-within:ring-1 focus-within:ring-ring">
         {/* 斜杠命令浮层:输入框上方 */}
         {slashOpen && onCommand && (
           <SlashMenu
