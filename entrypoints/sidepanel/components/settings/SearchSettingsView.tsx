@@ -19,16 +19,16 @@ interface SearchSettingsViewProps {
 
 const PROVIDER_OPTIONS: { value: WebSearchProvider; label: string; hint: string }[] = [
   { value: 'none', label: '不启用', hint: '' },
-  { value: 'duckduckgo', label: 'DuckDuckGo(免费,无需 Key)', hint: '免 Key 直连;HTML 解析,稳定性不保证' },
-  { value: 'searxng', label: 'SearXNG(免费,需实例地址)', hint: '免 Key;需自备允许外部访问的 SearXNG 实例地址' },
-  { value: 'brave', label: 'Brave Search(API Key)', hint: '免费层每月 2000 次;Key 在 api.brave.com/search 申请' },
-  { value: 'tavily', label: 'Tavily(API Key)', hint: '免费层每月 1000 credits;Key 在 tavily.com 申请' },
-  { value: 'bocha', label: '博查(API Key)', hint: '国内 agent 搜索事实标准;注册 api.bochaai.com 送免费额度(超出按量计费)' },
-  { value: 'serper', label: 'Serper · Google SERP(API Key)', hint: 'Google 索引;新户免费 2500 次,之后约 $3/千次(google.serper.dev)' },
-  { value: 'exa', label: 'Exa · 语义搜索(API Key)', hint: '语义搜索;注册送 $10(约 2800 次),每月叠加 $10(exa.ai)' },
-  { value: 'zhipu', label: '智谱(API Key)', hint: '智谱开放平台 bigmodel.cn 申请;注册赠送额度(search_std 0.01 元/次起)' },
-  { value: 'metaso', label: '秘塔(API Key)', hint: '秘塔搜索,metaso.cn 申请(计费)' },
-  { value: 'bing', label: 'Bing(免费,无 Key)', hint: 'HTML 抓取,稳定性不保证' },
+  { value: 'duckduckgo', label: 'DuckDuckGo', hint: '免 Key 直连;HTML 解析,稳定性不保证' },
+  { value: 'searxng', label: 'SearXNG', hint: '免 Key;需自备允许外部访问的 SearXNG 实例地址' },
+  { value: 'brave', label: 'Brave Search', hint: '免费层每月 2000 次;Key 在 api.brave.com/search 申请' },
+  { value: 'tavily', label: 'Tavily', hint: '免费层每月 1000 credits;Key 在 tavily.com 申请' },
+  { value: 'bocha', label: '博查', hint: '国内 agent 搜索事实标准;注册 api.bochaai.com 送免费额度(超出按量计费)' },
+  { value: 'serper', label: 'Serper', hint: 'Google 索引;新户免费 2500 次,之后约 $3/千次(google.serper.dev)' },
+  { value: 'exa', label: 'Exa', hint: '语义搜索;注册送 $10(约 2800 次),每月叠加 $10(exa.ai)' },
+  { value: 'zhipu', label: '智谱', hint: '智谱开放平台 bigmodel.cn 申请;注册赠送额度(search_std 0.01 元/次起)' },
+  { value: 'metaso', label: '秘塔', hint: '秘塔搜索,metaso.cn 申请(计费)' },
+  { value: 'bing', label: 'Bing', hint: '免 Key HTML 抓取,稳定性不保证' },
 ];
 
 /** 网络搜索设置:搜索源选择 + 条件字段(修改即经 updateSettings 持久化) */
