@@ -52,7 +52,7 @@ export function createGatedTools(options: GetToolsOptions): AgentTool[] {
   return refTabs.length > 0 ? [createExecuteJsToolDefinition(refTabs)] : [];
 }
 
-/** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩;fetch_url 自主取回任意 URL */
+/** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩 */
 export function createUtilityTools(onCompactContext?: () => void): AgentTool[] {
   return [
     createReadTimeToolDefinition(),
