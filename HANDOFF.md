@@ -19,6 +19,12 @@
 - 二期:划词快捷提问、多模型快捷切换、会话重命名/导出
 - 三期(规格 v2,见 §8.4):ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;未实施
 
+**当前位置:MVP + 获取支柱已全部落地并提交(见 §4/§6),质量基线 = 每批代码审查 + 构建全绿;卡点 = 用户手动回归未完成(清单见 §8.1),回归绿灯前不开新功能。**
+
+**接下来(按序)**:①完成手动回归 → ②三期步 1-2(search_element 发现层 → click/fill/scroll 动作原语 + 会话级 grant,ARIA 定位规格见 §8.4)→ ③三期步 3-4(screenshot_page 视觉反馈 → 动作返回模板 v2)→ ④i18n → ⑤发布(图标 + wxt zip)。
+
+**以后(backlog,已拍板方向,按需启动)**:二期(划词快捷提问/多模型快捷切换/会话重命名/导出);动作矩阵扩展(hover/select/submit/back/goto——实测需要再议,execute_js 逃生舱已覆盖);多标签管理(open_tab 等);记忆便签工具(新存储域,与页面动作主题无关);chrome.debugger 特权层(isTrusted 拒绝率构成实际阻断或 closed shadow DOM 真实需求时才启动);无 Key 搜索源新路线观察(如 Exa keyless MCP)。
+
 ## 2. 技术栈与硬约定
 
 | 项 | 约定 |
