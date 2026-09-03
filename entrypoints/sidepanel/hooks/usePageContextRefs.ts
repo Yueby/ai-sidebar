@@ -150,13 +150,10 @@ export function usePageContextRefs(params: {
   const activeDraftRefTabs = useAppStore((s) => selectCurrentSession(s)?.draft?.refTabs ?? null);
   const activeDraftPicked = useAppStore((s) => selectCurrentSession(s)?.draft?.pickedElements ?? null);
   const includePageContext = useAppStore((s) => s.settings.includePageContext);
-  // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆);
-  // 引用栏清空 = 重置组记忆(避免陈旧快照复活,回归纯跟随)
+  // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆)。
+  // 空工作集(发送清空草稿/暂无芯片)不动组记忆:组跨消息存活;成员移除另有精确删除
   useEffect(() => {
-    if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) {
-      groupMapRef.current.clear();
-      return;
-    }
+    if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) return;
     const ids = new Set(activeDraftRefTabs.map((t) => t.id));
     if (focusedTabIdRef.current !== null) ids.add(focusedTabIdRef.current);
     for (const id of ids) {
