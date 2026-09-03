@@ -17,18 +17,25 @@ interface SearchSettingsViewProps {
   onUpdateSettings: (settings: Settings) => void;
 }
 
-const PROVIDER_OPTIONS: { value: WebSearchProvider; label: string }[] = [
-  { value: 'none', label: '不启用' },
-  { value: 'duckduckgo', label: 'DuckDuckGo(免费,无需 Key)' },
-  { value: 'searxng', label: 'SearXNG(免费,需实例地址)' },
-  { value: 'brave', label: 'Brave Search(API Key)' },
-  { value: 'tavily', label: 'Tavily(API Key)' },
+const PROVIDER_OPTIONS: { value: WebSearchProvider; label: string; hint: string }[] = [
+  { value: 'none', label: '不启用', hint: '' },
+  { value: 'duckduckgo', label: 'DuckDuckGo(免费,无需 Key)', hint: '' },
+  { value: 'searxng', label: 'SearXNG(免费,需实例地址)', hint: '' },
+  { value: 'brave', label: 'Brave Search(API Key)', hint: '' },
+  { value: 'tavily', label: 'Tavily(API Key)', hint: '' },
+  { value: 'bocha', label: '博查(API Key)', hint: '国内 agent 搜索事实标准;注册 api.bochaai.com 送免费额度(超出按量计费)' },
+  { value: 'serper', label: 'Serper · Google SERP(API Key)', hint: 'Google 索引;新户免费 2500 次,之后约 $3/千次(google.serper.dev)' },
+  { value: 'exa', label: 'Exa · 语义搜索(API Key)', hint: '语义搜索;注册送 $10(约 2800 次),每月叠加 $10(exa.ai)' },
+  { value: 'zhipu', label: '智谱(API Key)', hint: '智谱开放平台 bigmodel.cn 申请;注册赠送额度(search_std 0.01 元/次起)' },
+  { value: 'metaso', label: '秘塔(API Key)', hint: '秘塔搜索,metaso.cn 申请(计费)' },
+  { value: 'bing', label: 'Bing(免费,无 Key)', hint: 'HTML 抓取,稳定性不保证' },
 ];
 
 /** 网络搜索设置:搜索源选择 + 条件字段(修改即经 updateSettings 持久化) */
 export function SearchSettingsView({ settings, onUpdateSettings }: SearchSettingsViewProps) {
   const webSearch = settings.webSearch;
   const [showKey, setShowKey] = useState(false);
+  const selectedOption = PROVIDER_OPTIONS.find((opt) => opt.value === webSearch.provider);
 
   const update = (patch: Partial<Settings['webSearch']>) => {
     onUpdateSettings({ ...settings, webSearch: { ...webSearch, ...patch } });
@@ -60,6 +67,9 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
               ))}
             </SelectContent>
           </Select>
+          {selectedOption?.hint && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed">{selectedOption.hint}</p>
+          )}
           <p className="text-[11px] text-muted-foreground leading-relaxed">
             启用后对话内提供 search_web 工具,模型可搜索 web 并用 fetch_url 深取结果。
           </p>
@@ -123,6 +133,37 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                 </a>
               )}
               ;Key 仅保存在本地浏览器扩展存储中。
+            </p>
+          </div>
+        )}
+
+        {(webSearch.provider === 'bocha' ||
+          webSearch.provider === 'serper' ||
+          webSearch.provider === 'exa' ||
+          webSearch.provider === 'zhipu' ||
+          webSearch.provider === 'metaso') && (
+          <div className="space-y-1.5">
+            <Label className="text-[11px] text-muted-foreground">API Key</Label>
+            <div className="relative">
+              <Input
+                type={showKey ? 'text' : 'password'}
+                value={webSearch.apiKey}
+                onChange={(e) => update({ apiKey: e.target.value })}
+                placeholder="API Key"
+                className="h-8 text-sm pr-8"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowKey((v) => !v)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 size-6 text-muted-foreground hover:text-foreground"
+              >
+                {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Key 仅保存在本地浏览器扩展存储中。
             </p>
           </div>
         )}

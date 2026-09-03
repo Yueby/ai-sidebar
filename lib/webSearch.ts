@@ -17,11 +17,17 @@ const USER_AGENT =
 export function isWebSearchConfigured(config: WebSearchConfig): boolean {
   switch (config.provider) {
     case 'duckduckgo':
+    case 'bing':
       return true;
     case 'searxng':
       return config.searxngBaseUrl.trim() !== '';
     case 'brave':
     case 'tavily':
+    case 'bocha':
+    case 'serper':
+    case 'exa':
+    case 'zhipu':
+    case 'metaso':
       return config.apiKey.trim() !== '';
     default:
       return false;
@@ -148,6 +154,148 @@ async function searchTavily(config: WebSearchConfig, query: string): Promise<Web
     .map((r) => ({ title: r.title, url: r.url, snippet: collapseWhitespace(r.content) }));
 }
 
+/** 博查(国内 agent 搜索事实标准;text 摘要) */
+async function searchBocha(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const response = await fetchWithTimeout('https://api.bochaai.com/v1/web-search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey.trim()}`,
+    },
+    body: JSON.stringify({ query, summary: false, count: MAX_RESULTS }),
+  });
+  if (!response.ok) {
+    throw new Error(`search_failed: Bocha returned ${response.status}`);
+  }
+  const data = (await response.json()) as {
+    data?: { webPages?: { value?: { name: string; url: string; snippet?: string; summary?: string }[] } };
+  };
+  return (data.data?.webPages?.value ?? [])
+    .slice(0, MAX_RESULTS)
+    .map((r) => ({
+      title: r.name,
+      url: r.url,
+      snippet: collapseWhitespace(r.snippet || r.summary),
+    }));
+}
+
+/** Serper(Google SERP;免费层每月 2500 次) */
+async function searchSerper(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const response = await fetchWithTimeout('https://google.serper.dev/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-KEY': config.apiKey.trim(),
+    },
+    body: JSON.stringify({ q: query, num: MAX_RESULTS }),
+  });
+  if (!response.ok) {
+    throw new Error(`search_failed: Serper returned ${response.status}`);
+  }
+  const data = (await response.json()) as {
+    organic?: { title: string; link: string; snippet?: string }[];
+  };
+  return (data.organic ?? [])
+    .slice(0, MAX_RESULTS)
+    .map((r) => ({ title: r.title, url: r.link, snippet: collapseWhitespace(r.snippet) }));
+}
+
+/** Exa(语义搜索;注册送额度) */
+async function searchExa(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const response = await fetchWithTimeout('https://api.exa.ai/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': config.apiKey.trim(),
+    },
+    body: JSON.stringify({ query, numResults: MAX_RESULTS }),
+  });
+  if (!response.ok) {
+    throw new Error(`search_failed: Exa returned ${response.status}`);
+  }
+  const data = (await response.json()) as {
+    results?: { title: string; url: string; text?: string; summary?: string; highlights?: string[] }[];
+  };
+  return (data.results ?? [])
+    .slice(0, MAX_RESULTS)
+    .map((r) => ({
+      title: r.title,
+      url: r.url,
+      snippet: collapseWhitespace(r.text || (r.highlights ?? []).join('\n') || r.summary),
+    }))
+    .map((r) => ({ ...r, snippet: r.snippet.replace(/<[^>]+>/g, '') }));
+}
+
+/** 智谱(bigmodel.cn 开放平台 web_search) */
+async function searchZhipu(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const response = await fetchWithTimeout('https://open.bigmodel.cn/api/paas/v4/web_search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey.trim()}`,
+    },
+    body: JSON.stringify({ search_query: query, search_engine: 'search_std', count: MAX_RESULTS }),
+  });
+  if (!response.ok) {
+    throw new Error(`search_failed: Zhipu returned ${response.status}`);
+  }
+  const data = (await response.json()) as {
+    search_result?: { title: string; link: string; content?: string }[];
+  };
+  return (data.search_result ?? [])
+    .slice(0, MAX_RESULTS)
+    .map((r) => ({ title: r.title, url: r.link, snippet: collapseWhitespace(r.content) }));
+}
+
+/** 秘塔(metaso.cn 开放 API) */
+async function searchMetaso(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
+  const response = await fetchWithTimeout('https://metaso.cn/api/v1/search', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey.trim()}`,
+    },
+    body: JSON.stringify({ q: query, scope: 'webpage', size: MAX_RESULTS }),
+  });
+  if (!response.ok) {
+    throw new Error(`search_failed: Metaso returned ${response.status}`);
+  }
+  const data = (await response.json()) as {
+    webpages?: { title: string; link: string; snippet?: string }[];
+  };
+  return (data.webpages ?? [])
+    .slice(0, MAX_RESULTS)
+    .map((r) => ({ title: r.title, url: r.link, snippet: collapseWhitespace(r.snippet) }));
+}
+
+/** Bing(无 Key HTML 抓取;解析依赖 class 名,被拦/改版会失效) */
+async function searchBing(query: string): Promise<WebSearchResult[]> {
+  const response = await fetchWithTimeout(`https://www.bing.com/search?q=${encodeURIComponent(query)}`, {
+    headers: { 'User-Agent': USER_AGENT, Referer: 'https://www.bing.com/' },
+  });
+  if (!response.ok) {
+    throw new Error(`search_failed: Bing returned ${response.status}`);
+  }
+  const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+  const results: WebSearchResult[] = [];
+  for (const block of doc.querySelectorAll('li.b_algo')) {
+    const anchor = block.querySelector('h2 > a');
+    const href = anchor?.getAttribute('href') ?? '';
+    const title = collapseWhitespace(anchor?.textContent);
+    if (!href || !title) continue;
+    results.push({
+      title,
+      url: href,
+      snippet: collapseWhitespace(block.querySelector('.b_caption p')?.textContent),
+    });
+    if (results.length >= MAX_RESULTS) break;
+  }
+  if (results.length === 0) {
+    throw new Error('search_failed: Bing HTML endpoint returned no results (may be rate-limited)');
+  }
+  return results;
+}
+
 /** 按配置分发;错误以规范化前缀英文文本抛出(search_failed/not_configured),由工具层转 tool result */
 export async function searchWeb(config: WebSearchConfig, query: string): Promise<WebSearchResult[]> {
   switch (config.provider) {
@@ -159,6 +307,18 @@ export async function searchWeb(config: WebSearchConfig, query: string): Promise
       return searchBrave(config, query);
     case 'tavily':
       return searchTavily(config, query);
+    case 'bocha':
+      return searchBocha(config, query);
+    case 'serper':
+      return searchSerper(config, query);
+    case 'exa':
+      return searchExa(config, query);
+    case 'zhipu':
+      return searchZhipu(config, query);
+    case 'bing':
+      return searchBing(query);
+    case 'metaso':
+      return searchMetaso(config, query);
     default:
       throw new Error('not_configured: no web search provider is configured in settings.');
   }

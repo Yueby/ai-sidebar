@@ -78,7 +78,18 @@ export function toolLabel(name: string): string {
 export type ToolRisk = 'safe' | 'confirm';
 
 /** 网络搜索源:none=未启用;duckduckgo/searxng 免费;brave/tavily 需 API Key */
-export type WebSearchProvider = 'none' | 'duckduckgo' | 'searxng' | 'brave' | 'tavily';
+export type WebSearchProvider =
+  | 'none'
+  | 'duckduckgo'
+  | 'searxng'
+  | 'brave'
+  | 'tavily'
+  | 'bocha'
+  | 'serper'
+  | 'exa'
+  | 'zhipu'
+  | 'bing'
+  | 'metaso';
 
 export interface WebSearchConfig {
   provider: WebSearchProvider;

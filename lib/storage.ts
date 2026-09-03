@@ -24,7 +24,19 @@ export const activeSessionIdItem = storage.defineItem<string | null>(
 );
 
 /** 兼容旧版 settings 结构(旧字段直接丢弃,回退默认值) */
-const WEB_SEARCH_PROVIDERS = ['none', 'duckduckgo', 'searxng', 'brave', 'tavily'] as const;
+const WEB_SEARCH_PROVIDERS = [
+  'none',
+  'duckduckgo',
+  'searxng',
+  'brave',
+  'tavily',
+  'bocha',
+  'serper',
+  'exa',
+  'zhipu',
+  'bing',
+  'metaso',
+] as const;
 
 function sanitizeWebSearch(value: unknown): Settings['webSearch'] {
   const raw = (value ?? {}) as Partial<Settings['webSearch']>;
