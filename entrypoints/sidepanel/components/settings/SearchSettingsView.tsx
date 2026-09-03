@@ -175,9 +175,11 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
           <Globe className="size-3.5 text-muted-foreground" />
           <span>说明</span>
         </div>
+        {selectedOption?.hint && (
+          <p className="text-[11px] text-muted-foreground leading-relaxed">{selectedOption.hint}</p>
+        )}
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          DuckDuckGo 与 SearXNG 走页面解析,源站改版可能临时失效;Brave 与 Tavily 走官方
-          API,更稳定但需要 Key。搜索请求由浏览器直接发起,不经过任何中间服务器。
+          搜索请求由浏览器直接发起,不经过任何中间服务器。
         </p>
       </div>
     </div>
