@@ -7,6 +7,7 @@ import { createSearchElementToolDefinition } from './search-element';
 import { createClickElementToolDefinition } from './click-element';
 import { createFillElementToolDefinition } from './fill-element';
 import { createScrollPageToolDefinition } from './scroll-page';
+import { createScreenshotPageToolDefinition } from './screenshot-page';
 import { createFetchUrlToolDefinition } from './fetch-url';
 import { createWebSearchToolDefinition } from './web-search';
 import { isWebSearchConfigured } from '../webSearch';
@@ -56,13 +57,16 @@ export function createPageDiscoveryTools(): AgentTool[] {
 }
 
 /** 页面动作组:click/fill(confirm + 会话级 grant,grantScope=工具@tabId)+ scroll(safe);
- *  寻址与 search_element 同源(role+name+序号),默认 focused tab、无条件注册 */
-export function createPageActionTools(): AgentTool[] {
-  return [
+ *  寻址与 search_element 同源(role+name+序号),默认 focused tab、无条件注册。
+ *  screenshot_page(confirm+grant)仅 vision 模型注册(非 vision 截图不可见,不占工具面) */
+export function createPageActionTools(options: GetToolsOptions): AgentTool[] {
+  const tools: AgentTool[] = [
     createClickElementToolDefinition(),
     createFillElementToolDefinition(),
     createScrollPageToolDefinition(),
   ];
+  if (options.canUseImage) tools.push(createScreenshotPageToolDefinition(options.refTabs ?? []));
+  return tools;
 }
 
 /** 网页抓取组(safe):fetch_url 自主取回任意公开 URL 的正文(无需 tab 引用) */
@@ -98,7 +102,7 @@ export function getTools(options: GetToolsOptions): AgentTool[] {
     ...createWebSearchTools(options.webSearch),
     ...createPageReadTools(options),
     ...createPageDiscoveryTools(),
-    ...createPageActionTools(),
+    ...createPageActionTools(options),
     ...createFetchTools(),
     ...createGatedTools(options),
   ];

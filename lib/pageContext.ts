@@ -68,10 +68,20 @@ export async function extractFromTab(tabId: number): Promise<ExtractedPage | nul
   } catch {
     return null;
   }
-  try {
+  // 首次直连;无 content script(如刚授权网页访问后已打开的旧标签页)则补注入后重试一次
+  const request = async (): Promise<Partial<ExtractedPage> | undefined> => {
     const res = (await browser.tabs.sendMessage(tabId, {
       type: READ_PAGE_MESSAGE,
     })) as Partial<ExtractedPage> | undefined;
+    return res;
+  };
+  try {
+    let res = await request().catch(() => undefined);
+    if (!res) {
+      const injected = await ensureContentScript(tabId);
+      if (!injected) return null;
+      res = await request().catch(() => undefined);
+    }
     if (!res || (!res.title && !res.text)) return null;
     return {
       title: res.title ?? '',
@@ -206,7 +216,16 @@ export async function resolveElement(
   tabId: number,
   selector: string,
 ): Promise<ResolvedElement | null> {
-  try {
+  // 首次直连;无 content script(如刚授权网页访问后已打开的旧标签页)则补注入后重试一次
+  const request = async (): Promise<{
+    found?: boolean;
+    tagName?: string;
+    html?: string;
+    truncated?: boolean;
+    preview?: string;
+    images?: unknown;
+    dpr?: unknown;
+  } | undefined> => {
     const res = (await browser.tabs.sendMessage(tabId, {
       type: PICK_ELEMENT_MESSAGE,
       action: 'resolve',
@@ -222,6 +241,15 @@ export async function resolveElement(
           dpr?: unknown;
         }
       | undefined;
+    return res;
+  };
+  try {
+    let res = await request().catch(() => undefined);
+    if (!res) {
+      const injected = await ensureContentScript(tabId);
+      if (!injected) return null;
+      res = await request().catch(() => undefined);
+    }
     if (!res?.found || typeof res.html !== 'string') return null;
     const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
     const images: ElementImage[] = Array.isArray(res.images)

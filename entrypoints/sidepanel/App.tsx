@@ -275,8 +275,11 @@ export default function App() {
       ? [...(currentSession?.messages ?? []), ...inFlight.messages]
       : (currentSession?.messages ?? []);
   // 尾部 in-flight 消息刚从 live 流式气泡接管:跳过入场动画,交接不闪
+  // (toolResult 不渲染独立气泡,不计入手数,避免过度抑制动画)
   const quietTailCount =
-    inFlight && inFlight.sessionId === currentSession?.id ? inFlight.messages.length : 0;
+    inFlight && inFlight.sessionId === currentSession?.id
+      ? inFlight.messages.filter((m) => m.role !== 'toolResult').length
+      : 0;
 
   if (!loaded) {
     return (

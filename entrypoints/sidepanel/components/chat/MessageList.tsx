@@ -9,6 +9,9 @@ import {
   ArrowDown,
   X,
   Settings as SettingsIcon,
+  Globe,
+  ShieldCheck,
+  Loader2,
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
@@ -236,14 +239,24 @@ export function MessageList({
   }, [isEmpty]);
 
   // 1.6 审批卡挂载/卸载会挤压/还原视口,锚点与 RO 在布局抖动瞬间可能失效:提交后强制钉底一次。
-  // 跟底挂起状态尊重用户阅读位置,不强制。
+  // 门控卡是阻塞式交互(agent 循环挂起等待),必须可见:即使用户上翻阅读也强制贴底并恢复跟底,
+  // 否则卡片落在视口外会造成“转圈圈无卡”的死等。卸载(应答后)仅在跟底状态下钉底。
   useEffect(() => {
-    if (!userScrolledUpRef.current) {
-      const el = scrollRef.current;
-      if (el) {
-        el.scrollTop = el.scrollHeight;
-        lastProgrammaticPinRef.current = performance.now();
-      }
+    if (!gateRequest) return;
+    userScrolledUpRef.current = false;
+    programmaticScrollRef.current = false;
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+      lastProgrammaticPinRef.current = performance.now();
+    }
+  }, [gateRequest]);
+  useEffect(() => {
+    if (gateRequest || userScrolledUpRef.current) return;
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+      lastProgrammaticPinRef.current = performance.now();
     }
   }, [gateRequest, messages.length]);
 
@@ -345,7 +358,7 @@ export function MessageList({
 
             {/* If no provider / model configured */}
             {(!hasProvider || !hasModel) && (
-              <div className="mb-5 rounded-lg border p-3.5 text-left bg-muted/30">
+              <div className="mb-4 rounded-lg border p-3.5 text-left bg-muted/30">
                 <p className="text-xs font-semibold text-foreground">尚未完成模型配置</p>
                 <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
                   {!hasProvider

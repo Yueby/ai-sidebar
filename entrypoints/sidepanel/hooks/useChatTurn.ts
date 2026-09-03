@@ -222,6 +222,16 @@ export function useChatTurn(params: {
               const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
               setStreamText('');
               setStreamThink('');
+            } else if (event.type === 'message_end' && event.message.role === 'toolResult') {
+              // 工具结果即时入 in-flight:工具卡立刻显示返回结果,不等整轮结束
+              // (转录落盘时同一消息对象引用已在 in-flight 中,零重挂载)
+              if (seq !== turnSeqRef.current) return;
+              const done = event.message;
+              useAppStore.getState().setInFlight((prev) =>
+                prev && prev.sessionId === session!.id
+                  ? { ...prev, messages: [...prev.messages, done as ChatMessage] }
+                  : prev
+              );
             } else if (event.type === 'tool_execution_start') {
               useAppStore.getState().setActiveToolNames((prev) =>
                 prev.includes(event.toolName) ? prev : [...prev, event.toolName]

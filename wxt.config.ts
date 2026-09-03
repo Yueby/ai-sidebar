@@ -14,7 +14,9 @@ export default defineConfig({
     permissions: ['storage', 'sidePanel', 'unlimitedStorage', 'scripting', 'activeTab', 'userScripts'],
     // userScripts.execute 自 Chrome 135 起可用
     minimum_chrome_version: '135',
-    host_permissions: ['http://*/*', 'https://*/*'],
+    // host_permissions: <all_urls> 为 captureVisibleTab(截图)硬要求(Chrome 只认 <all_urls>/activeTab,
+    // 站点级通配不够);content_scripts 声明的 http/https 宿主访问本就随安装授予,安装警告文案无升级
+    host_permissions: ['<all_urls>'],
   },
   vite: () => ({
     plugins: [tailwindcss()],

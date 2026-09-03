@@ -1,6 +1,6 @@
 # ai-sidebar — 项目代号
 
-> **交接注(2026-09)**:UI 已全部实现,agent 运行时为 pi-agent-core;引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ `read_page`/`read_element`/`search_element`/`click_element`/`fill_element`/`scroll_page`/`fetch_url`/`search_web` 工具。当前唯一权威现状、最新决策与 API 契约见 **`HANDOFF.md`**,以它为准;本文件与它已同步。
+> **交接注(2026-09)**:UI 已全部实现,agent 运行时为 pi-agent-core;引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ `read_page`/`read_element`/`search_element`/`click_element`/`fill_element`/`scroll_page`/`screenshot_page`/`fetch_url`/`search_web` 工具。当前唯一权威现状、最新决策与 API 契约见 **`HANDOFF.md`**,以它为准;本文件与它已同步。
 
 开源 **BYOK 浏览器 AI 侧边栏扩展**(Chromium 系:Chrome/Edge/Brave),对标 Chrome 内置 Gemini 侧边栏,但用你自己的 API Key、UI 现代化。
 
@@ -17,7 +17,7 @@
   - 网络搜索:设置页"搜索"页签配置十源(duckduckgo/searxng/brave/tavily/bocha/serper/exa/zhipu/metaso/bing),`search_web` 条件注册(未配置不占工具面)
   - BYOK 多提供商:三种协议 —— **OpenAI 兼容 · Chat Completions / OpenAI 兼容 · Responses / Anthropic Messages**(OpenAI / DeepSeek / OpenRouter / Kimi / GLM / Ollama / 自定义 baseUrl+key+model)
 - **二期**:划词快捷提问(选中文字弹快捷操作)、多模型快捷切换、会话重命名/导出
-- **三期(规格 v2,详见 HANDOFF.md §8.4)**:ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;步①②已实施(search_element 发现层 + click/fill/scroll 页面动作原语 + 会话级 grant),步③screenshot_page/④返回模板 v2 待做
+- **三期(规格 v2,详见 HANDOFF.md §8.4)**:ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;步①②③已实施(search_element 发现层 + click/fill/scroll/screenshot_page 页面动作原语 + 会话级 grant + 权限架构定案),步④返回模板 v2 待做
 
 ## UI 方向(已确认)
 
@@ -37,7 +37,7 @@
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`,manifest 已加 `unlimitedStorage`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,用 `idb`,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化,旧扁平结构由 `sanitizeSessions/sanitizeMessage` 迁移 |
 | 页面提取 | 引用元数据以 `<page-refs>{JSON}</page-refs>` 块(tabs)与 `<picked-element …/>` 自闭合块(元素引用单一表示,`elementId/tabId/selector/tagName/label` 属性,内容预览)内嵌 user 消息 content,草稿/存储/LLM 三处同串(唯一差异 = LLM 请求副本把 refs 块剥 elements 留 tabs,`lib/agent.ts toLlmMessage`);内容按需经 `read_page`(tabId 句柄读整页正文)/`read_element`(CSS selector 句柄,返回 outerHTML 12000 字符截断;tab 级白名单=草稿∪历史块)读取;消息协议 `ai-sidebar/read-page`、`ai-sidebar/pick-element(-result)` 由 content.ts 应答(常量单一来源 `lib/types.ts`,content.ts 只 import 纯常量);图像经 `lib/imageFetch.ts`(fetch 主取 + captureVisibleTab 裁剪兜底 + canvas 降采样) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight(已装) |
-| 权限 | manifest:`storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts`(+ host_permissions http/https);`minimum_chrome_version: "135"`(userScripts.execute 门槛);Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts |
+| 权限 | manifest:`storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts`(+ host_permissions **`<all_urls>`**——captureVisibleTab 硬要求;设置「权限」页签透明说明,决策 25);`minimum_chrome_version: "135"`(userScripts.execute 门槛);Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts |
 | 路径别名 | `@/*` → 项目根 |
 | 工具命名 | `<动词>_<域词>`:动词集 {read, search, fetch, click, fill, scroll, screenshot, execute, ask} × 域词集 {page, element, url, web, js, user, time},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key 兼容历史会话;协议字符串已随名同步,常量单一来源 lib/types.ts) |
 | 模型可见文本 | **一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支、非 vision 图片描述、system prompt 全文;UI 显示文案(TOOL_LABELS 中文值等)保持中文,以后收敛 i18n |
@@ -79,18 +79,18 @@ lib/
   pageScripting.ts    # execute_js 注入原语:isUserScriptsAvailable/executePageScript(userScripts.execute 主路线 + scripting MAIN world 兜底,8000 截断)
   imageFetch.ts       # fetchImageForModel/captureCropForModel(≤2000²、JPEG q80 逐级降质、base64 ≤4.5MB)
   gate.ts             # 工具门控契约:GateRequest(confirm/ask)/setGateHandler/flushPendingGates/requestGate/createGatedTool + 会话级 grant(grantedScopes 短路,工具+tab 粒度,面板生命周期;execute_js 永不可 grant)
-  tools/              # 工具注册表(pi 一工具一文件 + 集合函数模式):registry.ts = 唯一组装点 getTools(GetToolsOptions{refTabs,pickedElements,canUseImage,onCompactContext,webSearch},组装序 utility→web→read→discovery→action→fetch→gated);read-page/read-element/search-element/click-element/fill-element/scroll-page/page-action-shared/fetch-url/web-search/compact-context/execute-js/read-time/ask-user 各导出 createXxxToolDefinition;time.ts = 本地时间助手
+  tools/              # 工具注册表(pi 一工具一文件 + 集合函数模式):registry.ts = 唯一组装点 getTools(GetToolsOptions{refTabs,pickedElements,canUseImage,onCompactContext,webSearch},组装序 utility→web→read→discovery→action→fetch→gated);read-page/read-element/search-element/click-element/fill-element/scroll-page/screenshot-page/page-action-shared/fetch-url/web-search/compact-context/execute-js/read-time/ask-user 各导出 createXxxToolDefinition;time.ts = 本地时间助手
   utils.ts            # cn()/getErrorMessage
 components/ui/        # shadcn 组件(保持官方原样)
 ```
 
 ## 待办(按序)
 
-> **当前阶段**:MVP + 获取支柱 + 三期步①②(search_element 发现层 + 页面动作原语)落地且回归通过;接下来 = 步③screenshot_page → ④返回模板 v2 → i18n → 发布。
+> **当前阶段**:MVP + 获取支柱 + 三期步①②③(发现层 + 页面动作原语 + screenshot_page)落地且回归通过;接下来 = ④返回模板 v2 → i18n → 发布。
 
 1. **用户手动回归**(`pnpm dev` 自动拉起 Chrome):重点 = 普通对话、read_page/read_element/fetch_url/search_web(需在设置"搜索"页签启用)工具触发、search_element 触发(交互元素清单、file input 不入列、shadow DOM 页、超 80 元素截断)、框选元素(TipTap 徽章)+ vision 读图、压缩摘要分隔线卡、上下文占用环、思考折叠区、token 脚注、流式中途停止、自动跟底(流式无跳动)、旧会话数据迁移(旧格式元素/标记按裸文本丢弃,dev 数据可弃)
 2. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)
-3. 三期规格 v2(全文见 HANDOFF.md §8.4):**ARIA 定位与页面动作原语**——引库唯一新依赖 `dom-accessibility-api`;五新工具 `search_element`(safe,AX 交互元素清单紧凑行式)/ `click_element` / `fill_element`(confirm+会话 grant)/ `scroll_page`(safe)/ `screenshot_page`(confirm);时序等待内置有界 settle 不设独立工具;反馈 Before/After + 结构化错误前缀;寻址双轨(用户框选 = picked-element 块 CSS selector 不变,模型动作 = ARIA role+name locator,默认 focused tab;search_element 已按默认 focused tab、无白名单实施——用户拍板);会话级 grant 扩展进 gate.ts(execute_js 永不可 grant);实施序列 ①search(✅ 已完成 2026-09)→ ②click/fill+scroll+grant+高亮(✅ 已完成 2026-09)→ ③screenshot → ④返回模板 v2 → ⑤chrome.debugger(条件触发,不排期);验收标尺 = search→click 链完成登录页填字点按钮零手写 JS(✅ 真实登录页已通过;execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
+3. 三期规格 v2(全文见 HANDOFF.md §8.4):**ARIA 定位与页面动作原语**——引库唯一新依赖 `dom-accessibility-api`;五新工具 `search_element`(safe,AX 交互元素清单紧凑行式)/ `click_element` / `fill_element`(confirm+会话 grant)/ `scroll_page`(safe)/ `screenshot_page`(confirm);时序等待内置有界 settle 不设独立工具;反馈 Before/After + 结构化错误前缀;寻址双轨(用户框选 = picked-element 块 CSS selector 不变,模型动作 = ARIA role+name locator,默认 focused tab;search_element 已按默认 focused tab、无白名单实施——用户拍板);会话级 grant 扩展进 gate.ts(execute_js 永不可 grant);实施序列 ①search(✅ 已完成 2026-09)→ ②click/fill+scroll+grant+高亮(✅ 已完成 2026-09)→ ③screenshot(✅ 已完成 2026-09)→ ④返回模板 v2 → ⑤chrome.debugger(条件触发,不排期);验收标尺 = search→click 链完成登录页填字点按钮零手写 JS(✅ 真实登录页已通过;execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
 4. 发布:图标 + `wxt zip`
 
 > 已完成(2026-09-02):`err: any` → `unknown`(getErrorMessage helper);dev 可观测性(未知 `ai-sidebar/` 消息 console.warn);execute_js 工具(userScripts.execute 主路线 + scripting MAIN world 兜底,confirm 门控动态预览代码,Chrome 135+ / Allow User Scripts 开关引导)。用户拍板不做:highlight.js 语言包裁剪(本地加载,941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。

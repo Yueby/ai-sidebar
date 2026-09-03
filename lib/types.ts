@@ -71,6 +71,7 @@ export const TOOL_LABELS: Record<string, string> = {
   click_element: '点击页面元素',
   fill_element: '填写页面元素',
   scroll_page: '滚动页面',
+  screenshot_page: '截取页面画面',
 };
 
 /** 取工具展示文案:未知工具名原样返回 */

@@ -19,9 +19,9 @@
 - 二期:划词快捷提问、多模型快捷切换、会话重命名/导出
 - 三期(规格 v2,见 §8.4):ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;未实施
 
-**当前位置:手动回归已通过;MVP + 获取支柱 + 三期步①②(search_element 发现层 + click/fill/scroll 页面动作原语 + 会话级 grant)已落地(见 §4/§6),质量基线 = 每批代码审查 + 构建全绿。**
+**当前位置:三期步①②③(发现层 + 页面动作原语 + screenshot_page + 权限架构定案)已落地且回归通过(见 §4/§6),质量基线 = 每批代码审查 + 构建全绿。**
 
-**接下来(按序)**:①三期步 3(screenshot_page 视觉反馈,规格见 §8.4)→ ②三期步 4(动作返回模板 v2)→ ③i18n → ④发布(图标 + wxt zip)。
+**接下来(按序)**:①三期步 4(动作返回模板 v2:Before/After + 页面版本指纹,规格见 §8.4)→ ②i18n → ③发布(图标 + wxt zip)。
 
 **以后(backlog,已拍板方向,按需启动)**:二期(划词快捷提问/多模型快捷切换/会话重命名/导出);动作矩阵扩展(hover/select/submit/back/goto——实测需要再议,execute_js 逃生舱已覆盖);多标签管理(open_tab 等);记忆便签工具(新存储域,与页面动作主题无关);chrome.debugger 特权层(isTrusted 拒绝率构成实际阻断或 closed shadow DOM 真实需求时才启动);无 Key 搜索源新路线观察(如 Exa keyless MCP)。
 
@@ -36,7 +36,7 @@
 | AI 请求 | **`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(见 §6/§7),sidepanel 直连,BYOK |
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,`idb` 封装,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat;devtools 仅 DEV 构建),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化 |
 | 页面引用 | **元素引用单一表示 = 自闭合 `<picked-element elementId tabId selector tagName label />` 块**,草稿(TipTap 原子徽章节点)/存储消息/LLM 视图三处同串(属性值经 `&quot;` 转义);`<page-refs>{JSON}</page-refs>` 块仅承载 tabs 元数据(LLM 视图剥 elements 留 tabs,存储层保留供 UI chip 查表),两块皆在发送时序列化进 user content 此后不可变(`lib/pageRefs.ts`);元素内容按需经 `read_element`(块属性 tabId+selector 即句柄)获取 |
-| manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts`(+ host_permissions http/https);`minimum_chrome_version: "135"`(userScripts.execute 门槛;Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts) |
+| manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts` + host_permissions **`<all_urls>`**(截图 captureVisibleTab 硬要求,Chrome 只认 <all_urls>/activeTab;content_scripts 的 http/https 宿主访问随安装授予);`minimum_chrome_version: "135"`(userScripts.execute 门槛;Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts,无 API 可代开仅能引导) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight + highlight.js(样式已在 style.css 引入) |
 | 路径别名 | `@/*` → 项目根 |
 | Shell | Windows 环境;编写多命令/shell 片段时先确认实际使用的 shell 类型(POSIX vs PowerShell),语法按实际情况调整 |
@@ -69,6 +69,7 @@
 22. **步②会话级 grant = 工具+tab 粒度,生命周期 = 侧边栏面板**(2026-09,三期步②):切对话/新建对话不清除,关面板即失效;确认卡文案「暂时允许对当前页执行…/关面板后恢复询问」+勾选后「允许并记住」;gate.ts 模块级 grantedScopes 短路(命中直接 approved 不弹卡,应答带 grant 记录);execute_js 永不可 grant。
 23. **动作遮挡 = fallback 直接在元素上派发事件序列并注明**(2026-09,三期步②):scrollIntoView 居中重试仍被遮挡时不中断动作链,结果注记被何元素遮挡;untrusted 合成事件,chrome.debugger 特权层条件触发不排期。
 24. **search_element query 支持单串或数组 OR**(2026-09):role/可访问名称大小写不敏感子串,任一命中即保留,过滤先于 80 条预算;截断注记引导用 query;定位/验证元素优先用 search_element 而非 execute_js(描述双向引导)。
+25. **权限架构 = 全部随安装授予,无运行时授权流程**(2026-09,步③;曾实施 optional_host_permissions+request/remove 后回退——content_scripts 关联 origins 本就随安装授予,运行时授权只门槛截图且安装警告无差异):host **`<all_urls>`** 为 screenshot_page(captureVisibleTab)硬要求;设置「权限」页签 = 透明说明(网页访问/6 项安装权限用途 + userScripts 开关状态检测与直达详情页引导——Chrome 无 API 可代开)。
 
 ## 4. 当前代码状态
 
@@ -85,14 +86,14 @@ lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_elem
 | `lib/models.ts` | ✅ 完成 | `fetchProviderModels`(openai 兼容 Bearer / anthropic x-api-key+version,路径 openai=`/models`、anthropic=`/v1/models`)、`fetchModelsDevMeta`、`applyModelMeta`、`syncModelsWithModelsDev`(「同步」按钮:为已有模型补全参数)、`testConnection` |
 | `lib/pageContext.ts` | ✅ 完成 | tab 级读取原语(仅读取,不含工具工厂):`getActiveTabMeta`/`getTabMeta`/`listCandidateTabs`/`extractFromTab`/`renderPageContext`(content.ts 截 12000 字,本层透传);框选与元素解析:`startPickElement`(`ai-sidebar/pick-element`)、`resolveElement`(复用 `ai-sidebar/pick-element` + `action:'resolve'`,返回 outerHTML+truncated+preview+images+dpr);交互元素发现:`searchElementsInTab`(`ai-sidebar/search-element`,search_element 底层,无 content script 时补注入重试一次)+ `InteractiveElementInfo`/`SearchElementsResult` 类型(`SEARCH_ELEMENT_LIMIT` 在 lib/types.ts)+ 页面动作原语:`performPageAction`(`ai-sidebar/page-action`,resolve/click/fill/scroll,http 守卫+补注入重试+宽松透传)+ `ActionLocator`/`ResolvedActionElement`/`PageActionResult` 类型;`InteractiveElementInfo.inputType`(字段线索) |
 | `lib/imageFetch.ts` | ✅ 完成 | read_element 取图管道:`fetchImageForModel`(fetch 主取)→ `captureCropForModel`(captureVisibleTab 按 rect×DPR 裁剪兜底,防盗链/403);canvas 降采样对齐 pi 上游:≤2000×2000、JPEG q0.8 起逐级降质、PNG/JPEG 取小、base64 ≤4.5MB |
+| `lib/permissions.ts` | ✅ 完成 | 权限声明与展示(设置「权限」页签数据层):INSTALL_PERMISSIONS(6 项安装权限用途说明)/ WEB_ACCESS_PERMISSION(host <all_urls> 随安装授予,截图与取图兜底的硬依赖);无运行时授权流程(决策 25) |
 | `lib/gate.ts` | ✅ 完成 | 工具门控契约:`GateRequest`(confirm/ask)/`GateResponse`、`setGateHandler`(未注册=快速 deny/cancelled,安全默认)、`flushPendingGates`(停止/中止冲销 pending)、`requestGate`(handler 异常按 deny)、`createGatedTool`(confirm 包装,detail 支持按参数动态生成,denied 英文拒绝文本;execute_js 已用) |
 | `lib/pageScripting.ts` | ✅ 完成 | execute_js 注入原语:`isUserScriptsAvailable`(userScripts 存在 + getScripts() 探测不 throw)、`executePageScript(tabId, code, world)`(userScripts.execute 主路线 → scripting.executeScript MAIN world func 包装兜底,JSON.stringify 后 8000 字符截断,降级在返回文本注明,一切错误转英文不 throw) |
 | `lib/fetchPage.ts` | ✅ 完成 | fetch_url 抓取管线:sidepanel 直连 GET + 动态 `@mozilla/readability` 提取(与 content.ts 同库);**私有/内网地址拒绝 + 重定向复检**(防提示注入探测内网);2MB(Content-Length 与读入后双检)/content-type 限 HTML/正文 12000 字截断;错误英文文本规范化前缀 `fetch_failed:`/`http_error:`/`not_html:`/`too_large:`/`extract_failed:` |
 | `lib/webSearch.ts` | ✅ 完成 | websearch 十源适配器(duckduckgo/searxng HTML 解析 + brave/tavily/bocha/serper/exa/zhipu/metaso JSON API + bing 无 Key HTML 抓取):统一 `{title,url,snippet}[]`、10s 超时、截 8 条、错误 throw `search_failed:` 前缀族;`isWebSearchConfigured`(注册/运行守卫单一来源)、`searchWeb(config, query)` 分发 |
 | `lib/elementLabel.ts` | ✅ 完成 | 元素 chip label 构造:`elementChipLabel`(24 视觉单位,chip/气泡)/`elementListLabel`(48 视觉单位,引用列表);CJK 视觉宽度加权,空 preview 回退 `<tagName>`→"页面元素" |
 | `lib/compaction.ts` | ✅ 完成 | compact_context 压缩管线:生效历史序列化 → pi completeSimple 生成结构化摘要(KEEP_RECENT_TOKENS=12000 与 read_element 截断同值);`findCutIndex`/`runCompact`;摘要消息由调用方拼装落盘 |
-| `lib/tools/` | ✅ 完成 | 工具注册表(pi 一工具一文件 + 集合函数):`registry.ts` = 唯一组装点 `getTools(GetToolsOptions{refTabs,pickedElements,canUseImage,onCompactContext,webSearch})`,组装序 **utility(read_time/ask_user/compact_context)→ web(search_web 条件)→ read(read_page/read_element)→ discovery(search_element 无条件,无 tab 白名单)→ action(click/fill/scroll,无条件)→ fetch(fetch_url)→ gated(execute_js)**;`read-page`/`read-element`/`search-element`/`click-element`/`fill-element`/`scroll-page`/`page-action-shared`/`fetch-url`/`web-search`/`compact-context`/`execute-js`/`read-time`/`ask-user` 各导出 `createXxxToolDefinition`;`time.ts` = 本地时间助手 |
-| `lib/gate.ts` | ✅ 完成 | 工具门控契约:GateRequest(confirm/ask)/setGateHandler/flushPendingGates/requestGate/createGatedTool + 会话级 grant:模块级 grantedScopes Set(工具+tab 粒度如 click_element@12;命中短路直接 approved 不弹卡,UI 应答带 grant 记录;生命周期=侧边栏面板,切对话不清、关面板失效;execute_js 永不可 grant);gateSlice.approveGate(grant?)/useGate/ApprovalSection 勾选联动 |
+| `lib/tools/` | ✅ 完成 | 工具注册表(pi 一工具一文件 + 集合函数):`registry.ts` = 唯一组装点 `getTools(GetToolsOptions{refTabs,pickedElements,canUseImage,onCompactContext,webSearch})`,组装序 **utility(read_time/ask_user/compact_context)→ web(search_web 条件)→ read(read_page/read_element)→ discovery(search_element 无条件,无 tab 白名单)→ action(click/fill/scroll,无条件;screenshot_page 仅 vision 模型注册)→ fetch(fetch_url)→ gated(execute_js)**;`read-page`/`read-element`/`search-element`/`click-element`/`fill-element`/`scroll-page`/`screenshot-page`/`page-action-shared`/`fetch-url`/`web-search`/`compact-context`/`execute-js`/`read-time`/`ask-user` 各导出 `createXxxToolDefinition`;`time.ts` = 本地时间助手 |
 | `lib/utils.ts` | ✅ 完成 | cn()/getErrorMessage |
 | `entrypoints/content.ts` | ✅ 完成 | 结构化提取(article/main/[role=main] 优先,截 12000 字)+ 框选元素模式(@medv/finder 生成唯一 selector,结果经 `ai-sidebar/pick-element-result` 广播)+ 交互元素发现(`search-element` 消息;dom-accessibility-api 交互元素清单:role 白名单+DOM 标签启发+tabIndex≥0 候选、effectiveRole 兜底、开放 shadow root、option/optgroup/datalist 子树跳过、aria-hidden+checkVisibility+零尺寸可见性、同 role+name 序号全量计数后截 80 条;placeholder 兑底名称+inputType 线索;枚举共享内核供 locator 解析同源)+ 页面动作执行器(`page-action` 消息 resolve/click/fill/scroll:locator 解析(not_found 附同 role alternatives/ambiguous 附 matches)、400ms 轮廓高亮、点击(scrollIntoView 居中→遮挡检测→fallback 直发注记)、受控填充(select/toggle/文本类原生 setter+input/change、contenteditable execCommand、空串清空)、scroll(视口 0.8/locator scrollIntoView)、有界 settle、navigation_started 注记) |
 | `entrypoints/background.ts` | ✅ 完成 | 点击图标打开侧边栏 |
@@ -362,7 +363,7 @@ runAgentTurn({ provider; modelId; history: ChatMessage[]; userMessage: UserMessa
 // lib/tools/registry.ts —— 工具注册表(唯一组装点;一工具一文件见同目录)
 interface GetToolsOptions { refTabs?: RefTab[]; pickedElements?: PickedElement[]; canUseImage?: boolean;
   onCompactContext?: () => void; webSearch?: WebSearchConfig | null }
-getTools(options): AgentTool[]                  // 组装序:utility(read_time/ask_user/compact_context)→ web(search_web 条件)→ read(read_page/read_element)→ discovery(search_element 无条件,无 tab 白名单)→ action(click/fill/scroll,无条件)→ fetch(fetch_url)→ gated(execute_js)
+getTools(options): AgentTool[]                  // 组装序:utility(read_time/ask_user/compact_context)→ web(search_web 条件)→ read(read_page/read_element)→ discovery(search_element 无条件,无 tab 白名单)→ action(click/fill/scroll,无条件;screenshot_page 仅 vision 模型注册)→ fetch(fetch_url)→ gated(execute_js)
 // createWebSearchTools(config) / createPageReadTools(options) / createPageDiscoveryTools() / createFetchTools() / createGatedTools(options) /
 // createUtilityTools(onCompactContext):分组集合函数(search_web 仅在 isWebSearchConfigured(config) 时注册)
 // 各工具文件导出 createXxxToolDefinition;新增工具 = 新文件 + 在 registry 登记分组
@@ -438,11 +439,14 @@ createSearchElementToolDefinition(): AgentTool        // 'search_element':safe;�
 createClickElementToolDefinition(): AgentTool         // 'click_element':confirm+grant(自门控:先解析 locator 再 requestGate,detail 预览真实元素;遮挡 fallback 直发;untrusted 合成事件)
 createFillElementToolDefinition(): AgentTool          // 'fill_element':confirm+grant;分类填充(select/toggle true-false/文本类原生 setter+input-change;contenteditable execCommand;空串清空)
 createScrollPageToolDefinition(): AgentTool           // 'scroll_page':safe;视口 scrollBy(默认 0.8 视口)/locator scrollIntoView
+createScreenshotPageToolDefinition(): AgentTool      // 'screenshot_page':confirm+grant;captureVisibleTab 仅活动 tab 可视区(错误透传 Browser said);仅 vision 模型注册
+// lib/permissions.ts(权限声明与展示)INSTALL_PERMISSIONS(6 项安装权限用途)/WEB_ACCESS_PERMISSION(<all_urls> 随安装授予)——无运行时授权流程(决策 25);userScripts 开关无 API 代开,页签直达详情页引导
 // page-action-shared.ts:formatLocator/resolveActionTab(缺省 focused tab)/renderActionFailure(element_not_found 等前缀族)/renderActionSuccess
 
 // lib/imageFetch.ts(read_element 取图管道)
 fetchImageForModel(src): Promise<ModelImage | null>            // fetch 主取
 captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVisibleTab 裁剪兜底(仅活动 tab)
+captureVisibleForModel(tabId): Promise<CaptureVisibleResult>      // screenshot_page 主路径:活动 tab 整屏;非活动→inactive,浏览器拒绝原文透传
 // 编码:canvas 降采样 ≤2000×2000、JPEG q0.8 起逐级降质、PNG/JPEG 取小、base64 ≤4.5MB
 ```
 
@@ -475,7 +479,7 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
    - **会话级 grant 扩展**(gate.ts):confirm 卡加"本会话内允许此类操作"复选框 → grant 存运行时切片(面板关闭即失效);requestGate 查 grant 短路;execute_js 永不可 grant
    - **动作前反馈**:目标元素 400ms 轮廓闪烁(高亮)
    - **寻址双轨**:用户框选 = CSS selector(picked-element 块,不变);模型动作 = ARIA role+name locator(新);默认目标 = focused tab(tabId 可选)
-   - **实施序列**:①search_element(✅ 已完成 2026-09:dom-accessibility-api 0.7.1 + content script 侧计算、稀疏旗标行式、80 条预算(可见优先,隐藏项只填剩余名额)、序号全量计数保证步② locator 可重现、默认 focused tab 无白名单、打点 content durationMs + 工具 totalMs(仅 DEV console);实测 baidu 91 元素全链 5ms)→ ②click/fill + scroll + grant 扩展 + 高亮(✅ 已完成 2026-09:自门控先解析后确认、grant 工具+tab 面板生命周期、遮挡 fallback 直发、受控填充原生 setter、settle 内置、高亮 400ms、search_element query 数组 OR)→ ③screenshot_page → ④返回模板 v2(Before/After) → ⑤chrome.debugger(条件触发:isTrusted 拒绝率构成实际阻断或 closed shadow DOM 真实需求;不排期)
+   - **实施序列**:①search_element(✅ 已完成 2026-09:dom-accessibility-api 0.7.1 + content script 侧计算、稀疏旗标行式、80 条预算(可见优先,隐藏项只填剩余名额)、序号全量计数保证步② locator 可重现、默认 focused tab 无白名单、打点 content durationMs + 工具 totalMs(仅 DEV console);实测 baidu 91 元素全链 5ms)→ ②click/fill + scroll + grant 扩展 + 高亮(✅ 已完成 2026-09:自门控先解析后确认、grant 工具+tab 面板生命周期、遮挡 fallback 直发、受控填充原生 setter、settle 内置、高亮 400ms、search_element query 数组 OR)→ ③screenshot_page(✅ 已完成 2026-09:仅活动 tab 可截(浏览器硬限制,描述明示)、仅 vision 模型注册(canUseImage)、confirm+grant 工具@tabId、拒绝原因原文透传 Browser said;权限前置 = host <all_urls>)→ ④返回模板 v2(Before/After) → ⑤chrome.debugger(条件触发:isTrusted 拒绝率构成实际阻断或 closed shadow DOM 真实需求;不排期)
    - **参考**:AhYi8/browser-ai-assistant(CDP 驱动,特权层不可移植;可搬=AX 行格式/噪点过滤/预算截断/受控 fill 法/遮挡检测/wait_for_state 有界轮询/fail-closed 校验——克隆在 `.slim/clonedeps/repos/AhYi8__browser-ai-assistant`,只读)
    - **验收标尺**:模型经 search→click 链完成真实登录页填字点按钮,全程零手写 JS
 5. 发布:图标 + `wxt zip`。
@@ -485,6 +489,8 @@ captureCropForModel(tabId, rect, dpr): Promise<ModelImage | null>  // captureVis
 > 已完成批次(2026-09,交接前):fetch_url 工具(`1422168`/`b7d0dd0`);**元素引用统一为 `<picked-element …/>` 块协议**(`f4f9ea3`,标记层废除);token 瘦身(`5f7d549`,块内嵌 300 字 preview → 后续收敛为 chip label,system prompt/工具描述压缩,单轮 ~17000→~500 token);兼容层删除(`1e5f5a2`,旧数据可弃);finalize 入场动画闪烁修复(`eadae82`,重估以 sessionKey 为界);流式跟底重做(`2213d61`,overflow-anchor 钉底为主);websearch 十源(`4f87b51`/`8d3e67d`);注释叙事清扫(`80145bf`);UI 精修(`b7d0dd0`/`595b242`/`2bf6f2e`/`c4ee901`/`e160214`:registry fetch 组重组/徽章 label 裸名/hint 精简/说明卡删除/思考菜单排序);交接文档基线 `0b515b3`。
 >
 > 已完成批次(2026-09,三期步①):**search_element 工具**——引库 `dom-accessibility-api` 0.7.1(getRole/computeAccessibleName/isDisabled,动态导入内联进 content.js);content.ts 交互元素收集器(role 白名单+DOM 启发+tabIndex≥0 候选/effectiveRole 兜底/开放 shadow root/option 子树跳过/aria-hidden+checkVisibility 可见性/序号全量计数截 80 条);`searchElementsInTab` 原语(补注入重试);`search-element` 工具 + registry discovery 组(无条件注册,默认 focused tab 无白名单——决策 21);可见优先预算 + content durationMs/工具 totalMs 打点(仅 DEV console,实测 baidu 91 元素全链 5ms);pnpm-workspace.yaml allowBuilds 落定('@google/genai'/protobufjs 显式 false,修 pnpm 11 install 报错)。
+>
+> 已完成批次(2026-09,三期步③):**screenshot_page + 权限架构定案**——screenshot_page(confirm+grant,仅 vision 模型注册,captureVisibleTab 仅活动 tab 可视区,错误原文透传 Browser said);host <all_urls> 随安装授予(截图硬要求;曾试 optional_host_permissions 运行时授权后回退——content_scripts 关联 origins 本就随安装授予,安装警告无差异);设置「权限」页签(透明说明+userScripts 开关检测与详情页引导,designer);lib/permissions.ts;工具结果即时入 in-flight(toolResult message_end 处理,quietTailCount 过滤);截图视觉地标测试区(fixture 第 8 节)。
 >
 > 已完成批次(2026-09,三期步②):**页面动作原语**——click_element/fill_element(confirm+会话级 grant,工具+tab 粒度,面板生命周期)/scroll_page(safe)三工具 + registry action 组;content.ts 动作执行器(locator 解析同源 search_element、400ms 高亮、遮挡 fallback 直发、受控填充原生 setter、settle、navigation_started);gate.ts grantedScopes 短路 + grantable/grantScope 契约;search_element query 数组 OR 与 [type=x]/placeholder 名称兑底;流式 50ms 节流(STREAM_FLUSH_INTERVAL_MS)+ MessageItem rAF 平滑揭示(designer);卡片期跟底修复(强制钉底+抖动忽略);12 项提示词回归 + 真实登录页验收(零手写 JS)通过。
 

@@ -14,6 +14,7 @@ import type { Settings, ProviderConfig } from '@/lib/types';
 import { apiTypeLabel } from '@/lib/providers';
 import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
+import { SettingsPermissionsView } from './SettingsPermissionsView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -27,7 +28,7 @@ interface SettingsMainViewProps {
   onEditProvider: (provider: ProviderConfig) => void;
 }
 
-type SettingsTab = 'providers' | 'search' | 'about';
+type SettingsTab = 'providers' | 'search' | 'permissions' | 'about';
 
 export function SettingsMainView({
   settings,
@@ -160,6 +161,15 @@ export function SettingsMainView({
               className="h-6 px-2 text-xs font-normal"
             >
               搜索
+            </Button>
+            <Button
+              type="button"
+              variant={currentTab === 'permissions' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setCurrentTab('permissions')}
+              className="h-6 px-2 text-xs font-normal"
+            >
+              权限
             </Button>
             <Button
               type="button"
@@ -371,7 +381,12 @@ export function SettingsMainView({
           <SearchSettingsView settings={settings} onUpdateSettings={onUpdateSettings} />
         )}
 
-        {/* VIEW 3: About Page */}
+        {/* VIEW 3: Permissions Management */}
+        {currentTab === 'permissions' && (
+          <SettingsPermissionsView />
+        )}
+
+        {/* VIEW 4: About Page */}
         {currentTab === 'about' && (
           <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* Card: Basic Info */}

@@ -98,6 +98,36 @@ function encodeWithinBudget(source: ImageBitmap | HTMLCanvasElement): ModelImage
  * 主路径:按图片 URL 取模型可用图。
  * 失败(fetch 不通/解码不了/预算内压不下)返回 null,由调用方决定兜底。
  */
+/**
+ * screenshot_page 主路径:captureVisibleTab 截目标 tab 所在窗口的可见区整屏。
+ * 仅当该 tab 是所在窗口的活动标签才可截(浏览器限制);非活动 → inactive,任何失败 → failed。
+ * 编码管线与 read_element 取图同源(≤2000²、JPEG 逐级降质、base64 预算)。
+ */
+export type CaptureVisibleResult =
+  | { ok: true; image: ModelImage }
+  | { ok: false; reason: 'inactive' | 'failed'; /** 浏览器拒绝原因原文(权限/限流等,用于精确错误提示) */
+      detail?: string };
+
+export async function captureVisibleForModel(tabId: number): Promise<CaptureVisibleResult> {
+  try {
+    const tab = await browser.tabs.get(tabId);
+    if (typeof tab.windowId !== 'number' || tab.active !== true) return { ok: false, reason: 'inactive' };
+    const shot = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+    const bitmap = await decodeToBitmap(shot);
+    if (!bitmap) return { ok: false, reason: 'failed' };
+    try {
+      const image = encodeWithinBudget(bitmap);
+      return image ? { ok: true, image } : { ok: false, reason: 'failed' };
+    } finally {
+      bitmap.close();
+    }
+  } catch (err) {
+    // captureVisibleTab 的拒绝原因(权限要求/2次每秒限流/受保护页)全在错误消息里,透出供精确提示
+    const detail = String(err).slice(0, 200);
+    return { ok: false, reason: 'failed', detail };
+  }
+}
+
 export async function fetchImageForModel(src: string): Promise<ModelImage | null> {
   if (!/^(https?|data):/i.test(src)) return null;
   const bitmap = await decodeToBitmap(src);
