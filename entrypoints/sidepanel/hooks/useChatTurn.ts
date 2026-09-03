@@ -5,6 +5,7 @@ import { saveSession } from '@/lib/sessionStore';
 import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
 import { runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
+import { parsePageRefs } from '@/lib/pageRefs';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta } from '@/lib/pageContext';
 import { useAppStore, selectCurrentSession } from '../store';
@@ -92,7 +93,23 @@ export function useChatTurn(params: {
       const focused = store.settings.includePageContext
         ? await getActiveTabMeta().catch(() => null)
         : null;
-      if (snapTabs.length > 0 || snapElements.length > 0 || focused) {
+      // 注意力驱动注入:仅当聚焦 tab 相对「上一条带 focused 的消息块」发生变化(切页/导航)时才
+      // 携带 focused 行——无关消息零页面噪音;白名单由历史块聚合保留,“当前页”追问不受影响
+      let lastFocused: { tabId: number; url: string } | null = null;
+      for (let i = session.messages.length - 1; i >= 0; i--) {
+        const m = session.messages[i]!;
+        if (m.role !== 'user' || typeof m.content !== 'string') continue;
+        const refs = parsePageRefs(m.content);
+        if (!refs) continue;
+        const ft = refs.tabs.find((t) => t.focused);
+        if (ft) {
+          lastFocused = { tabId: ft.tabId, url: ft.url };
+          break;
+        }
+      }
+      const attentionChanged =
+        !!focused && (!lastFocused || lastFocused.tabId !== focused.id || lastFocused.url !== focused.url);
+      if (snapTabs.length > 0 || snapElements.length > 0 || (focused && attentionChanged)) {
         const focusedTabId = focused?.id;
         refreshedTabs = await Promise.all(
           snapTabs.map(async (t) => (await getTabMeta(t.id).catch(() => null)) ?? t)
@@ -101,11 +118,14 @@ export function useChatTurn(params: {
           tabId: t.id,
           title: t.title,
           url: t.url,
-          ...(t.id === focusedTabId ? { focused: true } : {}),
+          ...(focused && t.id === focused.id && attentionChanged ? { focused: true } : {}),
         }));
-        // 聚焦 tab 不在引用内 → 追加为 focused 条目(非 http(s) 页 getActiveTabMeta 已返回 null 跳过)
-        if (focused && !refreshedTabs.some((t) => t.id === focused.id)) {
+        // 聚焦 tab 不在引用内且注意力变化 → 追加为 focused 条目(非 http(s) 页 getActiveTabMeta 已返回 null 跳过)
+        if (focused && attentionChanged && !refreshedTabs.some((t) => t.id === focused.id)) {
           tabs.push({ tabId: focused.id, title: focused.title, url: focused.url, focused: true });
+        }
+        // 白名单始终包含聚焦 tab(注意力未变时不重复注入,但 read_page 需要句柄)
+        if (focused && !refreshedTabs.some((t) => t.id === focused.id)) {
           refreshedTabs = [...refreshedTabs, focused];
         }
         // id = 数据侧 elementId(与 ChatInput 插入的 [element:N] 标记永久对齐)。

@@ -93,7 +93,7 @@ export function buildSystemPrompt(): string {
   parts.push(
     '',
     'User messages may carry a <page-refs> block — the browser context referenced at send time:',
-    '- tabs lists referenced tabs; tabId is the read handle; focused = the tab the user was viewing (context, not the referent).',
+    '- tabs lists referenced tabs; tabId is the read handle; focused = the tab the user is currently viewing (ambient attention, not the referent). The focused tab may or may not be relevant to the request — read or act on it only when the request relates to it. It appears only when the user\'s attention changes; its absence means the previously announced tab still holds.',
     "- <picked-element …> blocks in message text mark an element the user deliberately picked; their attributes (tabId/selector) are the handle — call read_element with them to read the element's content when your answer needs it. Full-page content is read via read_page.",
     '- Inline tokens like [url: example.com] are URLs the user pasted as references — self-describing; treat them as plain links, not element markers.',
     '- Tool results are live and win over the block metadata when they conflict.',
