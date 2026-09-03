@@ -163,18 +163,19 @@ export function usePageContextRefs(params: {
   const switchRefGroup = useCallback(
     async (tabId: number) => {
       if (!includePageContext) return; // 总开关关闭:冻结切换,什么都不发
+      const isRefocus = focusedTabIdRef.current === tabId; // 同 tab 重估 = 聚焦页导航到可引用网址
       const prev = focusedTabIdRef.current;
-      if (prev === tabId) return;
       focusedTabIdRef.current = tabId;
       const meta = await getTabMeta(tabId).catch(() => null);
-      if (!meta) return; // 非 http(s) 页(如 chrome://):不建组,工作集维持原状
+      if (!meta) return; // 非 http(s) 页(如 chrome://新标签页):不建组,等导航后再触发重估
       if (focusedTabIdRef.current !== tabId) return; // 快速连切竞态:焦点已再变,本次作废
       const st = useAppStore.getState();
       const current = selectCurrentSession(st);
       if (!current) return;
       const snapshot = groupMapRef.current.get(tabId);
       if (snapshot) {
-        // 恢复该 tab 所属引用组(引用 + 框选元素整组还原)
+        // 恢复该 tab 所属引用组(引用 + 框选元素整组还原);已是该组则幂等跳过(重复触发不产生草稿抖动)
+        if (current.draft?.refTabs === snapshot.refTabs) return;
         patchActiveDraft((d) => ({
           ...d,
           refTabs: snapshot.refTabs,
@@ -183,7 +184,13 @@ export function usePageContextRefs(params: {
         return;
       }
       // 新页无组:隐式「当前页」芯片入住并自动跟随焦点(旧工作集已由成员同步存档,非破坏);
-      // 之后用户手动添加引用才会固定为一组
+      // 之后用户手动添加引用才会固定为一组。已是该单例则幂等跳过
+      if (
+        current.draft?.refTabs.length === 1 &&
+        current.draft.refTabs[0]?.id === tabId
+      ) {
+        return;
+      }
       const self = { id: tabId, title: meta.title, url: meta.url };
       groupMapRef.current.set(tabId, { refTabs: [self], pickedElements: [] });
       patchActiveDraft((d) => ({ ...d, refTabs: [self], pickedElements: [] }));
