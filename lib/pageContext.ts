@@ -87,6 +87,7 @@ export function getAgentOpenedTabs(): ReadonlySet<number> {
 export async function extractFromTab(
   tabId: number,
   section: 'head' | 'tail' = 'head',
+  waitStableMs = 0,
 ): Promise<ExtractedPage | null> {
   let url: string;
   try {
@@ -101,6 +102,7 @@ export async function extractFromTab(
     const res = (await browser.tabs.sendMessage(tabId, {
       type: READ_PAGE_MESSAGE,
       section,
+      waitStableMs,
     })) as Partial<ExtractedPage> | undefined;
     return res;
   };
@@ -348,6 +350,7 @@ export interface SearchElementsResult {
 export async function searchElementsInTab(
   tabId: number,
   query?: string | string[],
+  includeHidden = false,
 ): Promise<SearchElementsResult | null> {
   let url: string;
   try {
@@ -361,6 +364,7 @@ export async function searchElementsInTab(
     const res = (await browser.tabs.sendMessage(tabId, {
       type: SEARCH_ELEMENT_MESSAGE,
       query,
+      includeHidden,
     })) as SearchElementsResult | { error: string } | undefined;
     return res;
   };

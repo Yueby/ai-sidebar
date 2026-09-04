@@ -15,16 +15,22 @@ const SEARCH_ELEMENT_PARAMS = Type.Object({
     }),
   ),
   query: Type.Optional(
-    Type.Union(
-      [
-        Type.String(),
-        Type.Array(Type.String({ description: 'Substring of role or accessible name' })),
-      ],
-      {
-        description:
-          'One or more substrings to filter by (case-insensitive, matched against role or accessible name; ANY match counts — OR semantics). Pass a string (e.g. "submit") or an array for multiple kinds at once (e.g. ["button", "textbox"]). Use it when your target is not in the default list — the unfiltered list is capped at 80 entries.',
-      },
+      Type.Union(
+        [
+          Type.String(),
+          Type.Array(Type.String({ description: 'Substring of role or accessible name' })),
+        ],
+        {
+          description:
+            'One or more substrings to filter by (case-insensitive, matched against role or accessible name; ANY match counts — OR semantics). Pass a string (e.g. "submit") or an array for multiple kinds at once (e.g. ["button", "textbox"]). Use it when your target is not in the default list — the unfiltered list is capped at 80 entries.',
+        },
+      ),
     ),
+  includeHidden: Type.Optional(
+    Type.Boolean({
+      description:
+        'Include hidden elements (collapsed menus/popovers keep their buttons in the DOM but hidden). Default false — hidden rows are noise unless you specifically need them.',
+    }),
   ),
 });
 
@@ -53,7 +59,7 @@ export function createSearchElementToolDefinition(): AgentTool<
     label: toolLabel('search_element'),
     risk: 'safe',
     description:
-      'List the interactive elements of a web page tab — buttons, links, text fields, selects, checkboxes, tabs, sliders and similar — one per line with their ARIA role and accessible name, e.g. `- button "Sign in"`. Non-default state is flagged (`[disabled]`, `[hidden]`) and duplicate role+name pairs get an ordinal (`[2]`), so each element is uniquely addressable by role + accessible name + ordinal — click_element and fill_element accept exactly these rows as their locator. Text-like inputs may carry a `[type=x]` hint (e.g. `[type=password]` for password fields), and placeholder-only fields use their placeholder as the accessible name. The unfiltered list is capped at 80 entries (visible elements first); pass `query` to filter by a case-insensitive substring of role or accessible name when your target is not shown. Defaults to the currently focused tab; pass tabId to inspect another tab. Prefer this tool over execute_js whenever you need to locate or verify page elements.',
+      'List the interactive elements of a web page tab — buttons, links, text fields, selects, checkboxes, tabs, sliders and similar — one per line with their ARIA role and accessible name, e.g. `- button "Sign in"`. Non-default state is flagged (`[disabled]`, `[hidden]`) and duplicate role+name pairs get an ordinal (`[2]`), so each element is uniquely addressable by role + accessible name + ordinal — click_element and fill_element accept exactly these rows as their locator. Text-like inputs may carry a `[type=x]` hint (e.g. `[type=password]` for password fields), placeholder-only fields use their placeholder as the accessible name, and icon buttons surface their title/shortcut as a hint. Hidden elements (collapsed menus/popovers) are EXCLUDED by default — pass includeHidden: true to include them. The unfiltered list is capped at 80 entries (visible elements first); pass `query` to filter by a case-insensitive substring of role or accessible name when your target is not shown. Defaults to the currently focused tab; pass tabId to inspect another tab. Prefer this tool over execute_js whenever you need to locate or verify page elements.',
     parameters: SEARCH_ELEMENT_PARAMS,
     execute: async (_toolCallId, args) => {
       const rawTabId = args?.tabId;
@@ -87,10 +93,8 @@ export function createSearchElementToolDefinition(): AgentTool<
       }
       const startedAt = performance.now();
       const rawQuery = args?.query;
-      const result = await searchElementsInTab(
-        tabId,
-        typeof rawQuery === 'string' || Array.isArray(rawQuery) ? rawQuery : undefined,
-      );
+      const includeHidden = args?.includeHidden === true;
+      const result = await searchElementsInTab(tabId, rawQuery, includeHidden);
       const totalMs = Math.round(performance.now() - startedAt);
       if (!result) {
         if (import.meta.env.DEV) {

@@ -371,7 +371,10 @@ export default defineContentScript({
     }
 
     /** SPA 稳定化:等加载完成;首提过短则等待后重试一次 */
-    async function extractStable(section: 'head' | 'tail'): Promise<{
+    async function extractStable(
+      section: 'head' | 'tail',
+      waitStableMs = 0,
+    ): Promise<{
       title: string;
       url: string;
       text: string;
@@ -383,6 +386,17 @@ export default defineContentScript({
       if (result.text.length < SHORT_THRESHOLD) {
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
         result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
+      }
+      // 有界稳定等待:文本长度连续两次采样一致才算稳定(流式输出/迟到的渲染);后台 tab 节流由 deadline 兜底
+      if (waitStableMs > 0) {
+        const deadline = Date.now() + waitStableMs;
+        let lastLen = result.text.length;
+        while (Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
+          if (result.text.length === lastLen) break;
+          lastLen = result.text.length;
+        }
       }
       // tail 模式:路径内部已按头部锚定截断,这里重切为尾部窗口(聊天页最新内容在尾部)
       if (section === 'tail') result = tailSliceText(result.text, TEXT_LIMIT);
@@ -736,7 +750,10 @@ export default defineContentScript({
      * 交互元素清单(search_element 内容侧计算):全量枚举 → 可见优先预算截断。
      * 序号在全量上计数,输出选集不影响 [N] 与步② locator 解析的一致性。
      */
-    async function collectInteractiveElements(rawQuery: unknown): Promise<SearchElementsResult | { error: string }> {
+    async function collectInteractiveElements(
+      rawQuery: unknown,
+      includeHidden = false,
+    ): Promise<SearchElementsResult | { error: string }> {
       const libs = await loadAccessibilityLibs();
       if (!libs) return { error: 'Failed to load the accessibility analysis library.' };
 
@@ -751,6 +768,8 @@ export default defineContentScript({
       if (terms.length > 0) {
         all = all.filter((e) => terms.some((t) => e.role.includes(t) || e.name.toLowerCase().includes(t)));
       }
+      // hidden 默认排除(用户反馈:弹层隐藏按钮噪音大);includeHidden 时保留并带 [hidden] 旗标
+      if (!includeHidden) all = all.filter((e) => e.visible);
       const total = all.length;
       // 预算优先给可见元素(隐藏项多为折叠菜单/重复入口,行动价值低),组内保持文档序
       const visibleFirst = [
@@ -1138,11 +1157,11 @@ export default defineContentScript({
           notes.push('Note: the target element is currently not visible.');
         }
         let fail: { reason: 'option_not_found' | 'unsupported_element' | 'invalid_value'; options?: string[] } | undefined;
+        const value = typeof message.value === 'string' ? message.value : '';
+        const submit = message.submit === 'enter' ? ('enter' as const) : undefined;
         if (action === 'click') {
           notes.push(...performClick(res.hit.el));
         } else {
-          const value = typeof message.value === 'string' ? message.value : '';
-          const submit = message.submit === 'enter' ? 'enter' : undefined;
           const filled = performFill(res.hit.el, value, submit);
           if ('fail' in filled) fail = filled.fail;
           else notes.push(...filled.notes);
@@ -1152,6 +1171,26 @@ export default defineContentScript({
         await waitForSettle();
         if (location.href !== urlAfterAct) {
           notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
+        }
+        // 提交事实信号:回读输入框(不可跨站判定"已提交",但值变化是强信号——
+        // 大多数聊天站发送后会清空输入框;残留全文 = Enter 大概率未生效)
+        if (action === 'fill' && submit === 'enter') {
+          try {
+            const elNow = res.hit.el as HTMLElement;
+            const still =
+              elNow instanceof HTMLInputElement || elNow instanceof HTMLTextAreaElement
+                ? elNow.value
+                : (elNow.textContent ?? '');
+            if (still.trim() === '') {
+              notes.push('Input is now empty — the Enter key likely submitted the text.');
+            } else {
+              notes.push(
+                'Note: the text is still in the input field — the Enter key may NOT have submitted it. Consider clicking the send button instead.',
+              );
+            }
+          } catch {
+            /* 元素已被页面重渲染替换:无法回读,跳过 */
+          }
         }
         return { ok: true, url: location.href, title: document.title, element: summary, notes };
       }
@@ -1170,7 +1209,7 @@ export default defineContentScript({
       }
       if (message?.type === SEARCH_ELEMENT_MESSAGE) {
         // 异步计算(动态导入 dom-accessibility-api):返回 true 保持消息通道开放
-        collectInteractiveElements(message.query)
+        collectInteractiveElements(message.query, message.includeHidden === true)
           .then(sendResponse)
           .catch(() => sendResponse({ error: 'Unexpected failure while collecting interactive elements.' }));
         return true;

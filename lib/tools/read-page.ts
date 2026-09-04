@@ -11,6 +11,12 @@ const READ_PAGE_PARAMS = Type.Object({
         "Which part of long pages to keep when truncating (default 'head'). Use 'tail' for chat/message pages — the latest messages live at the end.",
     }),
   ),
+  waitStableMs: Type.Optional(
+    Type.Number({
+      description:
+        'Wait up to this many milliseconds for the page content to stabilize before extracting (text length unchanged across samples). Use after actions that trigger streaming updates (e.g. submitting a chat message); cap ~15000.',
+    }),
+  ),
 });
 
 /** read_page 工具定义(safe):AI 按需读取某个被引用标签页的当前正文(执行体消费 pageContext 的 extractFromTab) */
@@ -45,7 +51,11 @@ export function createReadPageToolDefinition(
         };
       }
       const section = args?.section === 'tail' ? 'tail' : 'head';
-      const page = await extractFromTab(tabId, section);
+      const waitStableMs =
+        typeof args?.waitStableMs === 'number' && args.waitStableMs > 0
+          ? Math.min(Math.round(args.waitStableMs), 30000)
+          : 0;
+      const page = await extractFromTab(tabId, section, waitStableMs);
       if (!page) {
         return {
           content: [
