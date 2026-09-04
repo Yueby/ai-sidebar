@@ -4,9 +4,11 @@ import type { RefTab } from '../pageContext';
 import { createReadPageToolDefinition } from './read-page';
 import { createReadElementToolDefinition } from './read-element';
 import { createSearchElementToolDefinition } from './search-element';
+import { createSearchPageToolDefinition } from './search-page';
 import { createClickElementToolDefinition } from './click-element';
 import { createFillElementToolDefinition } from './fill-element';
 import { createScrollPageToolDefinition } from './scroll-page';
+import { createOpenPageToolDefinition } from './open-page';
 import { createScreenshotPageToolDefinition } from './screenshot-page';
 import { createFetchUrlToolDefinition } from './fetch-url';
 import { createWebSearchToolDefinition } from './web-search';
@@ -34,6 +36,8 @@ export interface GetToolsOptions {
   onCompactContext?: () => void;
   /** 网络搜索源配置(设置里 provider 非 none 且字段齐备才注册 search_web;未配置传 null) */
   webSearch?: WebSearchConfig | null;
+  /** agent 开启标签页的运行时注册表(read_page/read_element/execute_js execute 时实时查询;决策 27) */
+  dynamicTabs?: ReadonlySet<number>;
 }
 
 /** 页面读取组(safe):read_page + read_element(tab 级白名单;selector 不设白名单) */
@@ -41,10 +45,15 @@ export function createPageReadTools(options: GetToolsOptions): AgentTool[] {
   const refTabs = options.refTabs ?? [];
   const pickedElements = options.pickedElements ?? [];
   const tools: AgentTool[] = [];
-  if (refTabs.length > 0) tools.push(createReadPageToolDefinition(refTabs));
+  if (refTabs.length > 0) tools.push(createReadPageToolDefinition(refTabs, options.dynamicTabs));
   if (refTabs.length > 0 || pickedElements.length > 0) {
     tools.push(
-      createReadElementToolDefinition(refTabs, pickedElements, options.canUseImage ?? false),
+      createReadElementToolDefinition(
+        refTabs,
+        pickedElements,
+        options.canUseImage ?? false,
+        options.dynamicTabs,
+      ),
     );
   }
   return tools;
@@ -53,7 +62,7 @@ export function createPageReadTools(options: GetToolsOptions): AgentTool[] {
 /** 页面发现组(safe):search_element 列交互元素清单 —— 动作支柱的 ARIA 定位发现层;
  *  寻址 = 默认 focused tab、tabId 可选(用户拍板:自动化任务可不引用页),故不设 tab 白名单、无条件注册 */
 export function createPageDiscoveryTools(): AgentTool[] {
-  return [createSearchElementToolDefinition()];
+  return [createSearchElementToolDefinition(), createSearchPageToolDefinition()];
 }
 
 /** 页面动作组:click/fill(confirm + 会话级 grant,grantScope=工具@tabId)+ scroll(safe);
@@ -64,6 +73,7 @@ export function createPageActionTools(options: GetToolsOptions): AgentTool[] {
     createClickElementToolDefinition(),
     createFillElementToolDefinition(),
     createScrollPageToolDefinition(),
+    createOpenPageToolDefinition(),
   ];
   if (options.canUseImage) tools.push(createScreenshotPageToolDefinition(options.refTabs ?? []));
   return tools;
@@ -83,7 +93,9 @@ export function createWebSearchTools(config: WebSearchConfig | null | undefined)
 /** 确认型工具组(confirm):execute_js 经 createGatedTool 包装,tab 句柄同 read_page 白名单 */
 export function createGatedTools(options: GetToolsOptions): AgentTool[] {
   const refTabs = options.refTabs ?? [];
-  return refTabs.length > 0 ? [createExecuteJsToolDefinition(refTabs)] : [];
+  return refTabs.length > 0
+    ? [createExecuteJsToolDefinition(refTabs, options.dynamicTabs)]
+    : [];
 }
 
 /** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩 */

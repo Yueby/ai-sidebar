@@ -217,7 +217,28 @@ export default defineContentScript({
     function truncateBlocks(
       blocks: string[],
       limit: number,
+      anchor: 'head' | 'tail' = 'head',
     ): { text: string; truncated: boolean } {
+      if (anchor === 'tail') {
+        // 聊天页/长对话页:最新内容在尾部,反向保留尾部窗口
+        let total = 0;
+        const kept: string[] = [];
+        for (let i = blocks.length - 1; i >= 0; i--) {
+          const block = blocks[i]!;
+          const cost = block.length + (kept.length > 0 ? 2 : 0);
+          if (total + cost > limit) break;
+          kept.unshift(block);
+          total += cost;
+        }
+        if (kept.length === 0) {
+          const last = blocks[blocks.length - 1] ?? '';
+          return {
+            text: `…(前段内容已截断)\n\n${last.slice(Math.max(0, last.length - limit))}`,
+            truncated: true,
+          };
+        }
+        return { text: `…(前段内容已截断)\n\n${kept.join('\n\n')}`, truncated: true };
+      }
       let size = 0;
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
@@ -233,11 +254,20 @@ export default defineContentScript({
       return { text: blocks.join('\n\n'), truncated: false };
     }
 
+    /** 尾部窗口切片(语义路径产出的整段文本用;段落边界对齐) */
+    function tailSliceText(text: string, limit: number): { text: string; truncated: boolean } {
+      if (text.length <= limit) return { text, truncated: false };
+      const sliced = text.slice(text.length - limit);
+      const nl = sliced.indexOf('\n');
+      const aligned = nl > 0 ? sliced.slice(nl + 1) : sliced;
+      return { text: `…(前段内容已截断)\n\n${aligned}`, truncated: true };
+    }
+
     /** 提取流水线:选根 → 块级遍历 → 轻量 Markdown → 块边界截断 */
-    function extractMarkdown(): { text: string; truncated: boolean } {
+    function extractMarkdown(section: 'head' | 'tail'): { text: string; truncated: boolean } {
       const root = selectRoot();
       if (!root) return { text: '', truncated: false };
-      return truncateBlocks(renderChildren(root), TEXT_LIMIT);
+      return truncateBlocks(renderChildren(root), TEXT_LIMIT, section);
     }
 
     /** 等 document.readyState === 'complete'(上限 READY_TIMEOUT) */
@@ -341,7 +371,7 @@ export default defineContentScript({
     }
 
     /** SPA 稳定化:等加载完成;首提过短则等待后重试一次 */
-    async function extractStable(): Promise<{
+    async function extractStable(section: 'head' | 'tail'): Promise<{
       title: string;
       url: string;
       text: string;
@@ -349,11 +379,13 @@ export default defineContentScript({
     }> {
       await waitForComplete(READY_TIMEOUT);
       // 语义路径优先;门控不过/库不可用则手写兜底(含 isHidden 可见性过滤)
-      let result = (await extractSemanticMarkdown()) ?? extractMarkdown();
+      let result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
       if (result.text.length < SHORT_THRESHOLD) {
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
-        result = (await extractSemanticMarkdown()) ?? extractMarkdown();
+        result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
       }
+      // tail 模式:路径内部已按头部锚定截断,这里重切为尾部窗口(聊天页最新内容在尾部)
+      if (section === 'tail') result = tailSliceText(result.text, TEXT_LIMIT);
       return { title: document.title, url: location.href, ...result };
     }
 
@@ -927,9 +959,26 @@ export default defineContentScript({
      * 文本类 = focus → 全选 → 原生 prototype setter(绕 React/Vue 值跟踪)→ input/change;
      * contenteditable = 全选后 execCommand('insertText')(富文本编辑器兼容)。空串 = 明确清空语义。
      */
+    /** 合成 Enter 键序列(fill submit 用;untrusted,与 click 同哲学) */
+    function dispatchEnter(el: Element): void {
+      for (const type of ['keydown', 'keypress', 'keyup']) {
+        el.dispatchEvent(
+          new KeyboardEvent(type, {
+            key: 'Enter',
+            code: 'Enter',
+            keyCode: 13,
+            which: 13,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      }
+    }
+
     function performFill(
       el: Element,
       value: string,
+      submit?: 'enter',
     ): { notes: string[] } | { fail: { reason: 'option_not_found' | 'unsupported_element' | 'invalid_value'; options?: string[] } } {
       const notes: string[] = [];
       if (el instanceof HTMLSelectElement) {
@@ -997,6 +1046,7 @@ export default defineContentScript({
             el.textContent = value;
           }
           dispatchInputAndChange(el);
+          if (submit === 'enter') dispatchEnter(el);
           return { notes };
         }
         if (typeof (el as HTMLInputElement).select === 'function') (el as HTMLInputElement).select();
@@ -1006,6 +1056,7 @@ export default defineContentScript({
         if (desc?.set) desc.set.call(el, value);
         else (el as HTMLInputElement).value = value;
         dispatchInputAndChange(el);
+        if (submit === 'enter') dispatchEnter(el);
         return { notes };
       }
       return { fail: { reason: 'unsupported_element' } };
@@ -1034,6 +1085,7 @@ export default defineContentScript({
       value?: unknown;
       direction?: unknown;
       amount?: unknown;
+      submit?: unknown;
     }): Promise<PageActionResult> {
       const libs = await loadAccessibilityLibs();
       if (!libs) return { ok: false, url: location.href, reason: 'not_found' };
@@ -1088,7 +1140,8 @@ export default defineContentScript({
           notes.push(...performClick(res.hit.el));
         } else {
           const value = typeof message.value === 'string' ? message.value : '';
-          const filled = performFill(res.hit.el, value);
+          const submit = message.submit === 'enter' ? 'enter' : undefined;
+          const filled = performFill(res.hit.el, value, submit);
           if ('fail' in filled) fail = filled.fail;
           else notes.push(...filled.notes);
         }
@@ -1137,7 +1190,7 @@ export default defineContentScript({
         return;
       }
       // 异步提取:返回 true 保持消息通道开放,完成后 sendResponse
-      extractStable().then(sendResponse);
+      extractStable(message.section === 'tail' ? 'tail' : 'head').then(sendResponse);
       return true;
     });
   },

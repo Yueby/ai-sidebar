@@ -21,6 +21,7 @@ export function createReadElementToolDefinition(
   refTabs: RefTab[],
   pickedElements: PickedElement[],
   canUseImage: boolean,
+  dynamicTabs?: ReadonlySet<number>,
 ): AgentTool<typeof READ_ELEMENT_PARAMS> & { risk: ToolRisk } {
   // tab 级白名单 = 引用标签页 ∪ 框选元素所在标签页(历史上引用过元素的 tab 必可读)
   const validTabIds = new Set<number>([
@@ -37,7 +38,10 @@ export function createReadElementToolDefinition(
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;
       const selector = args?.selector;
-      if (typeof tabId !== 'number' || !validTabIds.has(tabId)) {
+      if (
+        typeof tabId !== 'number' ||
+        (!validTabIds.has(tabId) && !(dynamicTabs?.has(tabId) ?? false))
+      ) {
         return {
           content: [
             {

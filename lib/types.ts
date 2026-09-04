@@ -67,6 +67,8 @@ export const TOOL_LABELS: Record<string, string> = {
   execute_js: '执行页面脚本',
   compact_context: '压缩上下文',
   search_web: '网络搜索',
+  search_page: '查找标签页',
+  open_page: '打开网页',
   search_element: '查找交互元素',
   click_element: '点击页面元素',
   fill_element: '填写页面元素',

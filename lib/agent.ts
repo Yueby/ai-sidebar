@@ -15,6 +15,7 @@ import { normalizeBaseUrl } from './providers';
 import type { RefTab } from './pageContext';
 import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
 import { getTools } from './tools/registry';
+import { getAgentOpenedTabs } from './pageContext';
 import { collectPageRefs, PAGE_REFS_TAG, parsePageRefs, renderPageRefsBlock } from './pageRefs';
 
 export type { AgentEvent } from '@earendil-works/pi-agent-core';
@@ -158,6 +159,10 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   for (const t of currentTabs) {
     tabById.set(t.id, t);
   }
+  // agent 本回合开启的 tab(决策 27):运行时注册表并入白名单(元数据空,read_page 现场取)
+  for (const id of getAgentOpenedTabs()) {
+    if (!tabById.has(id)) tabById.set(id, { id, title: '', url: '' });
+  }
   const refTabs = [...tabById.values()];
 
   const elementByKey = new Map<string, PickedElement>();
@@ -187,6 +192,8 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
     canUseImage: model.input.includes('image'),
     onCompactContext: options.onCompactContext,
     webSearch: options.webSearch ?? null,
+    // agent 本回合开启的 tab(动态注册表,面板生命周期):读工具 execute 时实时查询
+    dynamicTabs: getAgentOpenedTabs(),
   });
 
   const agent = new Agent({

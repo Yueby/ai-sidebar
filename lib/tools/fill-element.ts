@@ -25,6 +25,12 @@ const FILL_ELEMENT_PARAMS = Type.Object({
     description:
       'Value to fill. Text fields and textareas: the text to enter (an empty string clears the field). Selects: the option value or its visible text. Checkboxes, radios and switches: "true" or "false".',
   }),
+  submit: Type.Optional(
+    Type.Union([Type.Literal('enter')], {
+      description:
+        "After filling a TEXT field, dispatch an Enter key press to submit (e.g. chat/message boxes). Ignored for selects and toggles. Synthetic (untrusted) key events work with most frameworks; if a site ignores them, fill without submit and click its send button instead.",
+    }),
+  ),
   tabId: Type.Optional(
     Type.Number({
       description: 'Id of the tab to act on; omit to use the currently focused tab',
@@ -114,7 +120,8 @@ export function createFillElementToolDefinition(): AgentTool<typeof FILL_ELEMENT
         };
       }
 
-      const result = await performPageAction(tabId, 'fill', { locator, value });
+      const submit = args?.submit === 'enter' ? 'enter' : undefined;
+      const result = await performPageAction(tabId, 'fill', { locator, value, submit });
       if (!result) {
         return {
           content: [

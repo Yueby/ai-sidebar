@@ -23,6 +23,7 @@ const EXECUTE_JS_PARAMS = Type.Object({
  */
 export function createExecuteJsToolDefinition(
   refTabs: RefTab[],
+  dynamicTabs?: ReadonlySet<number>,
 ): AgentTool<typeof EXECUTE_JS_PARAMS> & { risk: ToolRisk } {
   const validTabIds = new Set<number>(refTabs.map((t) => t.id));
   const base: AgentTool<typeof EXECUTE_JS_PARAMS> & { risk: ToolRisk } = {
@@ -34,7 +35,10 @@ export function createExecuteJsToolDefinition(
     parameters: EXECUTE_JS_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;
-      if (typeof tabId !== 'number' || !validTabIds.has(tabId)) {
+      if (
+        typeof tabId !== 'number' ||
+        (!validTabIds.has(tabId) && !(dynamicTabs?.has(tabId) ?? false))
+      ) {
         return {
           content: [
             {

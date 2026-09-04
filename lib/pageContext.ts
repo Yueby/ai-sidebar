@@ -46,20 +46,48 @@ export async function getTabMeta(tabId: number): Promise<RefTab | null> {
 }
 
 /** 所有 http/https 标签页(供"添加标签页引用"候选列表) */
-export async function listCandidateTabs(): Promise<RefTab[]> {
+/** 所有 http/https 标签页(供"添加引用"候选列表与 search_page 工具);active 标注当前活动 tab */
+export async function listCandidateTabs(): Promise<(RefTab & { active?: boolean })[]> {
   const tabs = await browser.tabs.query({ url: ['http://*/*', 'https://*/*'] });
-  const result: RefTab[] = [];
+  const result: (RefTab & { active?: boolean })[] = [];
   for (const tab of tabs) {
-    if (tab?.id) {
-      const meta = await tabToRefTab(tab.id);
-      if (meta) result.push(meta);
-    }
+    if (!tab?.id) continue;
+    const meta = await tabToRefTab(tab.id);
+    if (meta) result.push({ ...meta, ...(tab.active ? { active: true } : {}) });
   }
   return result;
 }
 
+/** 打开新标签页(open_page 底层);返回新 tab 元信息,失败 null */
+export async function openTab(url: string, activate = true): Promise<RefTab | null> {
+  try {
+    const tab = await browser.tabs.create({ url, active: activate });
+    if (!tab?.id) return null;
+    return { id: tab.id, title: tab.title ?? '', url: tab.url ?? url };
+  } catch {
+    return null;
+  }
+}
+
+// ===== agent 开启标签页的运行时注册表(面板生命周期)=====
+// open_page 开出的 tabId 注册于此;read_page/read_element/execute_js 的白名单
+// 在草稿引用 ∪ 历史 refs 块 ∪ 本注册表三源合并(决策 27)。tab 关闭时残留条目
+// 无害(读 closed tab 走可行动错误文本),不主动清理。
+const agentOpenedTabs = new Set<number>();
+
+export function registerAgentOpenedTab(tabId: number): void {
+  agentOpenedTabs.add(tabId);
+}
+
+export function getAgentOpenedTabs(): ReadonlySet<number> {
+  return agentOpenedTabs;
+}
+
 /** 向指定标签页请求页面内容;失败或不可提取时返回 null(不阻塞发送) */
-export async function extractFromTab(tabId: number): Promise<ExtractedPage | null> {
+export async function extractFromTab(
+  tabId: number,
+  section: 'head' | 'tail' = 'head',
+): Promise<ExtractedPage | null> {
   let url: string;
   try {
     const tab = await browser.tabs.get(tabId);
@@ -72,6 +100,7 @@ export async function extractFromTab(tabId: number): Promise<ExtractedPage | nul
   const request = async (): Promise<Partial<ExtractedPage> | undefined> => {
     const res = (await browser.tabs.sendMessage(tabId, {
       type: READ_PAGE_MESSAGE,
+      section,
     })) as Partial<ExtractedPage> | undefined;
     return res;
   };
@@ -415,7 +444,13 @@ export type PageActionResult =
 export async function performPageAction(
   tabId: number,
   action: 'resolve' | 'click' | 'fill' | 'scroll',
-  params: { locator?: ActionLocator; value?: string; direction?: string; amount?: number } = {},
+  params: {
+    locator?: ActionLocator;
+    value?: string;
+    direction?: string;
+    amount?: number;
+    submit?: 'enter';
+  } = {},
 ): Promise<PageActionResult | null> {
   let url: string;
   try {

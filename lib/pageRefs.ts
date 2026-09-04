@@ -107,13 +107,16 @@ export function stripPageRefs(content: string): string {
  * 后者覆盖前者:同字段(tabs/elements)以较新块为准。
  */
 export function collectPageRefs(messages: readonly ChatMessage[]): PageRefs {
-  const result: PageRefs = { tabs: [], elements: [] };
+  // 并集语义(决策 26 配套):句柄按 tabId/元素键去重累积,元数据取最新——
+  // 单例快照块不得顶掉用户 pin 的多 tab 集(否则 agent 切页后白名单萎缩,引用跨消息存活失效)
+  const tabs = new Map<number, RefTabMeta>();
+  const elements = new Map<string, RefElementMeta>();
   for (const m of messages) {
     if (m.role !== 'user') continue;
     const parsed = parsePageRefs(m.content);
     if (!parsed) continue;
-    if (parsed.tabs.length > 0) result.tabs = parsed.tabs;
-    if (parsed.elements.length > 0) result.elements = parsed.elements;
+    for (const t of parsed.tabs) tabs.set(t.tabId, t);
+    for (const e of parsed.elements) elements.set(`${e.tabId}:${e.selector}`, e);
   }
-  return result;
+  return { tabs: [...tabs.values()], elements: [...elements.values()] };
 }
