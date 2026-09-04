@@ -28,7 +28,7 @@ export function createOpenPageToolDefinition(): AgentTool<typeof OPEN_PAGE_PARAM
     label: toolLabel('open_page'),
     risk: 'confirm',
     description:
-      'Open a URL in a new browser tab — use it to bring up a page the task needs (e.g. open an AI chat site, a docs page, or a link found in content). The new tab becomes addressable: its tabId is returned and can be used with read_page / click_element / fill_element. The new tab is focused unless background: true. Every call requires explicit user approval via a confirmation card unless the user granted this session.',
+      'Open a URL in a new browser tab — use it to bring up a page the task needs (e.g. open an AI chat site, a docs page, or a link found in content). The new tab becomes addressable: its tabId is returned and can be used with read_page / click_element / fill_element. Multi-tab workflows: open several sites with background: true and address each by its returned tabId — note that sites may redirect after loading (re-check identity with search_page if a title looks wrong). Every call requires explicit user approval via a confirmation card unless the user granted this session.',
     parameters: OPEN_PAGE_PARAMS,
     execute: async (toolCallId, args) => {
       const url = typeof args?.url === 'string' ? args.url.trim() : '';

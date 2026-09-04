@@ -69,6 +69,8 @@ export const TOOL_LABELS: Record<string, string> = {
   search_web: '网络搜索',
   search_page: '查找标签页',
   open_page: '打开网页',
+  activate_page: '切到标签页',
+  close_page: '关闭标签页',
   search_element: '查找交互元素',
   click_element: '点击页面元素',
   fill_element: '填写页面元素',

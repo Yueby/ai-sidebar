@@ -83,6 +83,31 @@ export function getAgentOpenedTabs(): ReadonlySet<number> {
   return agentOpenedTabs;
 }
 
+export function unregisterAgentOpenedTab(tabId: number): void {
+  agentOpenedTabs.delete(tabId);
+}
+
+/** 把指定标签页切到前台(activate_page 底层);返回最新元信息,失败 null */
+export async function activateTab(tabId: number): Promise<RefTab | null> {
+  try {
+    const tab = await browser.tabs.update(tabId, { active: true });
+    if (!tab?.id) return null;
+    return { id: tab.id, title: tab.title ?? '', url: tab.url ?? '' };
+  } catch {
+    return null;
+  }
+}
+
+/** 关闭标签页(close_page 底层);已关闭/不存在时静默成功 */
+export async function closeTab(tabId: number): Promise<boolean> {
+  try {
+    await browser.tabs.remove(tabId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** 向指定标签页请求页面内容;失败或不可提取时返回 null(不阻塞发送) */
 export async function extractFromTab(
   tabId: number,

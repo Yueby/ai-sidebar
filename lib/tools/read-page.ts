@@ -78,13 +78,18 @@ export function createReadPageToolDefinition(
         waitText && !page.text.toLowerCase().includes(waitText.toLowerCase())
           ? `Note: waitText "${waitText}" was not found within the wait window — the page may not have reached the expected state.`
           : '';
+      // 登录/注册页启发式:URL 特征提示(让模型直接告知用户需要登录,而不是白跑)
+      const authNote = /(log[-_]?in|sign[-_]?in|sign[-_]?up|register|authenticate)/i.test(page.url)
+        ? 'Note: this page appears to be a login/signup flow — the site may require authentication before it can be used.'
+        : '';
       return {
         content: [
           {
             type: 'text',
             text:
               renderPageContext(page) +
-              (waitNote ? `\n\n${waitNote}` : ''),
+              (waitNote ? `\n\n${waitNote}` : '') +
+              (authNote ? `\n\n${authNote}` : ''),
           },
         ],
         details: { title: page.title, url: page.url },
