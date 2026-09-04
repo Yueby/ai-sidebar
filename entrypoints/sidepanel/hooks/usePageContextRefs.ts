@@ -155,9 +155,13 @@ export function usePageContextRefs(params: {
   const activeDraftPicked = useAppStore((s) => selectCurrentSession(s)?.draft?.pickedElements ?? null);
   const includePageContext = useAppStore((s) => s.settings.includePageContext);
   // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆)。
-  // 空工作集(发送清空草稿/暂无芯片)不动组记忆:组跨消息存活;成员移除另有精确删除
+  // 引用栏被用户删空 → 重置组记忆(陈旧快照不复活,回归纯跟随;
+  // 发送不再清空 refTabs——决策 13 修订——故不会误伤跨消息的组存活)
   useEffect(() => {
-    if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) return;
+    if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) {
+      groupMapRef.current.clear();
+      return;
+    }
     const ids = new Set(activeDraftRefTabs.map((t) => t.id));
     if (focusedTabIdRef.current !== null) ids.add(focusedTabIdRef.current);
     for (const id of ids) {
