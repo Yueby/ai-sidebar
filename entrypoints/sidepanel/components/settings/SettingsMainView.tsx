@@ -16,6 +16,17 @@ import { toast } from 'sonner';
 import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
 import { SettingsBackupView } from './SettingsBackupView';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { buttonVariants } from '@/components/ui/button';
 import { SettingsPermissionsView } from './SettingsPermissionsView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +53,7 @@ export function SettingsMainView({
   const [currentTab, setCurrentTab] = useState<SettingsTab>('providers');
   const [testingId, setTestingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteProviderTarget, setDeleteProviderTarget] = useState<ProviderConfig | null>(null);
 
   // Read extension manifest info safely
   let appName = 'ai-sidebar';
@@ -305,35 +317,16 @@ export function SettingsMainView({
                             <Pencil className="size-3" />
                           </Button>
 
-                          {isConfirmingDelete ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteProvider(p.id)}
-                                className="px-1.5 py-0.5 rounded text-[10px] bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                删除
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeletingId(null)}
-                                className="px-1.5 py-0.5 rounded text-[10px] bg-secondary text-secondary-foreground"
-                              >
-                                取消
-                              </button>
-                            </div>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setDeletingId(p.id)}
-                              className="size-6 text-muted-foreground hover:text-destructive"
-                              title="删除提供商"
-                            >
-                              <Trash2 className="size-3" />
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteProviderTarget(p)}
+                            className="size-6 text-muted-foreground hover:text-destructive"
+                            title="删除提供商"
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -435,6 +428,34 @@ export function SettingsMainView({
             </div>
           </div>
         )}
+        {/* 删除提供商二次确认(dialog 统一删除语义) */}
+        <AlertDialog
+          open={deleteProviderTarget !== null}
+          onOpenChange={(open) => !open && setDeleteProviderTarget(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>删除提供商</AlertDialogTitle>
+              <AlertDialogDescription>
+                将删除「{deleteProviderTarget?.name || '未命名提供商'}」及其 {deleteProviderTarget?.models.length ?? 0} 个模型的配置，此操作不可撤销。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDeleteProviderTarget(null)}>
+                取消
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className={buttonVariants({ variant: 'destructive' })}
+                onClick={() => {
+                  if (deleteProviderTarget) handleDeleteProvider(deleteProviderTarget.id);
+                  setDeleteProviderTarget(null);
+                }}
+              >
+                删除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

@@ -21,6 +21,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ChatHeaderProps {
@@ -48,6 +50,7 @@ export function ChatHeader({
   onOpenSettings,
 }: ChatHeaderProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitleValue, setEditTitleValue] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -153,43 +156,8 @@ export function ChatHeader({
               ) : (
                 sortedSessions.map((s) => {
                   const isActive = s.id === activeSessionId;
-                  const isConfirming = deletingId === s.id;
                   const isEditing = editingId === s.id;
                   const isAiTitling = titlingSessionIds?.has(s.id);
-
-                  if (isConfirming) {
-                    return (
-                      <div
-                        key={s.id}
-                        className="flex items-center justify-between px-2 py-1.5 text-xs bg-destructive/10 rounded-sm animate-in fade-in-0 duration-100"
-                      >
-                        <span className="text-destructive font-medium truncate">确认删除?</span>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteSession(s.id);
-                              setDeletingId(null);
-                            }}
-                            className="px-1.5 py-0.5 rounded text-[11px] bg-destructive text-destructive-foreground hover:bg-destructive/90 cursor-pointer"
-                          >
-                            删除
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletingId(null);
-                            }}
-                            className="px-1.5 py-0.5 rounded text-[11px] bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer"
-                          >
-                            取消
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
 
                   if (isEditing) {
                     return (
@@ -295,7 +263,7 @@ export function ChatHeader({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setDeletingId(s.id);
+                            setDeleteTarget(s);
                           }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
                           title="删除会话"
@@ -333,6 +301,30 @@ export function ChatHeader({
           </Tooltip>
         </TooltipProvider>
       </div>
+
+      {/* 删除会话二次确认(dialog 统一删除语义) */}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>删除会话</AlertDialogTitle>
+            <AlertDialogDescription>
+              将删除「{deleteTarget?.title || '未命名会话'}」的全部聊天记录,此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteTarget(null)}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: 'destructive' })}
+              onClick={() => {
+                if (deleteTarget) onDeleteSession(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
 }
