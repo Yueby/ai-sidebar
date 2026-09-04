@@ -269,12 +269,6 @@
   }
 }
 
-/* ---- 环 tooltip(popover 同族):换底后同步箭头配色(仅作用于 tooltip-popover 作用域) ---- */
-.tooltip-popover[data-slot='tooltip-content'] > svg:last-child {
-  background: var(--popover);
-  fill: var(--popover);
-}
-
 /* ---- Composer TipTap 编辑器 ---- */
 .composer-editor {
   min-height: 52px;

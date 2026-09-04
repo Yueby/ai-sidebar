@@ -78,7 +78,7 @@ export function ContextPanel({
               </span>
             </p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              上下文占用 <span className="font-mono font-medium text-foreground">{usage.pct}%</span>
+              上下文占用 <span className="font-mono font-medium text-foreground">{usage.pct.toFixed(2)}%</span>
             </p>
           </div>
           {modelName && (
