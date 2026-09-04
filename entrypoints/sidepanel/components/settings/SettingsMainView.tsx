@@ -14,6 +14,7 @@ import type { Settings, ProviderConfig } from '@/lib/types';
 import { apiTypeLabel } from '@/lib/providers';
 import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
+import { SettingsBackupView } from './SettingsBackupView';
 import { SettingsPermissionsView } from './SettingsPermissionsView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +29,7 @@ interface SettingsMainViewProps {
   onEditProvider: (provider: ProviderConfig) => void;
 }
 
-type SettingsTab = 'providers' | 'search' | 'permissions' | 'about';
+type SettingsTab = 'providers' | 'search' | 'permissions' | 'backup' | 'about';
 
 export function SettingsMainView({
   settings,
@@ -170,6 +171,15 @@ export function SettingsMainView({
               className="h-6 px-2 text-xs font-normal"
             >
               权限
+            </Button>
+            <Button
+              type="button"
+              variant={currentTab === 'backup' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setCurrentTab('backup')}
+              className="h-6 px-2 text-xs font-normal"
+            >
+              备份
             </Button>
             <Button
               type="button"
@@ -379,6 +389,11 @@ export function SettingsMainView({
         {/* VIEW 2: Search Settings */}
         {currentTab === 'search' && (
           <SearchSettingsView settings={settings} onUpdateSettings={onUpdateSettings} />
+        )}
+
+        {/* VIEW: Backup (导出/导入配置文件) */}
+        {currentTab === 'backup' && (
+          <SettingsBackupView settings={settings} onUpdateSettings={onUpdateSettings} />
         )}
 
         {/* VIEW 3: Permissions Management */}
