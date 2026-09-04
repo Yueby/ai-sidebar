@@ -586,12 +586,89 @@ export async function performPageAction(
     })) as PageActionResult | undefined;
     return res;
   };
-  let res = await request().catch(() => undefined);
-  if (!res) {
-    const injected = await ensureContentScript(tabId);
-    if (!injected) return null;
-    res = await request().catch(() => undefined);
+  // sidepanel 侧硬保险:content 侧响应不到(隐藏 tab rAF 暂停挂死/导航销毁上下文)时,
+  // 上游 agent 无工具超时,裸 Promise 会拖死整轮对话(停止按钮也救不回)。
+  const ACTION_TIMEOUT_MS = 8000; // 可见最坏 ~4.6s(1500+3000+尾帧)+ 节流余量
+  type ActionOutcome =
+    | { kind: 'response'; res: PageActionResult | undefined }
+    | { kind: 'rejected' }
+    | { kind: 'timeout' };
+  const requestWithTimeout = async (): Promise<ActionOutcome> => {
+    return await Promise.race([
+      request().then(
+        (r) => ({ kind: 'response', res: r } as const),
+        () => ({ kind: 'rejected' } as const),
+      ),
+      new Promise<{ kind: 'timeout' }>((resolve) =>
+        setTimeout(() => resolve({ kind: 'timeout' }), ACTION_TIMEOUT_MS),
+      ),
+    ]);
+  };
+  /** 降级成功:动作已派发但结果未确认。绝不能返回 ok:false(会诱导模型重试 = 双动作) */
+  const degradedSuccess = (currentUrl: string, note: string): PageActionResult => ({
+    ok: true,
+    url: currentUrl,
+    title: '',
+    notes: [note],
+  });
+
+  let outcome = await requestWithTimeout();
+  if (outcome.kind === 'timeout') {
+    // 挂死:动作已派发一次,绝不能重发;降级成功,状态由 click_element 的 tab 变化报告补足
+    if (action === 'resolve') return null;
+    let currentUrl = url;
+    try {
+      const tab = await browser.tabs.get(tabId);
+      if (tab?.url?.startsWith('http')) currentUrl = tab.url;
+    } catch {
+      /* tab 已关闭:保留进入时 url */
+    }
+    outcome = {
+      kind: 'response',
+      res: degradedSuccess(
+        currentUrl,
+        'response_timeout: the page did not report back (it may have been backgrounded or navigated). The action was dispatched once; its final state is unconfirmed.',
+      ),
+    };
+  } else if (outcome.kind === 'rejected') {
+    // 接收方销毁:同 tab 导航(content 上下文随导航重建)= 动作已生效,不能重发;
+    // URL 未变 = content script 缺失,走既有补注入重试
+    let currentUrl: string | null = null;
+    try {
+      const tab = await browser.tabs.get(tabId);
+      if (tab?.url?.startsWith('http')) currentUrl = tab.url;
+    } catch {
+      /* closed */
+    }
+    if (action !== 'resolve' && currentUrl && currentUrl !== url) {
+      outcome = {
+        kind: 'response',
+        res: degradedSuccess(
+          currentUrl,
+          'navigation_confirmed: the page navigated before the action reported back (the content context is recreated per navigation). The action was dispatched once; its final state is unconfirmed.',
+        ),
+      };
+    } else {
+      const injected = await ensureContentScript(tabId);
+      if (!injected) return null;
+      const retry = await requestWithTimeout();
+      if (retry.kind === 'timeout') {
+        if (action === 'resolve') return null;
+        outcome = {
+          kind: 'response',
+          res: degradedSuccess(
+            currentUrl ?? url,
+            'response_timeout: the page did not report back after script injection. The action was dispatched once; its final state is unconfirmed.',
+          ),
+        };
+      } else if (retry.kind === 'rejected') {
+        return null;
+      } else {
+        outcome = retry;
+      }
+    }
   }
+  const res = outcome.kind === 'response' ? outcome.res : undefined;
   if (
     !res ||
     typeof res !== 'object' ||

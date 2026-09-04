@@ -879,7 +879,7 @@ export default defineContentScript({
      * 有界 settle:readyState complete(短上限)→ MutationObserver 100ms 静默(天花板 maxMs)→ 一帧 rAF。
      * 动作内置等待,不设独立等待工具(规格 8.4)。
      */
-    async function waitForSettle(maxMs = 3000): Promise<void> {
+    async function waitForSettle(maxMs = 3000): Promise<string[]> {
       if (document.readyState !== 'complete') {
         await new Promise<void>((resolve) => {
           const done = () => {
@@ -911,7 +911,30 @@ export default defineContentScript({
           resolve();
         }, maxMs);
       });
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      // 隐藏 tab 的 rAF 完全暂停(不是节流):尾帧等待会永不 resolve → 工具永久挂死。
+      // 已隐藏直接跳过;可见时与 visibilitychange 竞速(焦点被 _blank 新页抢走的瞬间迁移也能毫秒级短路)。
+      if (document.hidden) {
+        return ['settle_skipped: the tab lost focus (background tabs pause rendering); the post-action state could not be confirmed.'];
+      }
+      let hiddenMidway = false;
+      await Promise.race([
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+        new Promise<void>((resolve) => {
+          document.addEventListener(
+            'visibilitychange',
+            () => {
+              if (document.hidden) {
+                hiddenMidway = true;
+                resolve();
+              }
+            },
+            { once: true },
+          );
+        }),
+      ]);
+      return hiddenMidway
+        ? ['settle_skipped: the tab lost focus (background tabs pause rendering); the post-action state could not be confirmed.']
+        : [];
     }
 
     /**
@@ -1133,7 +1156,7 @@ export default defineContentScript({
           summary = elementSummary(res.hit);
         }
         const notes = performScroll(target, direction, amount);
-        await waitForSettle(1500);
+        notes.push(...(await waitForSettle(1500)));
         return { ok: true, url: location.href, title: document.title, element: summary, notes };
       }
 
@@ -1171,7 +1194,7 @@ export default defineContentScript({
         }
         if (fail) return { ok: false, url: location.href, reason: fail.reason, options: fail.options };
         const urlAfterAct = location.href;
-        await waitForSettle();
+        notes.push(...(await waitForSettle()));
         if (location.href !== urlAfterAct) {
           notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
         }
