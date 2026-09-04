@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Settings } from '@/lib/types';
 import { FALLBACK_PROMPTS, generateQuickPrompts, type QuickPrompt } from '@/lib/quickPrompts';
 import { getActiveTabMeta } from '@/lib/pageContext';
+import { resolveAuxModel } from '@/lib/providers';
 
 /**
  * 新会话推荐快捷指令:空会话可见时用辅助模型异步生成,失败静默回退静态四条。
@@ -41,6 +42,14 @@ export function useQuickPrompts(settings: Settings, active: boolean): QuickPromp
 
     const controller = new AbortController();
     let cancelled = false;
+
+    // 无任何可用模型(对话+辅助均未配置):不生成不发请求,UI 侧由 hasModel 隐藏区块
+    if (!resolveAuxModel(settingsRef.current, settingsRef.current.quickPromptModel)) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
 
     void (async () => {

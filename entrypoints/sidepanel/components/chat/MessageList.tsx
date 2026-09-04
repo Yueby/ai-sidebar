@@ -359,62 +359,64 @@ export function MessageList({
             )}
 
             {/* Quick Prompt Cards */}
-            <div className="space-y-1.5 text-left">
-              <div className="flex items-center justify-between px-1">
-                <p className="text-xs font-medium text-muted-foreground">推荐快捷指令</p>
-                <button
-                  type="button"
-                  onClick={quickPrompts.regenerate}
-                  disabled={quickPrompts.loading}
-                  className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/60 transition-colors disabled:opacity-40 cursor-pointer"
-                  title="换一批"
-                  aria-label="换一批"
-                >
-                  <RefreshCw className={cn('size-3', quickPrompts.loading && 'animate-spin')} />
-                </button>
-              </div>
+            {hasModel && (
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-xs font-medium text-muted-foreground">推荐快捷指令</p>
+                  <button
+                    type="button"
+                    onClick={quickPrompts.regenerate}
+                    disabled={quickPrompts.loading}
+                    className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/60 transition-colors disabled:opacity-40 cursor-pointer"
+                    title="换一批"
+                    aria-label="换一批"
+                  >
+                    <RefreshCw className={cn('size-3', quickPrompts.loading && 'animate-spin')} />
+                  </button>
+                </div>
 
-              {quickPrompts.loading ? (
-                <div className="grid grid-cols-1 gap-1.5">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2.5 rounded-lg border bg-card/60 p-2.5 animate-pulse"
-                    >
-                      <div className="size-4 rounded bg-muted shrink-0 mt-0.5" />
-                      <div className="flex-1 space-y-1.5 py-0.5">
-                        <div className="h-3 w-1/3 rounded bg-muted" />
-                        <div className="h-2.5 w-2/3 rounded bg-muted/70" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-1.5">
-                  {quickPrompts.items.map((item, idx) => {
-                    const Icon = PROMPT_ICONS[idx] ?? Sparkles;
-                    return (
-                      <button
-                        key={`${item.title}-${idx}`}
-                        type="button"
-                        onClick={() => onSelectPrompt(item.prompt)}
-                        className="group flex items-start gap-2.5 rounded-lg border bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                {quickPrompts.loading ? (
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="flex items-start gap-2.5 rounded-lg border bg-card/60 p-2.5 animate-pulse"
                       >
-                        <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground" />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-foreground">
-                            {item.title}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground truncate">
-                            {item.desc}
-                          </div>
+                        <div className="size-4 rounded bg-muted shrink-0 mt-0.5" />
+                        <div className="flex-1 space-y-1.5 py-0.5">
+                          <div className="h-3 w-1/3 rounded bg-muted" />
+                          <div className="h-2.5 w-2/3 rounded bg-muted/70" />
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {quickPrompts.items.map((item, idx) => {
+                      const Icon = PROMPT_ICONS[idx] ?? Sparkles;
+                      return (
+                        <button
+                          key={`${item.title}-${idx}`}
+                          type="button"
+                          onClick={() => onSelectPrompt(item.prompt)}
+                          className="group flex items-start gap-2.5 rounded-lg border bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                        >
+                          <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-foreground">
+                              {item.title}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {item.desc}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div ref={contentRef} className="flex flex-col gap-1 pb-4">

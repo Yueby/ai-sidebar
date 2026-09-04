@@ -9,6 +9,7 @@ import { createModels, type AssistantMessage, type Context, type SimpleStreamOpt
 import type { Settings } from '@/lib/types';
 import { resolveAuxModel } from '@/lib/providers';
 import { buildProvider } from '@/lib/agent';
+import { resolveAiLanguage } from '@/lib/language';
 
 /** 单条快捷建议:title/desc 用于卡片展示,prompt 为点击后填入输入框的完整消息 */
 export interface QuickPrompt {
@@ -42,14 +43,14 @@ export const FALLBACK_PROMPTS: QuickPrompt[] = [
 ];
 
 /** Model-facing 英文规范:JSON 数组输出,建议语言跟随页面语言 */
-const QUICK_PROMPT_SYSTEM_PROMPT = `You generate conversation starter suggestions for a browser AI sidebar. Based on the provided page context, generate exactly 4 short, distinct, actionable suggestions the user might want to ask about the current page. If no page context is provided, generate 4 useful generic suggestions for browsing with an AI assistant.
+const QUICK_PROMPT_SYSTEM_PROMPT = (language: string) => `You generate conversation starter suggestions for a browser AI sidebar. Based on the provided page context, generate exactly 4 short, distinct, actionable suggestions the user might want to ask about the current page. If no page context is provided, generate 4 useful generic suggestions for browsing with an AI assistant.
 
 Output format: a JSON array of exactly 4 objects, each with keys "title", "desc", "prompt":
 - "title": very short label (max 12 characters)
 - "desc": one-line description (max 24 characters)
 - "prompt": a complete message the user could send (one sentence)
 
-Write all values in the same language as the page context (e.g. a Chinese page gets Chinese suggestions; no context means the user's likely language). Output ONLY the JSON array, no markdown fences, no commentary.`;
+Write all values in ${language}. Output ONLY the JSON array, no markdown fences, no commentary.`;
 
 /** 生成请求上限:4 条短文本绰绰有余,防失控输出 */
 const MAX_TOKENS = 500;
@@ -80,7 +81,7 @@ export async function generateQuickPrompts(
       .join('\n') || 'No page context available.';
 
   const context_: Context = {
-    systemPrompt: QUICK_PROMPT_SYSTEM_PROMPT,
+    systemPrompt: QUICK_PROMPT_SYSTEM_PROMPT(resolveAiLanguage(settings.language)),
     messages: [
       {
         role: 'user',
@@ -94,6 +95,8 @@ export async function generateQuickPrompts(
     maxTokens: MAX_TOKENS,
     signal,
     cacheRetention: 'none',
+    // 辅助任务思考等级:off = 不发 reasoning 参数(pi-ai 语义 = 关闭/模型默认)
+    reasoning: settings.auxThinking === 'off' ? undefined : settings.auxThinking,
   };
 
   const response: AssistantMessage = await models.completeSimple(model, context_, options);

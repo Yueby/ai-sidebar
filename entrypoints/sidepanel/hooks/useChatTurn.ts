@@ -181,6 +181,8 @@ export function useChatTurn(params: {
           refTabs: refreshedTabs,
           pickedElements: snapElements,
           thinkingLevel: resolveReasoningLevel(active.model, useAppStore.getState().settings.reasoningLevel),
+          // AI 生成内容语言(设置全局语言;null = 跟随用户消息语言)
+          language: useAppStore.getState().settings.language,
           sessionId: session.id,
           signal: abortCtrl.signal,
           // search_web 工具注册配置:设置里配置了可用搜索源才下发

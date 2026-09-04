@@ -84,10 +84,14 @@ export function buildProvider(p: ProviderConfig) {
  * 组装 system prompt:身份 + <page-refs> 块协议的常量使用规则(压缩版,省 token)。
  * Model-facing 文本一律英文;注释是给开发者看的,保持中文。
  */
-export function buildSystemPrompt(): string {
+export function buildSystemPrompt(language: string | null = null): string {
   const now = new Date();
+  // 语言策略:未设置 = 跟随用户消息语言(原行为);设置 = 全局语言优先,用户消息明确指定时以用户为准
+  const languageDirective = language
+    ? `Always respond in ${language} unless the user explicitly requests a different language in their message.`
+    : "Respond in the same language the user writes in.";
   const parts = [
-    "You are an AI assistant living in the user's browser sidebar. Respond in the same language the user writes in.",
+    `You are an AI assistant living in the user's browser sidebar. ${languageDirective}`,
     // 不带时刻(精确时刻由 read_time 工具覆盖):system prompt 保持跨轮稳定,前缀缓存不失效
     `Today is ${weekdayName(now)}, ${localDate(now)} (${utcOffsetLabel(now)}).`,
   ];
@@ -114,6 +118,8 @@ export interface RunAgentOptions {
   /** 当前草稿中用户框选的页面元素(App 侧已按 includePageContext 门槛过滤) */
   pickedElements?: PickedElement[];
   thinkingLevel: ReasoningLevel;
+  /** AI 生成内容语言(已解析英文名);null = 跟随用户消息语言 */
+  language?: string | null;
   /** 会话 id,转发给支持提示缓存的提供商 */
   sessionId?: string;
   signal?: AbortSignal;
@@ -198,7 +204,7 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
 
   const agent = new Agent({
     initialState: {
-      systemPrompt: buildSystemPrompt(),
+      systemPrompt: buildSystemPrompt(options.language ?? null),
       model,
       thinkingLevel: options.thinkingLevel,
       tools,

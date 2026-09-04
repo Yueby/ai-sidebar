@@ -10,8 +10,10 @@ import {
   ShieldCheck,
   Layers,
   Sparkles,
+  Languages,
 } from 'lucide-react';
-import type { Settings, ProviderConfig } from '@/lib/types';
+import type { Settings, ProviderConfig, AuxThinkingLevel } from '@/lib/types';
+import { AI_LANGUAGES } from '@/lib/language';
 import { apiTypeLabel } from '@/lib/providers';
 import { toast } from 'sonner';
 import { testConnection } from '@/lib/models';
@@ -50,6 +52,13 @@ interface SettingsMainViewProps {
 }
 
 type SettingsTab = 'providers' | 'search' | 'permissions' | 'backup' | 'about';
+
+const AUX_THINKING_OPTIONS: { value: AuxThinkingLevel; label: string }[] = [
+  { value: 'off', label: '关闭(推荐)' },
+  { value: 'low', label: 'low' },
+  { value: 'medium', label: 'medium' },
+  { value: 'high', label: 'high' },
+];
 
 export function SettingsMainView({
   settings,
@@ -227,6 +236,58 @@ export function SettingsMainView({
         {/* VIEW 1: Providers List */}
         {currentTab === 'providers' && (
           <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+            {/* 偏好卡片 */}
+            <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 font-medium text-foreground">
+                  <Languages className="size-3.5 text-muted-foreground" />
+                  <span>偏好</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-normal">
+                  全局内容偏好设定
+                </p>
+              </div>
+
+              <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
+                <div className="flex items-center justify-between gap-2 p-2.5">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="font-medium text-foreground text-[11px]">语言</div>
+                    <div
+                      className="text-[10px] text-muted-foreground truncate"
+                      title="AI 生成内容(回复、标题、快捷指令)的语言;对话中明确要求其他语言时以用户要求为准"
+                    >
+                      AI 生成内容(回复、标题、快捷指令)的语言;对话中明确要求其他语言时以用户要求为准
+                    </div>
+                  </div>
+                  <div className="w-36 shrink-0">
+                    <Select
+                      value={settings.language ?? 'auto'}
+                      onValueChange={(val) => {
+                        onUpdateSettings({
+                          ...settings,
+                          language: val === 'auto' ? null : val,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder="自动检测(跟随浏览器)" />
+                      </SelectTrigger>
+                      <SelectContent align="end" className="max-w-[280px]">
+                        <SelectItem value="auto" className="text-xs font-medium">
+                          自动检测(跟随浏览器)
+                        </SelectItem>
+                        {AI_LANGUAGES.map((lang) => (
+                          <SelectItem key={lang.tag} value={lang.tag} className="text-xs">
+                            {lang.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* 模型分工卡片（参考 CherryStudio 辅助模型配置模式） */}
             <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
               <div className="space-y-0.5">
@@ -356,6 +417,41 @@ export function SettingsMainView({
                           跟随对话模型
                         </SelectItem>
                         {allModelOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* 4. 辅助任务思考 */}
+                <div className="flex items-center justify-between gap-2 p-2.5">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="font-medium text-foreground text-[11px]">辅助任务思考</div>
+                    <div
+                      className="text-[10px] text-muted-foreground truncate"
+                      title="标题与快捷指令生成任务的思考等级;关闭更快更省"
+                    >
+                      标题与快捷指令生成任务的思考等级;关闭更快更省
+                    </div>
+                  </div>
+                  <div className="w-36 shrink-0">
+                    <Select
+                      value={settings.auxThinking ?? 'off'}
+                      onValueChange={(val) => {
+                        onUpdateSettings({
+                          ...settings,
+                          auxThinking: val as AuxThinkingLevel,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder="关闭(推荐)" />
+                      </SelectTrigger>
+                      <SelectContent align="end" className="max-w-[280px]">
+                        {AUX_THINKING_OPTIONS.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value} className="text-xs">
                             {opt.label}
                           </SelectItem>

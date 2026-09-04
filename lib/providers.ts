@@ -46,6 +46,8 @@ export const DEFAULT_SETTINGS: Settings = {
   activeModelId: null,
   titleModel: null,
   quickPromptModel: null,
+  language: null,
+  auxThinking: 'off',
   includePageContext: true,
   reasoningLevel: 'off',
   webSearch: { provider: 'none', searxngBaseUrl: '', apiKeys: {} },

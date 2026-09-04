@@ -4,13 +4,14 @@ import type { Session, SessionDraft, Settings } from '@/lib/types';
 import { settingsItem, activeSessionIdItem, sanitizeSettings, createSession } from '@/lib/storage';
 import { migrateLegacySessions, saveSession, deleteSession } from '@/lib/sessionStore';
 import { resolveAuxModel } from '@/lib/providers';
+import { resolveAiLanguage } from '@/lib/language';
 import { buildProvider } from '@/lib/agent';
 import { useAppStore } from '../store';
 import { flushDraftSaves, dropPendingDraftSave } from '../store/sessionSlice';
 
-/** AI 标题生成 System Prompt (Model-facing 英文规范) */
-const TITLE_GENERATION_SYSTEM_PROMPT = `You are a concise title generator. Generate a very short title (max 20 characters) for a conversation based on the user's initial messages and assistant's response.
-Match the language of the conversation. Output ONLY the plain text title, no quotes, no markdown, no punctuation at the end.`;
+/** AI 标题生成 System Prompt (Model-facing 英文规范;语言由设置注入) */
+const TITLE_GENERATION_SYSTEM_PROMPT = (language: string) => `You are a concise title generator. Generate a very short title (max 20 characters) for a conversation based on the user's initial messages and assistant's response.
+Write the title in ${language}. Output ONLY the plain text title, no quotes, no markdown, no punctuation at the end.`;
 
 /**
  * 轻量生成会话短标题(AI 命名)
@@ -48,7 +49,7 @@ async function generateTitleWithAi(
   if (!model) throw new Error(`Model ${active.model.id} not found`);
 
   const context: Context = {
-    systemPrompt: TITLE_GENERATION_SYSTEM_PROMPT,
+    systemPrompt: TITLE_GENERATION_SYSTEM_PROMPT(resolveAiLanguage(settings.language)),
     messages: [
       {
         role: 'user',
@@ -62,6 +63,8 @@ async function generateTitleWithAi(
     maxTokens: 32,
     signal,
     cacheRetention: 'none',
+    // 辅助任务思考等级:off = 不发 reasoning 参数(pi-ai 语义 = 关闭/模型默认)
+    reasoning: settings.auxThinking === 'off' ? undefined : settings.auxThinking,
   };
 
   const response: AssistantMessage = await models.completeSimple(model, context, options);

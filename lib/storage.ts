@@ -10,7 +10,7 @@ import type {
   SessionDraft,
   Settings,
 } from './types';
-import { REASONING_LEVELS } from './types';
+import { REASONING_LEVELS, AUX_THINKING_LEVELS } from './types';
 import { DEFAULT_SETTINGS } from './providers';
 import { renderPageRefsBlock, stripPageRefs } from './pageRefs';
 
@@ -87,6 +87,10 @@ export function sanitizeSettings(value: unknown): Settings {
     activeModelId: typeof v.activeModelId === 'string' ? v.activeModelId : null,
     titleModel: sanitizeAuxModelRef(v.titleModel),
     quickPromptModel: sanitizeAuxModelRef(v.quickPromptModel),
+    language: typeof v.language === 'string' && v.language ? v.language : null,
+    auxThinking: AUX_THINKING_LEVELS.includes(v.auxThinking as never)
+      ? (v.auxThinking as Settings['auxThinking'])
+      : 'off',
     includePageContext: v.includePageContext === true,
     reasoningLevel: REASONING_LEVELS.includes(v.reasoningLevel as never)
       ? (v.reasoningLevel as Settings['reasoningLevel'])
