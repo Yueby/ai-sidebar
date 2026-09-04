@@ -44,11 +44,13 @@ export async function buildUnreadableTabError(
   tabId: unknown,
   validIds: readonly number[],
   dynamicTabs?: ReadonlySet<number>,
+  noun = 'readable',
 ): Promise<string> {
-  const dynamicList = [...(dynamicTabs ?? [])];
-  const readable = [...validIds, ...dynamicList].map((id) => `#${id}`).join(', ') || '(none)';
-  if (typeof tabId !== 'number') {
-    return `Invalid tabId: ${JSON.stringify(tabId ?? null)}. A numeric tab id is required. Readable tabs: ${readable}.`;
+  // refTabs 已并入 agent-opened(agent.ts 组装时),Set 去重防 `#5, #5`
+  const readable = [...new Set([...validIds, ...(dynamicTabs ?? [])])].map((id) => `#${id}`).join(', ') || '(none)';
+  const Cap = noun[0]!.toUpperCase() + noun.slice(1);
+  if (typeof tabId !== 'number' || !Number.isFinite(tabId)) {
+    return `Invalid tabId: ${JSON.stringify(tabId ?? null)}. A finite numeric tab id is required. ${Cap} tabs: ${readable}.`;
   }
   let exists = false;
   try {
@@ -58,9 +60,9 @@ export async function buildUnreadableTabError(
     exists = false;
   }
   if (!exists) {
-    return `Tab #${tabId} does not exist (it may have been closed). Readable tabs: ${readable}. Use search_page to list currently open tabs.`;
+    return `Tab #${tabId} does not exist (it may have been closed). ${Cap} tabs: ${readable}. Use search_page to list currently open tabs.`;
   }
-  return `Tab #${tabId} exists but is not readable in this conversation: only referenced tabs (from <page-refs>) and tabs opened via open_page are readable; currently readable: ${readable}. To read it, call open_page with its URL (the new tab becomes readable), or ask the user to reference the page and resend.`;
+  return `Tab #${tabId} exists but is not ${noun} in this conversation: only referenced tabs (from <page-refs>) and tabs opened via open_page are ${noun}; currently ${noun}: ${readable}. To use it, call open_page with its URL (the new tab becomes ${noun}), or ask the user to reference the page and resend.`;
 }
 
 /** 当前活动标签页(仅 http/https);失败返回 null */
@@ -75,7 +77,6 @@ export async function getTabMeta(tabId: number): Promise<RefTab | null> {
   return tabToRefTab(tabId);
 }
 
-/** 所有 http/https 标签页(供"添加标签页引用"候选列表) */
 /** 所有 http/https 标签页(供"添加引用"候选列表与 search_page 工具);active 标注当前活动 tab */
 export async function listCandidateTabs(): Promise<(RefTab & { active?: boolean })[]> {
   const tabs = await browser.tabs.query({ url: ['http://*/*', 'https://*/*'] });

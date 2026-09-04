@@ -1,7 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel, type ToolRisk } from '../types';
-import type { RefTab } from '../pageContext';
+import { buildUnreadableTabError, type RefTab } from '../pageContext';
 import { executePageScript, isUserScriptsAvailable, type PageScriptWorld } from '../pageScripting';
 import { createGatedTool } from '../gate';
 
@@ -43,9 +43,7 @@ export function createExecuteJsToolDefinition(
           content: [
             {
               type: 'text',
-              text: `Invalid tabId: ${JSON.stringify(tabId ?? null)}. Executable tabs: ${
-                [...validTabIds].map((id) => `#${id}`).join(', ') || '(none)'
-              }.`,
+              text: await buildUnreadableTabError(tabId, [...validTabIds], dynamicTabs, 'executable'),
             },
           ],
           details: null,

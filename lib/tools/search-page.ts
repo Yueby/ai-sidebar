@@ -62,7 +62,7 @@ export function createSearchPageToolDefinition(
         content: [
           {
             type: 'text',
-            text: `Open browser tabs (${filtered.length}):\n${lines.join('\n')}\n\n[readable] tabs can be addressed by read_page / click_element / fill_element / scroll_page (pass tabId explicitly). For [external] tabs, use open_page with the URL first to get a readable handle.`,
+            text: `Open browser tabs (${filtered.length}):\n${lines.join('\n')}\n\nread_page / read_element only work on [readable] tabs (pass tabId explicitly); click_element / fill_element / scroll_page accept any tabId (default: the focused tab). For [external] tabs, use open_page with the URL first to get a readable handle.`,
           },
         ],
         details: { count: filtered.length },
