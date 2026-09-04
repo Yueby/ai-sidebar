@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { i18n } from '#i18n';
 import { ShieldAlert, ExternalLink } from 'lucide-react';
 import { isUserScriptsAvailable } from '@/lib/pageScripting';
 import { openExtensionDetails } from '@/lib/permissions';
@@ -20,7 +21,7 @@ import { Button } from '@/components/ui/button';
  * 2. 未开启时弹出强引导 AlertDialog，拦截 Esc、点遮罩及外部交互，仅能通过按钮操作。
  * 3. 前往扩展详情页按钮仅负责打开新标签页，弹窗保持打开状态等待用户操作。
  * 4. 监听 window focus、document visibilitychange 及轮询探测，在用户切回或开启后自动闭环关闭。
- * 5. 「暂时跳过」仅在当前面板会话跳过，面板重新挂载时恢复检测与引导。
+ * 5. 「{i18n.t('gate.skip')}」仅在当前面板会话跳过，面板重新挂载时恢复检测与引导。
  */
 export function UserScriptsGateDialog() {
   const [ready, setReady] = useState<boolean>(() => isUserScriptsAvailable());
@@ -80,17 +81,17 @@ export function UserScriptsGateDialog() {
               <ShieldAlert className="size-4" />
             </div>
             <AlertDialogTitle className="text-sm font-semibold text-foreground">
-              开启“允许用户脚本”
+              {i18n.t('gate.title')}
             </AlertDialogTitle>
           </div>
 
           <AlertDialogDescription asChild>
             <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-0.5">
               <p>
-                AI 在网页执行脚本需要此开关（隔离环境、不受页面安全策略限制）。
+                {i18n.t('gate.desc1')}
               </p>
               <div className="rounded-md bg-muted/60 p-2.5 text-[11px] border border-border/50 text-foreground/85 leading-normal">
-                点击下方按钮打开扩展详情页，找到<strong>「允许用户脚本」</strong>（Allow User Scripts）开关并打开（Chrome 138+；更低版本打开页面右上角<strong>「开发者模式」</strong>），然后回到本面板。
+                {i18n.t('gate.desc2')}
               </div>
             </div>
           </AlertDialogDescription>
@@ -103,7 +104,7 @@ export function UserScriptsGateDialog() {
             className="w-full justify-center gap-1.5 text-xs font-medium cursor-pointer"
           >
             <ExternalLink className="size-3.5" />
-            <span>前往扩展详情页</span>
+            <span>{i18n.t('gate.openDetails')}</span>
           </Button>
 
           <Button
@@ -113,7 +114,7 @@ export function UserScriptsGateDialog() {
             onClick={handleSkip}
             className="w-full text-xs text-muted-foreground hover:text-foreground cursor-pointer h-7"
           >
-            暂时跳过
+            {i18n.t('gate.skip')}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

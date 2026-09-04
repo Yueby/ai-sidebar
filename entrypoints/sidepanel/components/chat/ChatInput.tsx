@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { i18n } from '#i18n';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
@@ -99,7 +100,7 @@ export function ChatInput({
   onRemovePickedElement,
   onOpenSettings,
   disabled = false,
-  placeholder = '输入消息... (Enter 发送, Shift+Enter 换行, / 唤起命令)',
+  placeholder = i18n.t('composer.placeholder'),
   initialInput = '',
   onInputChange,
   contextUsage,
@@ -349,7 +350,7 @@ export function ChatInput({
   // Find active provider and model info
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProviderId);
   const activeModel = activeProvider?.models.find((m) => m.id === settings.activeModelId);
-  const modelDisplayName = activeModel?.displayName || activeModel?.id || '未选择模型';
+  const modelDisplayName = activeModel?.displayName || activeModel?.id || i18n.t('composer.modelNotSelected');
   const supportsReasoning = activeModel?.reasoning === true;
   // 所有包含可用模型的提供商列表（用于模型切换下拉分组）
   const providersWithModels = settings.providers.filter((p) => p.models.length > 0);
@@ -371,7 +372,7 @@ export function ChatInput({
         className="flex items-center gap-2 text-xs cursor-pointer py-1.5"
       >
         <SquareMousePointer className="size-3.5 shrink-0 text-foreground" />
-        <span className="font-medium text-foreground">框选页面元素</span>
+        <span className="font-medium text-foreground">{i18n.t('composer.pickElement')}</span>
       </DropdownMenuItem>
 
       {/* 1b. Clear picked elements(全清一行入口;仅在有元素时出现) */}
@@ -383,7 +384,7 @@ export function ChatInput({
           className="flex items-center gap-2 text-xs cursor-pointer py-1.5 text-muted-foreground hover:text-foreground"
         >
           <X className="size-3.5 shrink-0" />
-          <span>清除已选元素 ({pickedElements.length})</span>
+          <span>{i18n.t('composer.clearPicked', { count: pickedElements.length })}</span>
         </DropdownMenuItem>
       )}
 
@@ -391,7 +392,7 @@ export function ChatInput({
 
       {/* 2. Open Tabs List */}
       <DropdownMenuLabel className="text-[11px] text-muted-foreground font-normal">
-        已打开的标签页
+        {i18n.t('composer.openTabs')}
       </DropdownMenuLabel>
 
       {/* Current Active Tab */}
@@ -462,7 +463,7 @@ export function ChatInput({
 
       {!activeTabMeta && otherCandidateTabs.length === 0 && (
         <div className="px-2 py-2 text-xs text-muted-foreground italic">
-          无可用网页标签页
+          {i18n.t('composer.noTabs')}
         </div>
       )}
     </DropdownMenuContent>
@@ -497,7 +498,7 @@ export function ChatInput({
         <div className="relative w-full">
           {!text && (editor?.isEmpty ?? true) && (
             <div className="pointer-events-none absolute left-3 top-2.5 max-w-[calc(100%-24px)] truncate text-sm text-muted-foreground">
-              {disabled ? '请先配置 AI 提供商与模型...' : placeholder}
+              {disabled ? i18n.t('composer.disabledPlaceholder') : placeholder}
             </div>
           )}
           <EditorContent editor={editor} />
@@ -515,7 +516,7 @@ export function ChatInput({
                   variant="ghost"
                   size="sm"
                   className="h-6 px-1.5 text-[11px] gap-0.5 text-muted-foreground hover:text-foreground shrink-0 font-normal"
-                  title="添加引用或框选元素"
+                  title={i18n.t('composer.addRefTitle')}
                 >
                   <Plus className="size-3.5 shrink-0" />
                   <ChevronDown className="size-2.5 shrink-0 opacity-50" />
@@ -542,7 +543,7 @@ export function ChatInput({
                 <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
                   {providersWithModels.length === 0 ? (
                     <div className="px-2 py-2 text-xs text-muted-foreground italic">
-                      暂无模型，请在设置中添加
+                      {i18n.t('composer.noModel')}
                     </div>
                   ) : (
                     providersWithModels.map((p, idx) => (
@@ -550,7 +551,7 @@ export function ChatInput({
                         {idx > 0 && <DropdownMenuSeparator />}
                         <DropdownMenuGroup>
                           <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                            {p.name || '未命名提供商'}
+                            {p.name || i18n.t('composer.unnamedProvider')}
                           </DropdownMenuLabel>
                           {p.models.map((m) => {
                             const isSelected =
@@ -583,7 +584,7 @@ export function ChatInput({
                     className="text-xs cursor-pointer gap-2"
                   >
                     <Sliders className="size-3.5" />
-                    <span>管理提供商与模型...</span>
+                    <span>{i18n.t('composer.manageProviders')}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -596,7 +597,7 @@ export function ChatInput({
                 className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground shrink-0"
               >
                 <Bot className="size-3.5" />
-                <span>配置模型</span>
+                <span>{i18n.t('composer.configureModel')}</span>
               </Button>
             )}
 
@@ -609,7 +610,7 @@ export function ChatInput({
                     variant="ghost"
                     size="sm"
                     className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground shrink-0 font-normal"
-                    title={`思考深度: ${currentReasoningShort}`}
+                    title={i18n.t('composer.reasoningTitle', { level: currentReasoningShort })}
                   >
                     <Brain className="size-3.5 shrink-0" />
                     <span>{currentReasoningShort}</span>
@@ -626,7 +627,7 @@ export function ChatInput({
                     onClick={() => onChangeReasoningLevel('off')}
                     className="flex items-center justify-between text-xs cursor-pointer"
                   >
-                    <span>关闭</span>
+                    <span>{i18n.t('composer.thinkingOff')}</span>
                     {effectiveReasoningLevel === 'off' && <Check className="size-3.5 shrink-0" />}
                   </DropdownMenuItem>
 
@@ -676,11 +677,11 @@ export function ChatInput({
                       className="size-6"
                     >
                       <Square className="size-3 fill-current" />
-                      <span className="sr-only">停止生成</span>
+                      <span className="sr-only">{i18n.t('composer.stopSr')}</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    <p>停止生成 (保留已生成部分)</p>
+                    <p>{i18n.t('composer.stopHint')}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -696,11 +697,11 @@ export function ChatInput({
                       className="size-6"
                     >
                       <ArrowUp className="size-3.5" />
-                      <span className="sr-only">发送</span>
+                      <span className="sr-only">{i18n.t('composer.sendSr')}</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    <p>发送消息 (Enter)</p>
+                    <p>{i18n.t('composer.sendHint')}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

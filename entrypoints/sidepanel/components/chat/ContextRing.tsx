@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { i18n } from '#i18n';
 import type { ContextUsage } from '@/lib/contextTokens';
 
 /** token 缩写(146K 风格);非有限值(缺字段/坏数据)兜底为 0,杜绝空白数值 */
@@ -32,7 +33,7 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
   const ringNode = (
     <span
       className={`relative inline-flex size-5 items-center justify-center ${isStreaming ? 'animate-pulse' : ''}`}
-      aria-label={`上下文占用 ${usage.pct}%`}
+      aria-label={i18n.t('context.aria', { pct: usage.pct })}
     >
       <svg viewBox="0 0 20 20" className="size-5 -rotate-90">
         <circle
@@ -89,16 +90,16 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
           {usage.hasUsageAnchor ? (
             <div className="space-y-0.5 text-[10px] text-muted-foreground">
               <div className="flex justify-between items-center">
-                <span>精确锚点:</span>
+                <span>{i18n.t('context.anchor')}</span>
                 <span className="font-mono text-foreground/80">{formatTokensShort(usage.usageTokens ?? 0)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>估算尾部:</span>
+                <span>{i18n.t('context.tail')}</span>
                 <span className="font-mono text-foreground/80">{formatTokensShort(usage.trailingTokens ?? 0)}</span>
               </div>
             </div>
           ) : (
-            <p className="text-[10px] text-muted-foreground italic">纯估算值(暂无模型精确返回)</p>
+            <p className="text-[10px] text-muted-foreground italic">{i18n.t('context.estimateOnlyRing')}</p>
           )}
           {modelName && (
             <p className="truncate text-[9px] text-muted-foreground/80 pt-1 border-t border-border/40 font-mono" title={modelName}>

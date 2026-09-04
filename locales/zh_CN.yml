@@ -43,3 +43,128 @@ header:
   deleteConfirmDesc: 将删除「{title}」的全部聊天记录，此操作不可撤销。
   cancel: 取消
   deleteAction: 删除
+
+composer:
+  placeholder: 输入消息... (Enter 发送，Shift+Enter 换行，/ 唤起命令)
+  placeholderCompact: 正在压缩上下文…
+  disabledPlaceholder: 请先配置 AI 提供商与模型...
+  modelNotSelected: 未选择模型
+  noModel: 暂无模型，请在设置中添加
+  unnamedProvider: 未命名提供商
+  configureModel: 配置模型
+  manageProviders: 管理提供商与模型...
+  addRefTitle: 添加引用或框选元素
+  pickElement: 框选页面元素
+  clearPicked: 清除已选元素 ({count})
+  openTabs: 已打开的标签页
+  current: 当前
+  noTabs: 无可用网页标签页
+  thinkingDepth: 思考深度
+  thinkingOff: 关闭
+  stopSr: 停止生成
+  stopHint: 停止生成 (保留已生成部分)
+  sendSr: 发送
+  sendHint: 发送消息 (Enter)
+  reasoningTitle: 思考深度：{level}
+
+messages:
+  welcomeTitle: AI 侧边栏
+  currentModel: 当前模型：
+  welcomeSubtitle: 配置你的 API Key，随时开启智能浏览
+  setupIncomplete: 尚未完成模型配置
+  setupNoProvider: 请先添加 OpenAI 兼容或 Anthropic 格式提供商
+  setupNoModel: 请选择或配置可用模型
+  goSettings: 前往设置
+  starterPrompts: 推荐快捷指令
+  refreshPrompts: 换一批
+  backToBottom: 回到底部
+  current: 当前
+  refCount: 引用 {total} 项
+  thinking: 思考中...
+  thinkingDone: 思考过程
+  thinkingExpand: 点击展开完整思考过程
+  denied: 用户拒绝授权执行该操作
+  pendingGates: (共 {total} 个待确认)
+  waitingReply: 等待回复
+  waitingConfirm: 等待确认
+  queued: 排队中
+  executing: 执行中
+  userDenied: 用户拒绝
+  failed: 失败
+  completed: 完成
+  invoked: 已调用
+  callArgs: 调用参数：
+  result: 返回结果：
+  resultTruncated: (已截断展示前 500 字，共 {total} 字)
+  waitingUserConfirm: 正在等待用户确认授权...
+  queuedBehind: 排队等待前序操作确认与执行...
+  waitingResult: 等待执行结果...
+  completedNoOutput: 执行完成（无文本输出）
+  waitingResultMore: 等待结果...
+  copied: 已复制
+  copy: 复制
+  stopped: (已停止生成)
+  emptyReply: 无回复内容
+
+compaction:
+  expand: 展开摘要全文
+  collapse: 收起摘要全文
+  title: 上下文已压缩 {before} → 摘要
+  fullTitle: 压缩摘要全文
+  originalTokens: 原 {tokens} tokens
+
+approval:
+  showCode: 查看代码详情
+  hideCode: 收起代码详情
+  customAnswer: 自定义回答…
+  customPlaceholder: 输入你的自定义回答...
+  submit: 提交
+  grantLabel: 暂时允许对当前页执行「{label}」
+  grantHint: 关面板后恢复询问
+  deny: 拒绝
+  denying: 拒绝中…
+  allow: 允许
+  allowing: 允许中…
+  allowRemember: 允许并记住
+  skip: 跳过
+  skipping: 跳过中…
+
+context:
+  roleUser: 用户
+  roleAssistant: 助手
+  roleTool: 工具
+  detailsTitle: 点击查看上下文详情与压缩
+  usage: 上下文占用 {pct}%
+  usageLabel: 上下文占用
+  anchor: 精确锚点：
+  tail: 估算尾部：
+  estimateOnlyPanel: 当前为纯估算值（暂无模型精确返回）
+  estimateOnlyRing: 纯估算值(暂无模型精确返回)
+  compactPlaceholder: 补充摘要重点(可选)…
+  compacting: 压缩中…
+  compactAction: 压缩上下文
+  note: 仅统计上下文占用,非计费账单;估算口径请参考说明。
+  aria: 上下文占用 {pct}%
+
+slash:
+  aria: 快捷命令
+  title: 快捷命令
+  hint: Tab 补全 · Enter 执行
+
+gate:
+  title: 开启“允许用户脚本”
+  desc1: AI 在网页执行脚本需要此开关（隔离环境、不受页面安全策略限制）。
+  desc2: 点击下方按钮打开扩展详情页，找到「允许用户脚本」（Allow User Scripts）开关并打开（Chrome 138+；更低版本打开页面右上角「开发者模式」），然后回到本面板。
+  openDetails: 前往扩展详情页
+  skip: 暂时跳过
+
+app:
+  loading: 加载中...
+  overflowSuggest: 当前上下文超出模型窗口，建议压缩
+  compact: 压缩
+  ignoreSuggest: 忽略建议
+  compacting: 正在压缩上下文…
+  helpTitle: 可用快捷命令
+  close: 关闭
+  settingsSr: 设置
+  settingsDesc: 配置 AI 提供商、搜索、权限与偏好设置

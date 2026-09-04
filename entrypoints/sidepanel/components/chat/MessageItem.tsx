@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { i18n } from '#i18n';
 import {
   Copy,
   Check,
@@ -182,7 +183,7 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
             onClick={() => setOpen((prev) => !prev)}
             className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5"
           >
-            <span>引用 {total} 项</span>
+            <span>{i18n.t('messages.refCount', { total })}</span>
             {open ? <ChevronDown className="size-2.5" /> : <ChevronRight className="size-2.5" />}
           </button>
           {open && (
@@ -232,7 +233,7 @@ function ThinkingBlock({
         ) : (
           <Brain className="size-3" />
         )}
-        <span>{isGenerating ? '思考中...' : '思考过程'}</span>
+        <span>{isGenerating ? i18n.t('messages.thinking') : i18n.t('messages.thinkingDone')}</span>
         {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
       </button>
 
@@ -244,7 +245,7 @@ function ThinkingBlock({
         <div
           onClick={() => setOpen(true)}
           className="group/preview relative mt-0.5 cursor-pointer border-l-2 border-border/60 pl-2.5 hover:border-border transition-colors select-none"
-          title="点击展开完整思考过程"
+          title={i18n.t('messages.thinkingExpand')}
         >
           <p className="line-clamp-3 whitespace-pre-wrap break-all text-[11px] leading-relaxed text-muted-foreground/75 group-hover/preview:text-muted-foreground transition-colors">
             {previewText}
@@ -299,7 +300,7 @@ function ToolCallCard({
   // Extract and truncate result text
   const resultText = useMemo(() => {
     if (!result?.content) return '';
-    if (isDenied) return '用户拒绝授权执行该操作';
+    if (isDenied) return i18n.t('messages.denied');
     return result.content
       .map((c) => (c.type === 'text' ? c.text : ''))
       .join('');
@@ -308,7 +309,7 @@ function ToolCallCard({
   const isTruncated = resultText.length > 500;
   const displayResultText = isTruncated ? `${resultText.slice(0, 500)}...` : resultText;
 
-  // 边框和背景调优: 等待确认时用琥珀色/蓝色警示强调
+  // 边框和背景调优: {i18n.t('messages.waitingConfirm')}时用琥珀色/蓝色警示强调
   const cardBorderClass = isWaitingConfirmation
     ? gateKind === 'ask'
       ? 'border-blue-500/40 bg-blue-500/5'
@@ -345,7 +346,7 @@ function ToolCallCard({
           </span>
           {isWaitingConfirmation && pendingGateTotal && pendingGateTotal > 1 ? (
             <span className="text-[10px] text-muted-foreground font-normal shrink-0">
-              (共 {pendingGateTotal} 个待确认)
+              {i18n.t('messages.pendingGates', { total: pendingGateTotal })}
             </span>
           ) : null}
         </div>
@@ -354,27 +355,27 @@ function ToolCallCard({
           {isWaitingConfirmation ? (
             isAskGate ? (
               <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium animate-pulse">
-                等待回复
+                {i18n.t('messages.waitingReply')}
               </span>
             ) : (
               <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium animate-pulse">
-                等待确认
+                {i18n.t('messages.waitingConfirm')}
               </span>
             )
           ) : isQueued ? (
             <span className="text-[10px] text-muted-foreground/80 font-normal">
-              排队中
+              {i18n.t('messages.queued')}
             </span>
           ) : isExecuting ? (
-            <span className="text-[10px] text-muted-foreground">执行中</span>
+            <span className="text-[10px] text-muted-foreground">{i18n.t('messages.executing')}</span>
           ) : isDenied ? (
-            <span className="text-[10px] text-destructive font-medium">用户拒绝</span>
+            <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.userDenied')}</span>
           ) : isError ? (
-            <span className="text-[10px] text-destructive font-medium">失败</span>
+            <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.failed')}</span>
           ) : isDone ? (
-            <span className="text-[10px] text-muted-foreground/70">完成</span>
+            <span className="text-[10px] text-muted-foreground/70">{i18n.t('messages.completed')}</span>
           ) : (
-            <span className="text-[10px] text-muted-foreground/70">已调用</span>
+            <span className="text-[10px] text-muted-foreground/70">{i18n.t('messages.invoked')}</span>
           )}
 
           {open ? (
@@ -393,7 +394,7 @@ function ToolCallCard({
           {/* Parameters */}
           {args && Object.keys(args).length > 0 && (
             <div className="space-y-1">
-              <div className="text-[10px] font-medium text-muted-foreground">调用参数:</div>
+              <div className="text-[10px] font-medium text-muted-foreground">{i18n.t('messages.callArgs')}</div>
               <pre className="font-mono text-[10px] bg-background/80 rounded p-1.5 border border-border/40 overflow-x-auto whitespace-pre-wrap break-all max-h-36">
                 {JSON.stringify(args, null, 2)}
               </pre>
@@ -403,25 +404,25 @@ function ToolCallCard({
           {/* Result */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] font-medium text-muted-foreground">
-              <span>返回结果:</span>
+              <span>{i18n.t('messages.result')}</span>
               {isTruncated && (
                 <span className="text-[9px] text-muted-foreground/70">
-                  (已截断展示前 500 字，共 {resultText.length} 字)
+                  {i18n.t('messages.resultTruncated', { total: resultText.length })}
                 </span>
               )}
             </div>
 
             {isWaitingConfirmation ? (
               <div className="text-[10px] text-amber-600 dark:text-amber-400 italic py-0.5">
-                正在等待用户确认授权...
+                {i18n.t('messages.waitingUserConfirm')}
               </div>
             ) : isQueued ? (
               <div className="text-[10px] text-muted-foreground italic py-0.5">
-                排队等待前序操作确认与执行...
+                {i18n.t('messages.queuedBehind')}
               </div>
             ) : isExecuting ? (
               <div className="text-[10px] text-muted-foreground italic py-0.5">
-                等待执行结果...
+                {i18n.t('messages.waitingResult')}
               </div>
             ) : resultText ? (
               <pre
@@ -433,11 +434,11 @@ function ToolCallCard({
               </pre>
             ) : isDone ? (
               <div className="text-[10px] text-muted-foreground italic py-0.5">
-                执行完成（无文本输出）
+                {i18n.t('messages.completedNoOutput')}
               </div>
             ) : (
               <div className="text-[10px] text-muted-foreground italic py-0.5">
-                等待结果...
+                {i18n.t('messages.waitingResultMore')}
               </div>
             )}
           </div>
@@ -574,7 +575,7 @@ export function MessageItem({
             className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-1"
           >
             {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-            <span>{copied ? '已复制' : '复制'}</span>
+            <span>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</span>
           </button>
         </div>
       </div>
@@ -628,10 +629,10 @@ export function MessageItem({
         </div>
       )}
       {isCancelled && (
-        <div className="mt-1.5 text-xs text-muted-foreground">(已停止生成)</div>
+        <div className="mt-1.5 text-xs text-muted-foreground">{i18n.t('messages.stopped')}</div>
       )}
       {emptyReply && (
-        <div className="text-xs text-muted-foreground italic">无回复内容</div>
+        <div className="text-xs text-muted-foreground italic">{i18n.t('messages.emptyReply')}</div>
       )}
     </>
   );
@@ -643,7 +644,7 @@ export function MessageItem({
     const hasResult = Boolean(result);
 
     // 状态判定顺序(块卡):结果(终态)→ 等待审批(toolCallId 精确匹配,退化首张未决议同名卡)
-    // → 排队中(同轮同名其余未决议;判定优先于执行中,未轮到的调用绝不显示执行中)
+    // → {i18n.t('messages.queued')}(同轮同名其余未决议;判定优先于执行中,未轮到的调用绝不显示执行中)
     // → 执行中(结果未返回但该工具正在执行:恢复执行窗口的 spinner,不落到兜底"已调用")
     const isWaiting =
       !hasResult &&
@@ -740,8 +741,8 @@ export function MessageItem({
           {liveToolLabels && liveToolLabels.length > 0 && (
             <div className="w-full space-y-1">
               {liveToolLabels.map((toolName, i) => {
-                // 状态判定顺序(live 卡):等待审批(仅无 toolCallId 的退化名匹配)→ 排队中 → 执行中。
-                // 有门控挂起而非门控目标时一律排队,绝不显示执行中(排队中判定优先于执行中)
+                // 状态判定顺序(live 卡):等待审批(仅无 toolCallId 的退化名匹配)→ {i18n.t('messages.queued')} → 执行中。
+                // 有门控挂起而非门控目标时一律排队,绝不显示执行中({i18n.t('messages.queued')}判定优先于执行中)
                 const isWaiting = !pendingGateToolCallId && pendingGateToolName === toolName;
                 const isQueued = !isWaiting && Boolean(pendingGateToolName);
                 return (
@@ -805,11 +806,11 @@ export function MessageItem({
                         className="size-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
                       >
                         {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                        <span className="sr-only">复制</span>
+                        <span className="sr-only">{i18n.t('messages.copy')}</span>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      <p>{copied ? '已复制' : '复制'}</p>
+                      <p>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

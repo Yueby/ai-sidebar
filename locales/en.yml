@@ -43,3 +43,128 @@ header:
   deleteConfirmDesc: This will permanently delete all messages in "{title}". This action cannot be undone.
   cancel: Cancel
   deleteAction: Delete
+
+composer:
+  placeholder: Type a message... (Enter to send, Shift+Enter for newline, / for commands)
+  placeholderCompact: Compacting context…
+  disabledPlaceholder: Configure an AI provider and model first...
+  modelNotSelected: No model selected
+  noModel: No models yet — add one in settings
+  unnamedProvider: Unnamed provider
+  configureModel: Configure model
+  manageProviders: Manage providers & models...
+  addRefTitle: Add reference or pick an element
+  pickElement: Pick page element
+  clearPicked: Clear picked elements ({count})
+  openTabs: Open tabs
+  current: Current
+  noTabs: No open web tabs
+  thinkingDepth: Thinking depth
+  thinkingOff: Off
+  stopSr: Stop generating
+  stopHint: Stop generating (keep partial output)
+  sendSr: Send
+  sendHint: Send message (Enter)
+  reasoningTitle: "Thinking depth: {level}"
+
+messages:
+  welcomeTitle: AI Sidebar
+  currentModel: "Current model:"
+  welcomeSubtitle: Add your API key to start smart browsing
+  setupIncomplete: Setup incomplete
+  setupNoProvider: Add an OpenAI-compatible or Anthropic provider first
+  setupNoModel: Select or configure a model
+  goSettings: Open settings
+  starterPrompts: Starter prompts
+  refreshPrompts: Refresh
+  backToBottom: Back to bottom
+  current: Current
+  refCount: "{total} references"
+  thinking: Thinking...
+  thinkingDone: Thinking
+  thinkingExpand: Click to expand the full thinking
+  denied: The user denied permission for this action
+  pendingGates: ({total} awaiting confirmation)
+  waitingReply: Waiting for reply
+  waitingConfirm: Waiting for confirmation
+  queued: Queued
+  executing: Executing
+  userDenied: Denied by user
+  failed: Failed
+  completed: Completed
+  invoked: Called
+  callArgs: "Arguments:"
+  result: "Result:"
+  resultTruncated: (showing first 500 of {total} characters)
+  waitingUserConfirm: Waiting for user confirmation...
+  queuedBehind: Queued behind earlier confirmations...
+  waitingResult: Waiting for result...
+  completedNoOutput: Completed (no text output)
+  waitingResultMore: Waiting for result...
+  copied: Copied
+  copy: Copy
+  stopped: (Generation stopped)
+  emptyReply: No response content
+
+compaction:
+  expand: Expand full summary
+  collapse: Collapse full summary
+  title: Context compacted {before} → summary
+  fullTitle: Full compaction summary
+  originalTokens: "{tokens} tokens before"
+
+approval:
+  showCode: Show code details
+  hideCode: Hide code details
+  customAnswer: Custom answer…
+  customPlaceholder: Type your custom answer...
+  submit: Submit
+  grantLabel: Allow this page for "{label}" for now
+  grantHint: Asks again after the panel is closed
+  deny: Deny
+  denying: Denying…
+  allow: Allow
+  allowing: Allowing…
+  allowRemember: Allow & remember
+  skip: Skip
+  skipping: Skipping…
+
+context:
+  roleUser: User
+  roleAssistant: Assistant
+  roleTool: Tools
+  detailsTitle: Click for context details & compaction
+  usage: Context usage {pct}%
+  usageLabel: Context usage
+  anchor: "Exact anchor:"
+  tail: "Estimated tail:"
+  estimateOnlyPanel: Estimate only (no exact model usage yet)
+  estimateOnlyRing: Estimate only (no exact usage yet)
+  compactPlaceholder: Add summary focus (optional)…
+  compacting: Compacting…
+  compactAction: Compact context
+  note: Usage tracking only, not a billing statement. See the docs for the estimation method.
+  aria: Context usage {pct}%
+
+slash:
+  aria: Quick commands
+  title: Quick commands
+  hint: Tab to complete · Enter to run
+
+gate:
+  title: Enable "Allow User Scripts"
+  desc1: AI script execution on web pages needs this switch (isolated world, immune to page CSP).
+  desc2: Click the button below to open the extension details page, find the "Allow User Scripts" toggle and enable it (Chrome 138+; on older versions enable "Developer mode" in the top-right), then return to this panel.
+  openDetails: Open extension details page
+  skip: Skip for now
+
+app:
+  loading: Loading...
+  overflowSuggest: Context exceeds the model window — compaction recommended
+  compact: Compact
+  ignoreSuggest: Dismiss
+  compacting: Compacting context…
+  helpTitle: Available quick commands
+  close: Close
+  settingsSr: Settings
+  settingsDesc: Configure AI providers, search, permissions and preferences

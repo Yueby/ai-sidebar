@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { i18n } from '#i18n';
 import { ChevronDown, ChevronRight, FoldVertical } from 'lucide-react';
 import { MarkdownView } from './MarkdownView';
 import { formatTokensShort } from './ContextRing';
@@ -29,11 +30,11 @@ export function CompactionRow({ tokensBefore, summary }: CompactionRowProps) {
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           className="flex max-w-[85%] items-center gap-1.5 rounded-full border border-border bg-muted/60 hover:bg-accent px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground cursor-pointer select-none shadow-2xs"
-          title={open ? '收起摘要全文' : '展开摘要全文'}
+          title={i18n.t(open ? 'compaction.collapse' : 'compaction.expand')}
         >
           <FoldVertical className="size-3 shrink-0 text-muted-foreground" />
           <span className="truncate">
-            上下文已压缩 <strong className="font-mono font-medium text-foreground">{formatTokensShort(tokensBefore)}</strong> → 摘要
+            {i18n.t('compaction.title', { before: formatTokensShort(tokensBefore) })}
           </span>
           {open ? (
             <ChevronDown className="size-3 shrink-0 opacity-70" />
@@ -47,9 +48,9 @@ export function CompactionRow({ tokensBefore, summary }: CompactionRowProps) {
       {open && (
         <div className="mx-auto mt-2 max-w-[95%] rounded-lg border border-border/80 bg-card p-3 shadow-xs animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
           <div className="flex items-center justify-between border-b border-border/50 pb-1.5 mb-2">
-            <span className="text-[11px] font-semibold text-foreground">压缩摘要全文</span>
+            <span className="text-[11px] font-semibold text-foreground">{i18n.t('compaction.fullTitle')}</span>
             <span className="text-[10px] text-muted-foreground font-mono">
-              原 {formatTokensShort(tokensBefore)} tokens
+              {i18n.t('compaction.originalTokens', { tokens: formatTokensShort(tokensBefore) })}
             </span>
           </div>
           <MarkdownView content={stripSummaryWrapper(summary)} />

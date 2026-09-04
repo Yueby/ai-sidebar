@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { i18n } from '#i18n';
 import {
   Bot,
   FileText,
@@ -326,13 +327,13 @@ export function MessageList({
                 <Bot className="size-5" />
               </div>
               <h2 className="text-sm font-semibold tracking-tight text-foreground">
-                AI 侧边栏
+                {i18n.t('messages.welcomeTitle')}
               </h2>
               <p className="mt-1 text-xs text-muted-foreground max-w-[260px] leading-relaxed">
                 {hasModel && activeModelName ? (
-                  <span>当前模型: <span className="font-medium text-foreground">{activeModelName}</span></span>
+                  <span>{i18n.t('messages.currentModel')} <span className="font-medium text-foreground">{activeModelName}</span></span>
                 ) : (
-                  <span>配置你的 API Key，随时开启智能浏览</span>
+                  <span>{i18n.t('messages.welcomeSubtitle')}</span>
                 )}
               </p>
             </div>
@@ -340,11 +341,11 @@ export function MessageList({
             {/* If no provider / model configured */}
             {(!hasProvider || !hasModel) && (
               <div className="mb-4 rounded-lg border p-3.5 text-left bg-muted/30">
-                <p className="text-xs font-semibold text-foreground">尚未完成模型配置</p>
+                <p className="text-xs font-semibold text-foreground">{i18n.t('messages.setupIncomplete')}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
                   {!hasProvider
-                    ? '请先添加 OpenAI 兼容或 Anthropic 格式提供商'
-                    : '请选择或配置可用模型'}
+                    ? i18n.t('messages.setupNoProvider')
+                    : i18n.t('messages.setupNoModel')}
                 </p>
                 <Button
                   size="sm"
@@ -353,7 +354,7 @@ export function MessageList({
                   className="mt-2.5 h-7 text-xs gap-1.5"
                 >
                   <SettingsIcon className="size-3" />
-                  前往设置
+                  {i18n.t('messages.goSettings')}
                 </Button>
               </div>
             )}
@@ -362,14 +363,14 @@ export function MessageList({
             {hasModel && quickPrompts.available && (
               <div className="space-y-1.5 text-left">
                 <div className="flex items-center justify-between px-1">
-                  <p className="text-xs font-medium text-muted-foreground">推荐快捷指令</p>
+                  <p className="text-xs font-medium text-muted-foreground">{i18n.t('messages.starterPrompts')}</p>
                   <button
                     type="button"
                     onClick={quickPrompts.regenerate}
                     disabled={quickPrompts.loading}
                     className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/60 transition-colors disabled:opacity-40 cursor-pointer"
-                    title="换一批"
-                    aria-label="换一批"
+                    title={i18n.t('messages.refreshPrompts')}
+                    aria-label={i18n.t('messages.refreshPrompts')}
                   >
                     <RefreshCw className={cn('size-3', quickPrompts.loading && 'animate-spin')} />
                   </button>
@@ -485,7 +486,7 @@ export function MessageList({
           variant="secondary"
           onClick={handleManualScrollToBottom}
           className="absolute bottom-3 right-5 z-20 size-7 rounded-full border border-border shadow-md hover:bg-secondary/90 animate-in fade-in-0 duration-150 motion-reduce:animate-none cursor-pointer"
-          title="回到底部"
+          title={i18n.t('messages.backToBottom')}
         >
           <ArrowDown className="size-3.5" />
         </Button>

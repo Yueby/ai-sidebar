@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { i18n } from '#i18n';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import type {
   ProviderConfig,
@@ -293,7 +294,7 @@ export default function App() {
   if (!loaded) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
-        加载中...
+        {i18n.t('app.loading')}
       </div>
     );
   }
@@ -355,7 +356,7 @@ export default function App() {
               <div className="flex items-center gap-2 rounded-md border border-amber-600/30 bg-amber-500/10 dark:border-amber-400/30 dark:bg-amber-400/10 px-2.5 py-1.5 text-[11px] text-foreground shadow-2xs">
                 <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
                 <span className="min-w-0 flex-1 truncate">
-                  当前上下文超出模型窗口，建议压缩
+                  {i18n.t('app.overflowSuggest')}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
                   <Button
@@ -368,13 +369,13 @@ export default function App() {
                       void compact.handleCompact();
                     }}
                   >
-                    压缩
+                    {i18n.t('app.compact')}
                   </Button>
                   <button
                     type="button"
                     onClick={() => setDismissedOverflowSessionId(currentSession?.id ?? 'temp')}
                     className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                    title="忽略建议"
+                    title={i18n.t('app.ignoreSuggest')}
                   >
                     <X className="size-3" />
                   </button>
@@ -388,7 +389,7 @@ export default function App() {
             <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/70 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-2xs">
                 <Loader2 className="size-3.5 animate-spin shrink-0 text-foreground" />
-                <span className="font-medium text-foreground">正在压缩上下文…</span>
+                <span className="font-medium text-foreground">{i18n.t('app.compacting')}</span>
               </div>
             </div>
           )}
@@ -412,12 +413,12 @@ export default function App() {
             <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <div className="space-y-2 rounded-lg border border-border bg-card p-3 text-xs shadow-xs">
                 <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
-                  <span className="text-[11px] font-semibold text-foreground">可用快捷命令</span>
+                  <span className="text-[11px] font-semibold text-foreground">{i18n.t('app.helpTitle')}</span>
                   <button
                     type="button"
                     onClick={() => setSlashHelpOpen(false)}
                     className="text-muted-foreground transition-colors hover:text-foreground cursor-pointer rounded p-0.5"
-                    title="关闭"
+                    title={i18n.t('app.close')}
                   >
                     <X className="size-3.5" />
                   </button>
@@ -455,7 +456,7 @@ export default function App() {
             onRemovePickedElement={pageRefs.handleRemovePickedElement}
             onOpenSettings={handleOpenSettings}
             disabled={!activeModelInfo || compact.isCompacting}
-            placeholder={compact.isCompacting ? '正在压缩上下文…' : undefined}
+            placeholder={compact.isCompacting ? i18n.t('app.compacting') : undefined}
             initialInput={draft.input}
             onInputChange={handleDraftInput}
             contextUsage={contextData?.usage ?? null}
@@ -477,9 +478,9 @@ export default function App() {
         shouldScaleBackground={false}
       >
         <DrawerContent className="mt-0 h-[93dvh] max-h-[93dvh] max-w-3xl mx-auto flex flex-col p-0 outline-none overflow-hidden">
-          <DrawerTitle className="sr-only">设置</DrawerTitle>
+          <DrawerTitle className="sr-only">{i18n.t('app.settingsSr')}</DrawerTitle>
           <DrawerDescription className="sr-only">
-            配置 AI 提供商、搜索、权限与偏好设置
+            {i18n.t('app.settingsDesc')}
           </DrawerDescription>
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden mt-2">
             <SettingsMainView

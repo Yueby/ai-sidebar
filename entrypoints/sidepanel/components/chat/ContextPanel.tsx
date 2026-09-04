@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { i18n } from '#i18n';
 import { FoldVertical, Loader2 } from 'lucide-react';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -25,9 +26,9 @@ interface ContextPanelProps {
 }
 
 const ROLE_SEGMENTS: { key: keyof RoleShares; label: string; className: string; dotClass: string }[] = [
-  { key: 'user', label: '用户', className: 'bg-foreground', dotClass: 'bg-foreground' },
-  { key: 'assistant', label: '助手', className: 'bg-foreground/50', dotClass: 'bg-foreground/50' },
-  { key: 'toolResult', label: '工具', className: 'bg-foreground/20', dotClass: 'bg-foreground/20' },
+  { key: 'user', label: i18n.t('context.roleUser'), className: 'bg-foreground', dotClass: 'bg-foreground' },
+  { key: 'assistant', label: i18n.t('context.roleAssistant'), className: 'bg-foreground/50', dotClass: 'bg-foreground/50' },
+  { key: 'toolResult', label: i18n.t('context.roleTool'), className: 'bg-foreground/20', dotClass: 'bg-foreground/20' },
 ];
 
 /** 点击环弹出的上下文面板:大数字 + 分解 + 角色占比条 + 压缩操作 */
@@ -56,7 +57,7 @@ export function ContextPanel({
         <button
           type="button"
           className="flex items-center justify-center size-7 rounded-md outline-none transition-colors hover:bg-muted/70 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
-          title="点击查看上下文详情与压缩"
+          title={i18n.t('context.detailsTitle')}
         >
           {/* hover 简要 tooltip 与点击面板并存(Radix tooltip 在 pointerdown 时自动收起,不冲突) */}
           <ContextRing
@@ -78,7 +79,7 @@ export function ContextPanel({
               </span>
             </p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              上下文占用 <span className="font-mono font-medium text-foreground">{usage.pct.toFixed(2)}%</span>
+              {i18n.t('context.usageLabel')} <span className="font-mono font-medium text-foreground">{usage.pct.toFixed(2)}%</span>
             </p>
           </div>
           {modelName && (
@@ -93,16 +94,16 @@ export function ContextPanel({
           {usage.hasUsageAnchor ? (
             <>
               <div className="flex justify-between items-center">
-                <span>精确锚点:</span>
+                <span>{i18n.t('context.anchor')}</span>
                 <span className="font-mono text-foreground/90 font-medium">{formatTokensShort(usage.usageTokens)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>估算尾部:</span>
+                <span>{i18n.t('context.tail')}</span>
                 <span className="font-mono text-foreground/90 font-medium">{formatTokensShort(usage.trailingTokens)}</span>
               </div>
             </>
           ) : (
-            <p className="italic text-muted-foreground/90">当前为纯估算值（暂无模型精确返回）</p>
+            <p className="italic text-muted-foreground/90">{i18n.t('context.estimateOnlyPanel')}</p>
           )}
         </div>
 
@@ -141,7 +142,7 @@ export function ContextPanel({
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             disabled={isCompacting}
-            placeholder="补充摘要重点(可选)…"
+            placeholder={i18n.t('context.compactPlaceholder')}
             className="h-7 text-[11px] bg-background/60 focus-visible:ring-1"
           />
           <Button
@@ -154,19 +155,19 @@ export function ContextPanel({
             {isCompacting ? (
               <>
                 <Loader2 className="size-3 animate-spin shrink-0" />
-                <span>压缩中…</span>
+                <span>{i18n.t('context.compacting')}</span>
               </>
             ) : (
               <>
                 <FoldVertical className="size-3 shrink-0" />
-                <span>压缩上下文</span>
+                <span>{i18n.t('context.compactAction')}</span>
               </>
             )}
           </Button>
         </div>
 
         <p className="text-[10px] text-muted-foreground/75 leading-tight pt-0.5">
-          仅统计上下文占用,非计费账单;估算口径请参考说明。
+          {i18n.t('context.note')}
         </p>
       </PopoverContent>
     </Popover>

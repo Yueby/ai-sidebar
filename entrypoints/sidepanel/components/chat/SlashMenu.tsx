@@ -1,4 +1,5 @@
 import React from 'react';
+import { i18n } from '#i18n';
 import type { SlashCommand } from '@/lib/slashCommands';
 
 interface SlashMenuProps {
@@ -18,13 +19,13 @@ export function SlashMenu({ commands, activeIndex, onSelect, onHover }: SlashMen
   return (
     <div
       role="listbox"
-      aria-label="快捷命令"
+      aria-label={i18n.t('slash.aria')}
       className="absolute bottom-full left-0 right-0 z-30 mb-2 overflow-y-auto rounded-lg border border-border bg-popover/95 backdrop-blur-md p-1 shadow-md animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none"
       style={{ maxHeight: 'min(200px, 50vh)' }}
     >
       <div className="flex items-center justify-between px-2 py-1 text-[10px] text-muted-foreground border-b border-border/40 mb-0.5 select-none">
-        <span className="font-medium">快捷命令</span>
-        <span className="text-[9px] opacity-75">Tab 补全 · Enter 执行</span>
+        <span className="font-medium">{i18n.t('slash.title')}</span>
+        <span className="text-[9px] opacity-75">{i18n.t('slash.hint')}</span>
       </div>
       {commands.map((cmd, i) => (
         <button

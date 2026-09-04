@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { i18n } from '#i18n';
 import {
   ShieldAlert,
   HelpCircle,
@@ -109,7 +110,7 @@ export function ApprovalSection({
             className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
           >
             {detailOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-            <span>{detailOpen ? '收起代码详情' : '查看代码详情'}</span>
+            <span>{detailOpen ? i18n.t('approval.hideCode') : i18n.t('approval.showCode')}</span>
           </button>
 
           {detailOpen && (
@@ -159,7 +160,7 @@ export function ApprovalSection({
               >
                 <div className="flex items-center gap-1.5 min-w-0">
                   <PenLine className="size-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-[11px]">自定义回答…</span>
+                  <span className="truncate text-[11px]">{i18n.t('approval.customAnswer')}</span>
                 </div>
                 <ChevronRight className="size-3 text-muted-foreground shrink-0" />
               </button>
@@ -172,7 +173,7 @@ export function ApprovalSection({
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   disabled={pendingAction !== null}
-                  placeholder="输入你的自定义回答..."
+                  placeholder={i18n.t('approval.customPlaceholder')}
                   className="h-6.5 text-[11px] flex-1 min-w-0 border-0 shadow-none focus-visible:ring-0 px-1.5 bg-transparent"
                   autoFocus
                 />
@@ -188,7 +189,7 @@ export function ApprovalSection({
                   ) : (
                     <SendHorizontal className="size-3 shrink-0" />
                   )}
-                  <span>提交</span>
+                  <span>{i18n.t('approval.submit')}</span>
                 </Button>
               </form>
             )}
@@ -214,7 +215,7 @@ export function ApprovalSection({
             />
             <div className="flex-1 min-w-0 flex items-center justify-between gap-1.5">
               <span className="text-[11px] leading-snug font-normal truncate">
-                暂时允许对当前页执行「{request.label}」
+                {i18n.t('approval.grantLabel', { label: request.label })}
               </span>
               <span
                 className={`text-[9px] shrink-0 font-medium px-1 py-0.2 rounded transition-colors ${
@@ -223,7 +224,7 @@ export function ApprovalSection({
                     : 'text-muted-foreground/70 group-hover/grant:text-muted-foreground'
                 }`}
               >
-                关面板后恢复询问
+                {i18n.t('approval.grantHint')}
               </span>
             </div>
           </label>
@@ -243,7 +244,7 @@ export function ApprovalSection({
               className="h-6 text-[11px] px-2.5 cursor-pointer gap-1"
             >
               {pendingAction === 'deny' && <Loader2 className="size-3 animate-spin shrink-0" />}
-              <span>{pendingAction === 'deny' ? '拒绝中…' : '拒绝'}</span>
+              <span>{pendingAction === 'deny' ? i18n.t('approval.denying') : i18n.t('approval.deny')}</span>
             </Button>
 
             <Button
@@ -261,10 +262,10 @@ export function ApprovalSection({
               {pendingAction === 'approve' && <Loader2 className="size-3 animate-spin shrink-0" />}
               <span>
                 {pendingAction === 'approve'
-                  ? '允许中…'
+                  ? i18n.t('approval.allowing')
                   : grantChecked
-                    ? '允许并记住'
-                    : '允许'}
+                    ? i18n.t('approval.allowRemember')
+                    : i18n.t('approval.allow')}
               </span>
             </Button>
           </>
@@ -278,7 +279,7 @@ export function ApprovalSection({
             className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground cursor-pointer gap-1"
           >
             {pendingAction === 'cancel' && <Loader2 className="size-3 animate-spin shrink-0" />}
-            <span>{pendingAction === 'cancel' ? '跳过中…' : '跳过'}</span>
+            <span>{pendingAction === 'cancel' ? i18n.t('approval.skipping') : i18n.t('approval.skip')}</span>
           </Button>
         )}
       </div>
