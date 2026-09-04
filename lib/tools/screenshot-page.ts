@@ -75,6 +75,8 @@ export function createScreenshotPageToolDefinition(
           details: null,
         };
       }
+      // 后台 tab 计时器节流 + captureVisibleTab 仅活动 tab:截图前自动激活目标页
+      await browser.tabs.update(tabId, { active: true }).catch(() => {});
       const refInfo = refTabsById.get(tabId);
 
       const approved = await requestGate({

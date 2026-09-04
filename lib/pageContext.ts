@@ -457,6 +457,8 @@ export async function performPageAction(
     const tab = await browser.tabs.get(tabId);
     if (!tab?.url?.startsWith('http')) return null;
     url = tab.url;
+    // 后台 tab 的计时器被 Chrome 节流(settle/高亮会冻结到分钟级):动作前自动激活目标页
+    if (tab.active !== true) await browser.tabs.update(tabId, { active: true }).catch(() => {});
   } catch {
     return null;
   }

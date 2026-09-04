@@ -44,19 +44,17 @@ export interface GetToolsOptions {
 export function createPageReadTools(options: GetToolsOptions): AgentTool[] {
   const refTabs = options.refTabs ?? [];
   const pickedElements = options.pickedElements ?? [];
-  const tools: AgentTool[] = [];
-  if (refTabs.length > 0) tools.push(createReadPageToolDefinition(refTabs, options.dynamicTabs));
-  if (refTabs.length > 0 || pickedElements.length > 0) {
-    tools.push(
-      createReadElementToolDefinition(
-        refTabs,
-        pickedElements,
-        options.canUseImage ?? false,
-        options.dynamicTabs,
-      ),
-    );
-  }
-  return tools;
+  // read_page/read_element 无条件注册:agent 开启的 tab(动态注册表)在 execute 时实时检查可达,
+  // 回合中途 open_page 开出的 tab 也即刻可读(条件注册会让读工具在 agent 场景凭空消失)
+  return [
+    createReadPageToolDefinition(refTabs, options.dynamicTabs),
+    createReadElementToolDefinition(
+      refTabs,
+      pickedElements,
+      options.canUseImage ?? false,
+      options.dynamicTabs,
+    ),
+  ];
 }
 
 /** 页面发现组(safe):search_element 列交互元素清单 —— 动作支柱的 ARIA 定位发现层;
@@ -92,10 +90,8 @@ export function createWebSearchTools(config: WebSearchConfig | null | undefined)
 
 /** 确认型工具组(confirm):execute_js 经 createGatedTool 包装,tab 句柄同 read_page 白名单 */
 export function createGatedTools(options: GetToolsOptions): AgentTool[] {
-  const refTabs = options.refTabs ?? [];
-  return refTabs.length > 0
-    ? [createExecuteJsToolDefinition(refTabs, options.dynamicTabs)]
-    : [];
+  // execute_js 无条件注册:同 read 组,动态注册表的 tab 在 execute 时实时检查可达
+  return [createExecuteJsToolDefinition(options.refTabs ?? [], options.dynamicTabs)];
 }
 
 /** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩 */

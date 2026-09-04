@@ -106,12 +106,16 @@ export function usePageContextRefs(params: {
 
   // Ref tab management(写入当前会话草稿,addRefTab 语义不变:按 tab id 去重)
   const addRefTab = useCallback(
-    (tab: RefTab) => {
+    async (tab: RefTab) => {
+      // 与 handleAddCurrentTab 对齐:总开关关闭时芯片栏不可见,先自动开启再添加(否则静默无效)
+      if (!useAppStore.getState().settings.includePageContext) {
+        await handleTogglePageContext(true);
+      }
       patchActiveDraft((d) =>
         d.refTabs.some((t) => t.id === tab.id) ? d : { ...d, refTabs: [...d.refTabs, tab] }
       );
     },
-    [patchActiveDraft]
+    [patchActiveDraft, handleTogglePageContext]
   );
 
   const handleAddCurrentTab = useCallback(async () => {

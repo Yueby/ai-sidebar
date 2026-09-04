@@ -674,6 +674,8 @@ export default defineContentScript({
       visible: boolean;
       /** 文本型 input 的真实 type(password/email/tel/url/日期族等,与 role 冗余时有区分价值) */
       inputType?: string;
+      /** 无名元素的定位提示(title/data-testid/aria-keyshortcuts/placeholder,首一个非空) */
+      hint?: string;
     }
 
     /** 对输入类元素,名称/预览优先用 placeholder/value(大量真实表单只有 placeholder 没有 label) */
