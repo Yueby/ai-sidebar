@@ -500,6 +500,7 @@ captureVisibleForModel(tabId): Promise<CaptureVisibleResult>      // screenshot_
 
 ## 9. 环境备注
 
+- **本环境的 dev watcher 不可靠**(WXT/vite 的 chokidar 在 agent 后台会话中静默失效,轮询配置也救不回来):改代码后 `.output/chrome-mv3-dev` 不会自动重编译。已改用**外部重建桥**(nohup node + mtime 轮询 → `wxt build -m development`,脚本在 %TEMP%/ai-sidebar-fixture/watch-dev.mjs,日志 bridge.log):agent 改完代码后桥自动重建,用户需**手动重载扩展**(chrome://extensions → 刷新图标)+ 刷新页面。若桥未启动:先 `pnpm build` 验证源码,再手动执行桥脚本。
 - 无残留 dev 进程;直接 `pnpm dev`(自动拉 Chrome,扩展目录 `.output/chrome-mv3-dev`)。
 - **改 content.ts/消息协议/权限后必须完整重启 `pnpm dev` 并刷新页面**:sidepanel 热更新 ≠ content script 更新,旧 content script 会继续应答过期协议。
 - 浏览器 local storage 里可能残留旧结构 `local:settings`(须过 `sanitizeSettings`)与 `local:sessions`(启动时 `migrateLegacySessions()` 自动迁入 IndexedDB 并删除旧 key,只迁一次)。
