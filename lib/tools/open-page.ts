@@ -1,7 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel, type ToolRisk } from '../types';
-import { openTab, registerAgentOpenedTab } from '../pageContext';
+import { openTab, findTabByUrl, registerAgentOpenedTab } from '../pageContext';
 import { requestGate } from '../gate';
 
 const OPEN_PAGE_PARAMS = Type.Object({
@@ -28,7 +28,7 @@ export function createOpenPageToolDefinition(): AgentTool<typeof OPEN_PAGE_PARAM
     label: toolLabel('open_page'),
     risk: 'confirm',
     description:
-      'Open a URL in a new browser tab — use it to bring up a page the task needs (e.g. open an AI chat site, a docs page, or a link found in content). The new tab becomes addressable: its tabId is returned and can be used with read_page / click_element / fill_element. Multi-tab workflows: open several sites with background: true and address each by its returned tabId — note that sites may redirect after loading (re-check identity with search_page if a title looks wrong). Every call requires explicit user approval via a confirmation card unless the user granted this session.',
+      'Open a URL in a browser tab — use it to bring up a page the task needs (e.g. open an AI chat site, a docs page, or a link found in content). If a tab with the same URL already exists it is reused (activated and registered as readable) instead of duplicated. The returned tabId is addressable: read_page / click_element / fill_element. Multi-tab workflows: open several sites with background: true and address each by its returned tabId — note that sites may redirect after loading (re-check identity with search_page if a title looks wrong). Every call requires explicit user approval via a confirmation card unless the user granted this session.',
     parameters: OPEN_PAGE_PARAMS,
     execute: async (toolCallId, args) => {
       const url = typeof args?.url === 'string' ? args.url.trim() : '';
@@ -45,12 +45,16 @@ export function createOpenPageToolDefinition(): AgentTool<typeof OPEN_PAGE_PARAM
       }
       const background = args?.background === true;
 
+      // 同 URL 复用:已存在同页 tab 时激活并注册为可读,不再开重复页(反馈:click 开新页后
+      // open_page 同 URL 曾叠加出第二个重复 tab)
+      const existing = await findTabByUrl(url);
+
       const approved = await requestGate({
         kind: 'confirm',
         toolName: 'open_page',
         label: toolLabel('open_page'),
-        summary: '在浏览器中打开新标签页',
-        detail: `Open ${url}${background ? ' (background tab)' : ' (focused)'}`,
+        summary: existing ? '复用已打开的标签页并设为可读' : '在浏览器中打开新标签页',
+        detail: `${existing ? `Reuse existing tab #${existing.id}` : `Open ${url}`}${background ? ' (background tab)' : ' (focused)'}`,
         toolCallId,
         grantable: true,
         grantScope: 'open_page@*',
@@ -60,6 +64,28 @@ export function createOpenPageToolDefinition(): AgentTool<typeof OPEN_PAGE_PARAM
           content: [{ type: 'text', text: 'User denied permission to run this tool.' }],
           details: { denied: true, url },
         };
+      }
+
+      if (existing) {
+        registerAgentOpenedTab(existing.id);
+        let activated = true;
+        if (!background) {
+          try {
+            await browser.tabs.update(existing.id, { active: true });
+          } catch {
+            // 激活失败(如刚被关闭):落入下方新建路径
+            activated = false;
+          }
+        }
+        if (activated) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Reused existing tab #${existing.id} (${existing.url || url})${background ? ' (left in background)' : ' — it is now the focused tab'}. Its tabId is registered: read_page / click_element / fill_element can address it via tabId.`,
+            }],
+            details: { tabId: existing.id, url: existing.url || url, reused: true },
+          };
+        }
       }
 
       const meta = await openTab(url, !background);

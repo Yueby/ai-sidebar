@@ -100,6 +100,60 @@ export async function openTab(url: string, activate = true): Promise<RefTab | nu
   }
 }
 
+/** 按 URL 找现存 http(s) 标签页(忽略 #hash);open_page 同 URL 复用去重用 */
+export async function findTabByUrl(url: string): Promise<RefTab | null> {
+  try {
+    const target = url.replace(/#.*$/, '');
+    const tabs = await browser.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+    const match = tabs.find((t) => t.id !== undefined && (t.url ?? '').replace(/#.*$/, '') === target);
+    if (!match?.id) return null;
+    return { id: match.id, title: match.title ?? '', url: match.url ?? url };
+  } catch {
+    return null;
+  }
+}
+
+// ===== click_element 的 tab 变化报告(target=_blank 新开页不再让模型猜)=====
+
+export interface TabSnapshot {
+  ids: Set<number>;
+  activeId?: number;
+}
+
+/** 动作前快照:tab 集合 + 焦点 tab */
+export async function snapshotTabs(): Promise<TabSnapshot> {
+  const tabs = await browser.tabs.query({}).catch(() => []);
+  const ids = new Set<number>();
+  let activeId: number | undefined;
+  for (const t of tabs) {
+    if (t.id === undefined) continue;
+    ids.add(t.id);
+    if (t.active) activeId = t.id;
+  }
+  return { ids, activeId };
+}
+
+/**
+ * 动作后对比:有新 tab(如点击 target=_blank 链接)或焦点切换时返回提示文本,
+ * 无变化返回 null。新 tab 提示附带可读化路径(open_page 同 URL 复用,不再开重复页)。
+ */
+export async function describeTabChanges(before: TabSnapshot): Promise<string | null> {
+  const tabs = await browser.tabs.query({}).catch(() => []);
+  const opened = tabs.filter((t) => t.id !== undefined && !before.ids.has(t.id));
+  const notes: string[] = [];
+  for (const t of opened) {
+    if (t.id === undefined) continue;
+    notes.push(
+      `The click opened new tab #${t.id}${t.url ? ` (${t.url})` : ''}${t.active ? ' — it is now the focused tab' : ''}. It is not readable yet: call open_page with its URL to get a readable handle (it will reuse this tab, not open a duplicate).`,
+    );
+  }
+  const active = tabs.find((t) => t.active);
+  if (opened.length === 0 && active?.id !== undefined && active.id !== before.activeId) {
+    notes.push(`Focus moved to tab #${active.id}${active.url ? ` (${active.url})` : ''}. It is not readable unless it was referenced or opened via open_page.`);
+  }
+  return notes.length > 0 ? notes.join(' ') : null;
+}
+
 // ===== agent 开启标签页的运行时注册表(面板生命周期)=====
 // open_page 开出的 tabId 注册于此;read_page/read_element/execute_js 的白名单
 // 在草稿引用 ∪ 历史 refs 块 ∪ 本注册表三源合并(决策 27)。tab 关闭时残留条目

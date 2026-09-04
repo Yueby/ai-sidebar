@@ -1,7 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel, type ToolRisk } from '../types';
-import { performPageAction, type ActionLocator } from '../pageContext';
+import { performPageAction, snapshotTabs, describeTabChanges, type ActionLocator } from '../pageContext';
 import { requestGate } from '../gate';
 import { formatLocator, renderActionFailure, renderActionSuccess, resolveActionTab } from './page-action-shared';
 
@@ -108,6 +108,8 @@ export function createClickElementToolDefinition(): AgentTool<typeof CLICK_ELEME
         };
       }
 
+      // target=_blank 链接会开新 tab:前后对比,把新页/焦点变化写进结果,模型不必再猜
+      const tabsBefore = await snapshotTabs();
       const result = await performPageAction(tabId, 'click', { locator });
       if (!result) {
         return {
@@ -126,8 +128,9 @@ export function createClickElementToolDefinition(): AgentTool<typeof CLICK_ELEME
           details: { tabId, locator },
         };
       }
+      const tabNote = await describeTabChanges(tabsBefore);
       return {
-        content: [{ type: 'text', text: renderActionSuccess('Clicked', locator, tabId, result) }],
+        content: [{ type: 'text', text: renderActionSuccess('Clicked', locator, tabId, result) + (tabNote ? `\n${tabNote}` : '') }],
         details: { tabId, locator },
       };
     },
