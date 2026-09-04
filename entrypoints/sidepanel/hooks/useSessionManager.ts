@@ -64,7 +64,7 @@ async function generateTitleWithAi(
     signal,
     cacheRetention: 'none',
     // 辅助任务思考等级:off = 不发 reasoning 参数(pi-ai 语义 = 关闭/模型默认)
-    reasoning: settings.auxThinking === 'off' ? undefined : settings.auxThinking,
+    reasoning: settings.titleThinking === 'off' ? undefined : settings.titleThinking,
   };
 
   const response: AssistantMessage = await models.completeSimple(model, context, options);

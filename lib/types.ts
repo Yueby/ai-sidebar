@@ -131,8 +131,10 @@ export interface Settings {
   quickPromptModel: AuxModelRef | null;
   /** AI 生成内容语言(BCP-47);null = 自动(跟随浏览器语言) */
   language: string | null;
-  /** 辅助任务思考等级(默认 off:更快更省) */
-  auxThinking: AuxThinkingLevel;
+  /** 标题生成任务思考等级(默认 off:更快更省);旧版共享 auxThinking 由 sanitize 迁移 */
+  titleThinking: AuxThinkingLevel;
+  /** 快捷指令生成任务思考等级(默认 off) */
+  quickPromptThinking: AuxThinkingLevel;
   /** 发送时启用页面上下文(引用当前标签页,AI 经 read_page 工具按需读取正文) */
   includePageContext: boolean;
   /** 思考等级,仅当激活模型 reasoning=true 时生效 */

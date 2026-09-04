@@ -2,6 +2,7 @@ import { storage } from 'wxt/utils/storage';
 import type { AssistantMessage, ToolResultMessage, UserMessage } from '@earendil-works/pi-ai';
 import type { RefTab } from './pageContext';
 import type {
+  AuxThinkingLevel,
   ChatMessage,
   PageRefs,
   PickedElement,
@@ -78,9 +79,16 @@ function sanitizeAuxModelRef(v: unknown): Settings['titleModel'] {
     : null;
 }
 
+/** 辅助任务思考等级:off = 不发 reasoning 参数(pi-ai 语义 = 关闭/模型默认) */
+function sanitizeAuxThinking(v: unknown, fallback: AuxThinkingLevel): AuxThinkingLevel {
+  return AUX_THINKING_LEVELS.includes(v as never) ? (v as AuxThinkingLevel) : fallback;
+}
+
 export function sanitizeSettings(value: unknown): Settings {
   if (!value || typeof value !== 'object') return DEFAULT_SETTINGS;
   const v = value as Partial<Settings>;
+  // 旧版共享 auxThinking(设置一次两处生效)→ 迁移为两字段各自默认(字段已从 Settings 移除,裸读)
+  const legacyAux = sanitizeAuxThinking((v as Record<string, unknown>).auxThinking, 'off');
   return {
     providers: Array.isArray(v.providers) ? v.providers : [],
     activeProviderId: typeof v.activeProviderId === 'string' ? v.activeProviderId : null,
@@ -88,9 +96,8 @@ export function sanitizeSettings(value: unknown): Settings {
     titleModel: sanitizeAuxModelRef(v.titleModel),
     quickPromptModel: sanitizeAuxModelRef(v.quickPromptModel),
     language: typeof v.language === 'string' && v.language ? v.language : null,
-    auxThinking: AUX_THINKING_LEVELS.includes(v.auxThinking as never)
-      ? (v.auxThinking as Settings['auxThinking'])
-      : 'off',
+    titleThinking: sanitizeAuxThinking(v.titleThinking, legacyAux),
+    quickPromptThinking: sanitizeAuxThinking(v.quickPromptThinking, legacyAux),
     includePageContext: v.includePageContext === true,
     reasoningLevel: REASONING_LEVELS.includes(v.reasoningLevel as never)
       ? (v.reasoningLevel as Settings['reasoningLevel'])

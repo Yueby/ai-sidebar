@@ -12,9 +12,10 @@ import {
   Sparkles,
   Languages,
 } from 'lucide-react';
-import type { Settings, ProviderConfig, AuxThinkingLevel } from '@/lib/types';
+import type { Settings, ProviderConfig, AuxThinkingLevel, ReasoningLevel } from '@/lib/types';
+import { REASONING_LEVEL_LABELS } from '@/lib/types';
 import { AI_LANGUAGES } from '@/lib/language';
-import { apiTypeLabel } from '@/lib/providers';
+import { apiTypeLabel, getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { toast } from 'sonner';
 import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
@@ -54,11 +55,28 @@ interface SettingsMainViewProps {
 type SettingsTab = 'providers' | 'search' | 'permissions' | 'backup' | 'about';
 
 const AUX_THINKING_OPTIONS: { value: AuxThinkingLevel; label: string }[] = [
-  { value: 'off', label: '关闭(推荐)' },
-  { value: 'low', label: 'low' },
-  { value: 'medium', label: 'medium' },
-  { value: 'high', label: 'high' },
+  { value: 'off', label: REASONING_LEVEL_LABELS.off.full },
+  { value: 'low', label: REASONING_LEVEL_LABELS.low.full },
+  { value: 'medium', label: REASONING_LEVEL_LABELS.medium.full },
+  { value: 'high', label: REASONING_LEVEL_LABELS.high.full },
 ];
+
+const REASONING_DISPLAY_ORDER: ReasoningLevel[] = [
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+
+const sortReasoningLevels = (levels: ReasoningLevel[]): ReasoningLevel[] =>
+  [...levels].sort(
+    (a, b) =>
+      (REASONING_DISPLAY_ORDER.indexOf(a) + 1 || 99) -
+      (REASONING_DISPLAY_ORDER.indexOf(b) + 1 || 99),
+  );
 
 export function SettingsMainView({
   settings,
@@ -111,6 +129,26 @@ export function SettingsMainView({
     )
       ? `${settings.quickPromptModel.providerId}::${settings.quickPromptModel.modelId}`
       : 'follow';
+
+  // 当前生效的对话模型配置
+  const chatModel = useMemo(() => {
+    if (!settings.activeProviderId || !settings.activeModelId) return null;
+    const provider = settings.providers.find((p) => p.id === settings.activeProviderId);
+    return provider?.models.find((m) => m.id === settings.activeModelId) ?? null;
+  }, [settings.providers, settings.activeProviderId, settings.activeModelId]);
+
+  // 对话模型支持的思考档位（与 ChatInput 保持一致：模型未配置 reasoning 时为空列表）
+  const chatModelSupportsReasoning = chatModel?.reasoning === true;
+  const chatSupportedLevels = useMemo(() => {
+    if (!chatModel || !chatModelSupportsReasoning) return [];
+    return sortReasoningLevels(getModelReasoningLevels(chatModel));
+  }, [chatModel, chatModelSupportsReasoning]);
+
+  // 对话模型思考受控值（与输入框保持一致：不支持思考时回退 off）
+  const effectiveChatReasoningLevel = useMemo(() => {
+    if (!chatModel || !chatModelSupportsReasoning) return 'off';
+    return resolveReasoningLevel(chatModel, settings.reasoningLevel);
+  }, [chatModel, chatModelSupportsReasoning, settings.reasoningLevel]);
 
   // Read extension manifest info safely
   let appName = 'ai-sidebar';
@@ -296,7 +334,7 @@ export function SettingsMainView({
                   <span>模型分工</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-normal">
-                  对话模型可在输入框随时切换；标题与快捷指令生成建议使用更轻量的模型
+                  思考等级按行独立配置；对话模型的思考深度与输入框选择器同步
                 </p>
               </div>
 
@@ -309,36 +347,67 @@ export function SettingsMainView({
                       主界面对话及工具调用的主力模型
                     </div>
                   </div>
-                  <div className="w-36 shrink-0">
-                    <Select
-                      value={chatModelValue}
-                      onValueChange={(val) => {
-                        if (val === '__none__') return;
-                        const [pId, mId] = val.split('::');
-                        if (pId && mId) {
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="w-28 shrink-0">
+                      <Select
+                        value={chatModelValue}
+                        onValueChange={(val) => {
+                          if (val === '__none__') return;
+                          const [pId, mId] = val.split('::');
+                          if (pId && mId) {
+                            onUpdateSettings({
+                              ...settings,
+                              activeProviderId: pId,
+                              activeModelId: mId,
+                            });
+                          }
+                        }}
+                        disabled={allModelOptions.length === 0}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-full">
+                          <SelectValue placeholder={allModelOptions.length === 0 ? '暂无可用模型' : '未选择'} />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="max-w-[280px]">
+                          <SelectItem value="__none__" disabled className="hidden">
+                            {allModelOptions.length === 0 ? '暂无可用模型' : '未选择'}
+                          </SelectItem>
+                          {allModelOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="w-20 shrink-0">
+                      <Select
+                        value={effectiveChatReasoningLevel}
+                        onValueChange={(val) => {
                           onUpdateSettings({
                             ...settings,
-                            activeProviderId: pId,
-                            activeModelId: mId,
+                            reasoningLevel: val as ReasoningLevel,
                           });
-                        }
-                      }}
-                      disabled={allModelOptions.length === 0}
-                    >
-                      <SelectTrigger className="h-7 text-xs w-full">
-                        <SelectValue placeholder={allModelOptions.length === 0 ? '暂无可用模型' : '未选择'} />
-                      </SelectTrigger>
-                      <SelectContent align="end" className="max-w-[280px]">
-                        <SelectItem value="__none__" disabled className="hidden">
-                          {allModelOptions.length === 0 ? '暂无可用模型' : '未选择'}
-                        </SelectItem>
-                        {allModelOptions.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {opt.label}
+                        }}
+                        disabled={!chatModel}
+                      >
+                        <SelectTrigger
+                          className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                          title={chatModel && chatModelSupportsReasoning ? '对话模型思考深度' : '该模型不支持思考'}
+                        >
+                          <SelectValue placeholder="关闭" />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="w-28">
+                          <SelectItem value="off" className="text-xs">
+                            关闭
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          {chatSupportedLevels.map((lvl) => (
+                            <SelectItem key={lvl} value={lvl} className="text-xs">
+                              {REASONING_LEVEL_LABELS[lvl]?.full || lvl}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 
@@ -350,37 +419,64 @@ export function SettingsMainView({
                       会话首轮问答后自动起短标题
                     </div>
                   </div>
-                  <div className="w-36 shrink-0">
-                    <Select
-                      value={titleModelValue}
-                      onValueChange={(val) => {
-                        if (val === 'follow') {
-                          onUpdateSettings({ ...settings, titleModel: null });
-                        } else {
-                          const [pId, mId] = val.split('::');
-                          if (pId && mId) {
-                            onUpdateSettings({
-                              ...settings,
-                              titleModel: { providerId: pId, modelId: mId },
-                            });
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="w-28 shrink-0">
+                      <Select
+                        value={titleModelValue}
+                        onValueChange={(val) => {
+                          if (val === 'follow') {
+                            onUpdateSettings({ ...settings, titleModel: null });
+                          } else {
+                            const [pId, mId] = val.split('::');
+                            if (pId && mId) {
+                              onUpdateSettings({
+                                ...settings,
+                                titleModel: { providerId: pId, modelId: mId },
+                              });
+                            }
                           }
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-7 text-xs w-full">
-                        <SelectValue placeholder="跟随对话模型" />
-                      </SelectTrigger>
-                      <SelectContent align="end" className="max-w-[280px]">
-                        <SelectItem value="follow" className="text-xs font-medium">
-                          跟随对话模型
-                        </SelectItem>
-                        {allModelOptions.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {opt.label}
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-full">
+                          <SelectValue placeholder="跟随对话模型" />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="max-w-[280px]">
+                          <SelectItem value="follow" className="text-xs font-medium">
+                            跟随对话模型
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          {allModelOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="w-20 shrink-0">
+                      <Select
+                        value={settings.titleThinking}
+                        onValueChange={(val) => {
+                          onUpdateSettings({
+                            ...settings,
+                            titleThinking: val as AuxThinkingLevel,
+                          });
+                        }}
+                      >
+                        <SelectTrigger
+                          className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                          title="标题生成思考等级"
+                        >
+                          <SelectValue placeholder="关闭" />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="w-28">
+                          {AUX_THINKING_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 
@@ -392,72 +488,64 @@ export function SettingsMainView({
                       新会话基于当前网页动态生成建议
                     </div>
                   </div>
-                  <div className="w-36 shrink-0">
-                    <Select
-                      value={quickPromptModelValue}
-                      onValueChange={(val) => {
-                        if (val === 'follow') {
-                          onUpdateSettings({ ...settings, quickPromptModel: null });
-                        } else {
-                          const [pId, mId] = val.split('::');
-                          if (pId && mId) {
-                            onUpdateSettings({
-                              ...settings,
-                              quickPromptModel: { providerId: pId, modelId: mId },
-                            });
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="w-28 shrink-0">
+                      <Select
+                        value={quickPromptModelValue}
+                        onValueChange={(val) => {
+                          if (val === 'follow') {
+                            onUpdateSettings({ ...settings, quickPromptModel: null });
+                          } else {
+                            const [pId, mId] = val.split('::');
+                            if (pId && mId) {
+                              onUpdateSettings({
+                                ...settings,
+                                quickPromptModel: { providerId: pId, modelId: mId },
+                              });
+                            }
                           }
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-7 text-xs w-full">
-                        <SelectValue placeholder="跟随对话模型" />
-                      </SelectTrigger>
-                      <SelectContent align="end" className="max-w-[280px]">
-                        <SelectItem value="follow" className="text-xs font-medium">
-                          跟随对话模型
-                        </SelectItem>
-                        {allModelOptions.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {opt.label}
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-full">
+                          <SelectValue placeholder="跟随对话模型" />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="max-w-[280px]">
+                          <SelectItem value="follow" className="text-xs font-medium">
+                            跟随对话模型
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* 4. 辅助任务思考 */}
-                <div className="flex items-center justify-between gap-2 p-2.5">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">辅助任务思考</div>
-                    <div
-                      className="text-[10px] text-muted-foreground truncate"
-                      title="标题与快捷指令生成任务的思考等级;关闭更快更省"
-                    >
-                      标题与快捷指令生成任务的思考等级;关闭更快更省
+                          {allModelOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
-                  <div className="w-36 shrink-0">
-                    <Select
-                      value={settings.auxThinking ?? 'off'}
-                      onValueChange={(val) => {
-                        onUpdateSettings({
-                          ...settings,
-                          auxThinking: val as AuxThinkingLevel,
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="h-7 text-xs w-full">
-                        <SelectValue placeholder="关闭(推荐)" />
-                      </SelectTrigger>
-                      <SelectContent align="end" className="max-w-[280px]">
-                        {AUX_THINKING_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="w-20 shrink-0">
+                      <Select
+                        value={settings.quickPromptThinking}
+                        onValueChange={(val) => {
+                          onUpdateSettings({
+                            ...settings,
+                            quickPromptThinking: val as AuxThinkingLevel,
+                          });
+                        }}
+                      >
+                        <SelectTrigger
+                          className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                          title="快捷指令思考等级"
+                        >
+                          <SelectValue placeholder="关闭" />
+                        </SelectTrigger>
+                        <SelectContent align="end" className="w-28">
+                          {AUX_THINKING_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               </div>
