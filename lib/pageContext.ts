@@ -231,6 +231,7 @@ export async function extractFromTab(
       url: res.url ?? url,
       text: res.text ?? '',
       truncated: res.truncated === true,
+      fingerprint: typeof res.fingerprint === 'string' ? res.fingerprint : undefined,
     };
   } catch {
     // 该页没有 content script(如刚加载的 chrome:// 页)或提取失败

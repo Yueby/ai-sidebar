@@ -1213,8 +1213,9 @@ export default defineContentScript({
         notes.push(...(await waitForSettle()));
         if (location.href !== urlAfterAct) {
           notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
-        } else if (!notes.some((n) => n.startsWith('settle_skipped'))) {
-          // 步④ Before/After:re-resolve locator 对比动作后的元素状态(导航/失焦短路时跳过——状态未知)
+        } else if (!notes.some((n) => n.startsWith('navigation_started'))) {
+          // 步④ Before/After:re-resolve locator 对比动作后的元素状态。
+          // 仅同 tab 导航时跳过(上下文已重建);settle_skipped(失焦)不跳——后台 DOM 查询正常可用
           try {
             const after = resolveLocator(enumerateInteractiveElements(libs), locator);
             if (after.status === 'not_found') {
