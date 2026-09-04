@@ -52,6 +52,11 @@ export function useChatTurn(params: {
   // AI Chat & Agent Loop
   const handleSendMessage = useCallback(
     async (userText: string) => {
+      if (import.meta.env.DEV) {
+        console.log(
+          `[turn] handleSendMessage enter: streaming=${useAppStore.getState().isStreaming} inFlight=${JSON.stringify(useAppStore.getState().inFlight?.messages.length ?? null)} activeId=${useAppStore.getState().activeSessionId}`,
+        );
+      }
       const store = useAppStore.getState();
       // 若当前正在流式/有 pending 门控/压缩中，按发送视为用户打断当前轮次
       if (isStreaming || hasPendingGate || isCompacting) {
@@ -212,6 +217,10 @@ export function useChatTurn(params: {
             } else if (event.type === 'message_end' && event.message.role === 'assistant') {
               // 同上,旧 turn 的 message_end 不得进新 turn 的 in-flight
               if (seq !== turnSeqRef.current) return;
+              if (import.meta.env.DEV) {
+                const prevLen = useAppStore.getState().inFlight?.messages.length ?? -1;
+                console.log(`[turn] msg_end assistant: inFlight ${prevLen}->+1 (seq ${seq})`);
+              }
               // 一条 assistant 完成:整体进 in-flight(思考/toolCall/正文齐全),
               // 同一批 setState 里重置 live 流式态,准备承载下一 turn —— 交接无闪烁
               const done = event.message;
@@ -229,6 +238,11 @@ export function useChatTurn(params: {
               // 工具结果即时入 in-flight:工具卡立刻显示返回结果,不等整轮结束
               // (转录落盘时同一消息对象引用已在 in-flight 中,零重挂载)
               if (seq !== turnSeqRef.current) return;
+              if (import.meta.env.DEV) {
+                console.log(
+                  `[turn] msg_end toolResult: inFlight ${useAppStore.getState().inFlight?.messages.length ?? '?'}->+1 (seq ${seq})`,
+                );
+              }
               const done = event.message;
               useAppStore.getState().setInFlight((prev) =>
                 prev && prev.sessionId === session!.id
@@ -258,6 +272,11 @@ export function useChatTurn(params: {
         autoCompactPending = compactRequestedRef.current;
         compactRequestedRef.current = false;
         const latest = useAppStore.getState().sessions.find((s) => s.id === session!.id);
+        if (import.meta.env.DEV) {
+          console.log(
+            `[turn] finalize: latest msgs=${latest?.messages.length ?? '?'} result.newMessages=${result.newMessages.length} stopReason=${result.errorMessage ? 'error' : 'ok'} inFlight=${JSON.stringify(useAppStore.getState().inFlight?.messages.length ?? null)}`,
+          );
+        }
         if (latest) {
           // 非破坏落盘 = 全量历史 + 本轮新增(newMessages 基于「生效历史」,
           // 直接落 result.messages 会丢被压缩截断的前缀消息)
