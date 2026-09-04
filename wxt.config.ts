@@ -4,7 +4,8 @@ import { defineConfig } from 'wxt';
 
 // 项目代号 ai-sidebar(内部用,产品名后续再定)
 export default defineConfig({
-  modules: ['@wxt-dev/module-react', '@wxt-dev/i18n/module'],
+  modules: ['@wxt-dev/module-react', '@wxt-dev/i18n/module', '@wxt-dev/auto-icons'],
+  // 扩展图标:assets/icon.png(512²)自动生成全套尺寸并写入 manifest.icons
   // locales 目录(默认 <srcDir>/locales)自动发现语言;默认语言 = manifest.default_locale(zh_CN)
   // dev 文件监听在部分 Windows 会话下静默失效(chokidar 事件丢失):强制 1s 轮询保证 rebuild 可靠
   watchOptions: { usePolling: true, interval: 1000 },
