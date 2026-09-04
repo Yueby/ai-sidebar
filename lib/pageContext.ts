@@ -251,6 +251,9 @@ export function renderPageContext(page: ExtractedPage): string {
   if (page.truncated) {
     lines.push('', '(Note: the page content above was truncated due to length and may be incomplete. Adjust your answer accordingly.)');
   }
+  if (page.fingerprint) {
+    lines.push('', `Page fingerprint: ${page.fingerprint} (compare across two reads to tell whether/how the page changed).`);
+  }
   return lines.join('\n');
 }
 
@@ -352,6 +355,8 @@ export interface ResolvedElement {
   images: ElementImage[];
   /** 页面 devicePixelRatio(captureCrop 裁剪用) */
   dpr: number;
+  /** 页面状态指纹(步④) */
+  fingerprint?: string;
 }
 
 /** 按 selector 实时读取指定标签页中的元素;元素不存在或失败返回 null */
@@ -368,6 +373,7 @@ export async function resolveElement(
     preview?: string;
     images?: unknown;
     dpr?: unknown;
+    fingerprint?: unknown;
   } | undefined> => {
     const res = (await browser.tabs.sendMessage(tabId, {
       type: PICK_ELEMENT_MESSAGE,
@@ -382,6 +388,7 @@ export async function resolveElement(
           preview?: string;
           images?: unknown;
           dpr?: unknown;
+          fingerprint?: unknown;
         }
       | undefined;
     return res;
@@ -417,6 +424,7 @@ export async function resolveElement(
       preview: res.preview ?? '',
       images,
       dpr: typeof res.dpr === 'number' && res.dpr > 0 ? res.dpr : 1,
+      fingerprint: typeof res.fingerprint === 'string' ? res.fingerprint : undefined,
     };
   } catch {
     // 该页没有 content script(如导航中/chrome:// 页)或读取失败

@@ -82,6 +82,9 @@ export function createReadElementToolDefinition(
             element.html,
             '</element>',
             ...(element.truncated ? ['', '(Element content truncated due to length)'] : []),
+            ...(element.fingerprint
+              ? ['', `Page fingerprint: ${element.fingerprint} (compare across two reads to tell whether/how the page changed).`]
+              : []),
           ].join('\n'),
         },
       ];

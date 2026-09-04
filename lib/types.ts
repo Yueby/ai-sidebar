@@ -220,6 +220,8 @@ export interface PageContext {
   title: string;
   url: string;
   text: string;
+  /** 页面状态指纹(步④,页内计算):模型跨两次读取比对判断页面是否变化 */
+  fingerprint?: string;
 }
 
 /** 用户在页面上框选的元素引用(selector 由 @medv/finder 生成,保证唯一) */

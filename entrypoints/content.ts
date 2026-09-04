@@ -270,6 +270,18 @@ export default defineContentScript({
       return truncateBlocks(renderChildren(root), TEXT_LIMIT, section);
     }
 
+    /** 页面状态指纹(步④):URL+标题+正文规模+正交采样的 FNV-1a;模型跨两次读取比对即可判断页面是否/如何变化 */
+    function pageFingerprint(): string {
+      const text = document.body?.innerText ?? '';
+      const material = `${location.href}|${document.title}|${text.length}|${text.slice(0, 400)}`;
+      let hash = 0x811c9dc5;
+      for (let i = 0; i < material.length; i++) {
+        hash ^= material.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193);
+      }
+      return (hash >>> 0).toString(36);
+    }
+
     /** 等 document.readyState === 'complete'(上限 READY_TIMEOUT) */
     function waitForComplete(timeoutMs: number): Promise<void> {
       if (document.readyState === 'complete') return Promise.resolve();
@@ -380,6 +392,7 @@ export default defineContentScript({
       url: string;
       text: string;
       truncated: boolean;
+      fingerprint?: string;
     }> {
       await waitForComplete(READY_TIMEOUT);
       // 语义路径优先;门控不过/库不可用则手写兜底(含 isHidden 可见性过滤)
@@ -403,7 +416,7 @@ export default defineContentScript({
       }
       // tail 模式:路径内部已按头部锚定截断,这里重切为尾部窗口(聊天页最新内容在尾部)
       if (section === 'tail') result = tailSliceText(result.text, TEXT_LIMIT);
-      return { title: document.title, url: location.href, ...result };
+      return { title: document.title, url: location.href, fingerprint: pageFingerprint(), ...result };
     }
 
     // ===== 页面元素选择模式 =====
@@ -444,6 +457,8 @@ export default defineContentScript({
       images: ReturnType<typeof elementImagePayload>[];
       /** 页面 devicePixelRatio(截图裁剪用) */
       dpr: number;
+      /** 页面状态指纹(步④) */
+      fingerprint?: string;
     } | null {
       const el = document.querySelector(selector);
       if (!el) return null;
@@ -462,6 +477,7 @@ export default defineContentScript({
         preview: elementPreview(el),
         images,
         dpr: window.devicePixelRatio || 1,
+        fingerprint: pageFingerprint(),
       };
     }
 
@@ -1197,6 +1213,24 @@ export default defineContentScript({
         notes.push(...(await waitForSettle()));
         if (location.href !== urlAfterAct) {
           notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
+        } else if (!notes.some((n) => n.startsWith('settle_skipped'))) {
+          // 步④ Before/After:re-resolve locator 对比动作后的元素状态(导航/失焦短路时跳过——状态未知)
+          try {
+            const after = resolveLocator(enumerateInteractiveElements(libs), locator);
+            if (after.status === 'not_found') {
+              notes.push('after: the locator no longer resolves — the element is gone (often a strong signal the action took effect).');
+            } else if (after.status === 'ok') {
+              const afterSummary = elementSummary(after.hit);
+              if (afterSummary.preview === summary.preview) {
+                notes.push(`after: locator still resolves to <${afterSummary.tagName}> "${afterSummary.preview}" — element state unchanged.`);
+              } else {
+                notes.push(`after: locator now resolves to <${afterSummary.tagName}> "${afterSummary.preview}" (was "${summary.preview}").`);
+              }
+            }
+            // ambiguous:同名元素变多,语义不明,不注记(避免误导)
+          } catch {
+            /* After 检查失败不影响动作结果 */
+          }
         }
         // 提交事实信号:回读输入框(不可跨站判定"已提交",但值变化是强信号——
         // 大多数聊天站发送后会清空输入框;残留全文 = Enter 大概率未生效)
