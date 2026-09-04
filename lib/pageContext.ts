@@ -20,8 +20,7 @@ export interface RefTab {
   id: number;
   title: string;
   url: string;
-  /** 标签条正在显示的实时图标(tabs API;http(s) 才带);未知的旧草稿缺省,渲染时回退 _favicon */
-  favIconUrl?: string;
+  // favIconUrl 已退出数据层(审计窄版收敛):实时图标由 lib/tabMetaStore 渲染层单源提供
 }
 
 /** 只取标签页标题/URL(不触发 content script 提取) */
@@ -29,15 +28,7 @@ async function tabToRefTab(tabId: number): Promise<RefTab | null> {
   try {
     const tab = await browser.tabs.get(tabId);
     if (!tab?.url?.startsWith('http')) return null;
-    return {
-      id: tabId,
-      title: tab.title ?? '',
-      url: tab.url,
-      favIconUrl:
-        typeof tab.favIconUrl === 'string' && /^https?:/i.test(tab.favIconUrl)
-          ? tab.favIconUrl
-          : undefined,
-    };
+    return { id: tabId, title: tab.title ?? '', url: tab.url };
   } catch {
     return null;
   }

@@ -214,17 +214,7 @@ function sanitizeDraft(v: unknown): SessionDraft | undefined {
         if (!t || typeof t !== 'object') return [];
         const x = t as Record<string, unknown>;
         if (typeof x.id !== 'number') return [];
-        return [
-          {
-            id: x.id,
-            title: typeof x.title === 'string' ? x.title : '',
-            url: typeof x.url === 'string' ? x.url : '',
-            // 实时 favicon 随草稿持久化(重启后面板立即可用,不依赖 _favicon 历史库)
-            ...(typeof x.favIconUrl === 'string' && /^https?:/i.test(x.favIconUrl)
-              ? { favIconUrl: x.favIconUrl }
-              : {}),
-          },
-        ];
+        return [{ id: x.id, title: typeof x.title === 'string' ? x.title : '', url: typeof x.url === 'string' ? x.url : '' }];
       })
     : [];
   const pickedElements = Array.isArray(d.pickedElements)

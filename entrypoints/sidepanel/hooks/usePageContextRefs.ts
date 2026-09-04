@@ -56,20 +56,12 @@ export function usePageContextRefs(params: {
     };
     const onUpdated = (
       tabId: number,
-      changeInfo: { title?: string; url?: string; status?: string; favIconUrl?: string },
-      tab?: { favIconUrl?: string },
+      changeInfo: { title?: string; url?: string; status?: string },
     ) => {
-      // 导航/重载完成:清空该 tab 的元素选择记录(页面引用保留,title/url/favicon 继续同步)
+      // 导航/重载完成:清空该 tab 的元素选择记录(页面引用保留,title/url 继续同步;
+      // favicon 已退出数据层,由 lib/tabMetaStore 单源提供)
       const clearPicked = changeInfo.status === 'complete';
-      // favicon 取第三参 Tab 的实时值(标签条正在显示的图标);页内导航后旧值失效,不能保留。
-      // complete 事件每次加载必发且常已带就绪 favicon —— 是唯一可靠的确定性写入点,不能只看 title/url
-      const liveFav =
-        typeof tab?.favIconUrl === 'string' && /^https?:/i.test(tab.favIconUrl)
-          ? tab.favIconUrl
-          : undefined;
-      const syncMeta = Boolean(
-        changeInfo.title || changeInfo.url || changeInfo.favIconUrl || liveFav,
-      );
+      const syncMeta = Boolean(changeInfo.title || changeInfo.url);
       if (!clearPicked && !syncMeta) return;
       patchAllDrafts((d) => {
         let nd = d;
@@ -81,12 +73,7 @@ export function usePageContextRefs(params: {
             ...nd,
             refTabs: nd.refTabs.map((t) =>
               t.id === tabId
-                ? {
-                    ...t,
-                    title: changeInfo.title ?? t.title,
-                    url: changeInfo.url ?? t.url,
-                    ...(liveFav !== undefined ? { favIconUrl: liveFav } : {}),
-                  }
+                ? { ...t, title: changeInfo.title ?? t.title, url: changeInfo.url ?? t.url }
                 : t
             ),
           };
@@ -189,7 +176,6 @@ export function usePageContextRefs(params: {
   const switchRefGroup = useCallback(
     async (tabId: number) => {
       if (!includePageContext) return; // 总开关关闭:冻结切换,什么都不发
-      const isRefocus = focusedTabIdRef.current === tabId; // 同 tab 重估 = 聚焦页导航到可引用网址
       const prev = focusedTabIdRef.current;
       focusedTabIdRef.current = tabId;
       const meta = await getTabMeta(tabId).catch(() => null);
@@ -217,7 +203,7 @@ export function usePageContextRefs(params: {
       ) {
         return;
       }
-      // 全量透传(含 favIconUrl):getTabMeta 已带实时图标,丢弃会让隐式芯片 100% 走 service/自愈路径
+      // 隐式芯片全量快照(meta 来自 getTabMeta;favicon 已由 tabMetaStore 单源提供)
       const self: RefTab = { ...meta };
       groupMapRef.current.set(tabId, { refTabs: [self], pickedElements: [] });
       patchActiveDraft((d) => ({ ...d, refTabs: [self], pickedElements: [] }));

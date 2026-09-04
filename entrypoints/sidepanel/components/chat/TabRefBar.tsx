@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Globe, ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { RefTab } from '@/lib/pageContext';
 import { faviconUrl } from '@/lib/favicon';
+import { useTabMeta } from '@/lib/tabMetaStore';
 import { cn } from '@/lib/utils';
 
 interface TabRefBarProps {
@@ -10,76 +11,37 @@ interface TabRefBarProps {
 }
 
 /**
- * 单个网站图标(多级回退:标签条实时 favIconUrl → 现场按 tabId 重查(事件时序竞态自愈) → _favicon 服务 → Globe):
- * _favicon 只在页面提交进历史后才有条目(不实时、时有时无);新开 tab 激活瞬间 favIconUrl 常未生成,
- * 数据链路任何环节漏掉实时值,渲染层按 tabId 自行补偿一次(决策:导出反馈修复)
+ * 单个网站图标(回退链:tabMetaStore 实时 favicon(单源,事件驱动自愈) → _favicon 服务(浏览器历史库) → Globe):
+ * favIconUrl 已从数据层退出(审计窄版收敛),渲染层经 useTabMeta 直接订阅单一读源;
+ * 新开 tab 的 favicon 异步生成、任何时序漏网都由 store 的 hydrate/事件刷新补齐
  */
 export function FaviconIcon({
   url,
-  favIconUrl,
   tabId,
   className = 'size-3.5',
 }: {
   url: string;
-  favIconUrl?: string;
   tabId?: number;
   className?: string;
 }) {
-  const [live, setLive] = useState<string | undefined>(favIconUrl);
-  const [stage, setStage] = useState<'live' | 'service' | 'failed'>(favIconUrl ? 'live' : 'service');
+  const meta = useTabMeta(tabId);
+  const liveFav = meta?.favIconUrl;
+  const [failedStage, setFailedStage] = useState<'live' | 'service' | null>(null);
+  // 实时值/页面变化后重置失败标记(新 favicon/新页面两级都值得一试)
   useEffect(() => {
-    setLive(favIconUrl);
-    setStage(favIconUrl ? 'live' : 'service');
-    // 数据链路缺实时值时自愈(新开 tab 的 favicon 异步生成,事件时序无保证):
-    // (a) 订阅本 tabId 的 onUpdated——任意 changeInfo(含 status:'complete')都读第三参实时值,就绪即升级;
-    // (b) 1s/2s/4s 退避重试 tabs.get 兜底(Chromium 不保证发 favIconUrl changeInfo);tab 关闭即停
-    if (favIconUrl || tabId === undefined) return;
-    let alive = true;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const readLive = (t: { favIconUrl?: string } | undefined): string | undefined =>
-      typeof t?.favIconUrl === 'string' && /^https?:/i.test(t.favIconUrl) ? t.favIconUrl : undefined;
-    const upgrade = (fav: string) => {
-      if (!alive) return;
-      setLive(fav);
-      setStage('live');
-      stop();
-    };
-    const onUpdated = (updatedTabId: number, _ci: unknown, tab?: { favIconUrl?: string }) => {
-      if (updatedTabId !== tabId) return;
-      const fav = readLive(tab);
-      if (fav) upgrade(fav);
-    };
-    const checkOnce = () => {
-      void browser.tabs
-        .get(tabId)
-        .then((t) => {
-          const fav = readLive(t);
-          if (alive && fav) upgrade(fav);
-        })
-        .catch(() => stop());
-    };
-    const stop = () => {
-      timers.forEach((t) => clearTimeout(t));
-      browser.tabs.onUpdated.removeListener(onUpdated);
-    };
-    browser.tabs.onUpdated.addListener(onUpdated);
-    [1000, 2000, 4000].forEach((delay) => timers.push(setTimeout(checkOnce, delay)));
-    return () => {
-      alive = false;
-      stop();
-    };
-  }, [tabId, favIconUrl, url]);
-  const src = stage === 'live' && live ? live : faviconUrl(url, 32);
-  if (stage === 'failed' || !src) {
+    setFailedStage(null);
+  }, [liveFav, url]);
+  const useLive = Boolean(liveFav) && failedStage !== 'live';
+  const src = useLive ? liveFav : faviconUrl(url, 32);
+  if (failedStage === 'service' || !src) {
     return <Globe className={`${className} text-muted-foreground shrink-0`} />;
   }
   return (
     <img
       src={src}
       alt=""
-      onError={() => setStage((s) => (s === 'live' ? 'service' : 'failed'))}
+      onError={() => setFailedStage(useLive ? 'live' : 'service')}
       className={`${className} rounded-[2px] shrink-0 object-contain`}
-      loading="lazy"
     />
   );
 }
@@ -107,7 +69,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
           title={tab.url}
         >
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <FaviconIcon url={tab.url} favIconUrl={tab.favIconUrl} tabId={tab.id} className="size-3.5" />
+            <FaviconIcon url={tab.url} tabId={tab.id} className="size-3.5" />
             <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
               正在引用
             </span>
@@ -153,7 +115,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                 key={t.id}
                 className="relative ring-1 ring-background rounded-[2px] bg-background"
               >
-                <FaviconIcon url={t.url} favIconUrl={t.favIconUrl} tabId={t.id} className="size-3.5" />
+                <FaviconIcon url={t.url} tabId={t.id} className="size-3.5" />
               </div>
             ))}
             {count > 4 && (
@@ -198,7 +160,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                 title={t.url}
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <FaviconIcon url={t.url} favIconUrl={t.favIconUrl} tabId={t.id} className="size-3.5" />
+                  <FaviconIcon url={t.url} tabId={t.id} className="size-3.5" />
                   <span className="truncate font-normal text-foreground">
                     {t.title || t.url}
                   </span>
