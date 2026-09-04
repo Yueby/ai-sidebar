@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -349,8 +350,9 @@ export function ChatInput({
   const activeProvider = settings.providers.find((p) => p.id === settings.activeProviderId);
   const activeModel = activeProvider?.models.find((m) => m.id === settings.activeModelId);
   const modelDisplayName = activeModel?.displayName || activeModel?.id || '未选择模型';
-  const providerName = activeProvider?.name || '未配置提供商';
   const supportsReasoning = activeModel?.reasoning === true;
+  // 所有包含可用模型的提供商列表（用于模型切换下拉分组）
+  const providersWithModels = settings.providers.filter((p) => p.models.length > 0);
 
   // Resolve dynamic reasoning levels supported by this model
   const supportedLevels: ReasoningLevel[] = activeModel ? getModelReasoningLevels(activeModel) : [];
@@ -545,35 +547,43 @@ export function ChatInput({
                     <ChevronDown className="size-3 shrink-0 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56 max-h-72">
-                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                    {providerName} 模型
-                  </DropdownMenuLabel>
-                  {activeProvider.models.length === 0 ? (
+                <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
+                  {providersWithModels.length === 0 ? (
                     <div className="px-2 py-2 text-xs text-muted-foreground italic">
                       暂无模型，请在设置中添加
                     </div>
                   ) : (
-                    activeProvider.models.map((m) => {
-                      const isSelected = m.id === settings.activeModelId;
-                      return (
-                        <DropdownMenuItem
-                          key={m.id}
-                          onClick={() => onSelectModel(activeProvider.id, m.id)}
-                          className="flex items-center justify-between text-xs cursor-pointer"
-                        >
-                          <div className="flex flex-col min-w-0 pr-2">
-                            <span className="truncate">{m.displayName || m.id}</span>
-                            {m.displayName && (
-                              <span className="truncate text-[10px] text-muted-foreground font-mono">
-                                {m.id}
-                              </span>
-                            )}
-                          </div>
-                          {isSelected && <Check className="size-3.5 shrink-0" />}
-                        </DropdownMenuItem>
-                      );
-                    })
+                    providersWithModels.map((p, idx) => (
+                      <React.Fragment key={p.id}>
+                        {idx > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                            {p.name || '未命名提供商'}
+                          </DropdownMenuLabel>
+                          {p.models.map((m) => {
+                            const isSelected =
+                              p.id === settings.activeProviderId && m.id === settings.activeModelId;
+                            return (
+                              <DropdownMenuItem
+                                key={m.id}
+                                onClick={() => onSelectModel(p.id, m.id)}
+                                className="flex items-center justify-between text-xs cursor-pointer"
+                              >
+                                <div className="flex flex-col min-w-0 pr-2">
+                                  <span className="truncate">{m.displayName || m.id}</span>
+                                  {m.displayName && (
+                                    <span className="truncate text-[10px] text-muted-foreground font-mono">
+                                      {m.id}
+                                    </span>
+                                  )}
+                                </div>
+                                {isSelected && <Check className="size-3.5 shrink-0" />}
+                              </DropdownMenuItem>
+                            );
+                          })}
+                        </DropdownMenuGroup>
+                      </React.Fragment>
+                    ))
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

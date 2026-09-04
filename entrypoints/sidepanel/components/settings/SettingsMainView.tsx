@@ -34,7 +34,10 @@ import { buttonVariants } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -101,6 +104,34 @@ export function SettingsMainView({
       }))
     );
   }, [settings.providers]);
+
+  // 包含可用模型的提供商列表（用于模型分工按提供商分组展示）
+  const providersWithModels = useMemo(() => {
+    return settings.providers.filter((p) => p.models.length > 0);
+  }, [settings.providers]);
+
+  // 渲染按提供商分组的模型选项
+  const renderModelGroups = () => {
+    return providersWithModels.map((p, idx) => (
+      <React.Fragment key={p.id}>
+        {idx > 0 && <SelectSeparator />}
+        <SelectGroup>
+          <SelectLabel className="text-[11px] text-muted-foreground font-normal px-2 py-1">
+            {p.name || '未命名提供商'}
+          </SelectLabel>
+          {p.models.map((m) => (
+            <SelectItem
+              key={`${p.id}::${m.id}`}
+              value={`${p.id}::${m.id}`}
+              className="text-xs"
+            >
+              {m.displayName || m.id}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </React.Fragment>
+    ));
+  };
 
   // 对话模型受控值：未选或模型已不在列表时为 '__none__'
   const chatModelValue =
@@ -367,15 +398,11 @@ export function SettingsMainView({
                         <SelectTrigger className="h-7 text-xs w-full">
                           <SelectValue placeholder={allModelOptions.length === 0 ? '暂无可用模型' : '未选择'} />
                         </SelectTrigger>
-                        <SelectContent align="end" className="max-w-[280px]">
+                        <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
                           <SelectItem value="__none__" disabled className="hidden">
                             {allModelOptions.length === 0 ? '暂无可用模型' : '未选择'}
                           </SelectItem>
-                          {allModelOptions.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                              {opt.label}
-                            </SelectItem>
-                          ))}
+                          {renderModelGroups()}
                         </SelectContent>
                       </Select>
                     </div>
@@ -440,15 +467,12 @@ export function SettingsMainView({
                         <SelectTrigger className="h-7 text-xs w-full">
                           <SelectValue placeholder="跟随对话模型" />
                         </SelectTrigger>
-                        <SelectContent align="end" className="max-w-[280px]">
+                        <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
                           <SelectItem value="follow" className="text-xs font-medium">
                             跟随对话模型
                           </SelectItem>
-                          {allModelOptions.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                              {opt.label}
-                            </SelectItem>
-                          ))}
+                          {providersWithModels.length > 0 && <SelectSeparator />}
+                          {renderModelGroups()}
                         </SelectContent>
                       </Select>
                     </div>
@@ -509,15 +533,12 @@ export function SettingsMainView({
                         <SelectTrigger className="h-7 text-xs w-full">
                           <SelectValue placeholder="跟随对话模型" />
                         </SelectTrigger>
-                        <SelectContent align="end" className="max-w-[280px]">
+                        <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
                           <SelectItem value="follow" className="text-xs font-medium">
                             跟随对话模型
                           </SelectItem>
-                          {allModelOptions.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                              {opt.label}
-                            </SelectItem>
-                          ))}
+                          {providersWithModels.length > 0 && <SelectSeparator />}
+                          {renderModelGroups()}
                         </SelectContent>
                       </Select>
                     </div>
