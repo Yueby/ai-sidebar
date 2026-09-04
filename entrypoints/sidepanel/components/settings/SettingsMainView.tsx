@@ -130,86 +130,65 @@ export function SettingsMainView({
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground overflow-hidden animate-in fade-in-0 duration-150 motion-reduce:animate-none">
       {/* Top Header with Tab Switcher */}
-      <header className="flex h-11 shrink-0 items-center justify-between border-b bg-background px-3 select-none gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            className="size-7 shrink-0"
-          >
-            <ArrowLeft className="size-4" />
-            <span className="sr-only">返回聊天</span>
-          </Button>
+      <header className="flex h-11 shrink-0 items-center border-b bg-background px-2.5 select-none gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onBack}
+          className="size-7 shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+        >
+          <ArrowLeft className="size-4" />
+          <span className="sr-only">返回聊天</span>
+        </Button>
 
-          {/* Tab Switcher in Header */}
-          <div className="flex items-center rounded-md border bg-muted/40 p-0.5 text-xs">
-            <Button
-              type="button"
-              variant={currentTab === 'providers' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setCurrentTab('providers')}
-              className="h-6 px-2 text-xs font-normal"
-            >
-              提供商
-            </Button>
-            <Button
-              type="button"
-              variant={currentTab === 'search' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setCurrentTab('search')}
-              className="h-6 px-2 text-xs font-normal"
-            >
-              搜索
-            </Button>
-            <Button
-              type="button"
-              variant={currentTab === 'permissions' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setCurrentTab('permissions')}
-              className="h-6 px-2 text-xs font-normal"
-            >
-              权限
-            </Button>
-            <Button
-              type="button"
-              variant={currentTab === 'backup' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setCurrentTab('backup')}
-              className="h-6 px-2 text-xs font-normal"
-            >
-              备份
-            </Button>
-            <Button
-              type="button"
-              variant={currentTab === 'about' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setCurrentTab('about')}
-              className="h-6 px-2 text-xs font-normal"
-            >
-              关于
-            </Button>
-          </div>
-        </div>
-
-        {/* Main Content Area */}
+        {/* Tab Switcher in Header (Segmented Control) */}
+        <nav
+          aria-label="设置导航"
+          className="flex items-center rounded-lg border border-border/60 bg-muted/50 p-0.5 text-xs"
+        >
+          {[
+            { id: 'providers', label: '提供商' },
+            { id: 'search', label: '搜索' },
+            { id: 'permissions', label: '权限' },
+            { id: 'backup', label: '备份' },
+            { id: 'about', label: '关于' },
+          ].map((tab) => {
+            const isActive = currentTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setCurrentTab(tab.id as SettingsTab)}
+                className={cn(
+                  'h-6 px-2 text-[11px] font-medium rounded-md transition-all cursor-pointer whitespace-nowrap',
+                  isActive
+                    ? 'bg-background text-foreground shadow-2xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
         {/* VIEW 1: Providers List */}
         {currentTab === 'providers' && (
-          <div className="space-y-3 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-medium text-muted-foreground">
-                AI 提供商 ({settings.providers.length})
+              <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Bot className="size-3.5 text-muted-foreground" />
+                <span>AI 提供商 ({settings.providers.length})</span>
               </h2>
               <Button
                 type="button"
                 size="sm"
                 onClick={onAddProvider}
-                className="gap-1 h-7 text-xs px-2.5 shrink-0"
+                className="gap-1 h-7 text-xs px-2.5 shrink-0 cursor-pointer"
               >
                 <Plus className="size-3" />
                 <span>添加提供商</span>
@@ -218,14 +197,25 @@ export function SettingsMainView({
 
             {settings.providers.length === 0 ? (
               /* Empty state */
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center">
-                <div className="mb-2 flex size-10 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center space-y-3">
+                <div className="flex size-10 items-center justify-center rounded-md border bg-muted text-muted-foreground">
                   <Bot className="size-5" />
                 </div>
-                <h3 className="text-xs font-semibold text-foreground">尚未配置 AI 提供商</h3>
-                <p className="mt-1 text-xs text-muted-foreground max-w-[240px] leading-relaxed">
-                  支持 OpenAI 兼容、Responses 协议及 Anthropic 格式
-                </p>
+                <div className="space-y-1">
+                  <h3 className="text-xs font-semibold text-foreground">尚未配置 AI 提供商</h3>
+                  <p className="text-[11px] text-muted-foreground max-w-[240px] leading-relaxed">
+                    支持 OpenAI 兼容、Responses 协议及 Anthropic 格式
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onAddProvider}
+                  className="h-7 text-xs gap-1.5 cursor-pointer"
+                >
+                  <Plus className="size-3" />
+                  <span>立即添加提供商</span>
+                </Button>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
@@ -239,10 +229,10 @@ export function SettingsMainView({
                     <div
                       key={p.id}
                       className={cn(
-                        'rounded-lg border p-3 text-left space-y-2',
+                        'rounded-lg border p-3 text-left space-y-2.5 transition-colors',
                         isActive
-                          ? 'border-foreground/30 bg-muted/30'
-                          : 'border-border bg-card'
+                          ? 'border-primary/40 bg-primary/5 dark:bg-primary/10 shadow-2xs'
+                          : 'border-border bg-card hover:border-border/80'
                       )}
                     >
                       {/* Header: Name + Protocol + Active Badge */}
@@ -391,12 +381,22 @@ export function SettingsMainView({
           <SettingsPermissionsView />
         )}
 
-        {/* VIEW 4: About Page */}
+        {/* VIEW 5: About Page */}
         {currentTab === 'about' && (
-          <div className="space-y-3 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-            {/* Card: Basic Info */}
-            <div className="rounded-lg border bg-card p-3.5 space-y-2">
+          <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+            {/* Section 1: Basic Info */}
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between">
+                <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Bot className="size-3.5 text-muted-foreground" />
+                  <span>扩展信息</span>
+                </h2>
+                <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 font-mono">
+                  v{appVersion}
+                </Badge>
+              </div>
+
+              <div className="rounded-lg border bg-card p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="flex size-7 items-center justify-center rounded-md border bg-muted text-muted-foreground">
                     <Bot className="size-4" />
@@ -406,58 +406,54 @@ export function SettingsMainView({
                     <p className="text-[11px] text-muted-foreground">BYOK 浏览器 AI 侧边栏</p>
                   </div>
                 </div>
-                <Badge variant="outline" className="text-[11px] font-mono">
-                  v{appVersion}
-                </Badge>
-              </div>
 
-              <Separator />
-
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                开源自带 API Key（BYOK）浏览器侧边栏扩展，使用您自己的 API 密钥连接各大模型端点，提供网页上下文感知与流式对话能力。
-              </p>
-            </div>
-
-            {/* Card: Supported Protocols */}
-            <div className="rounded-lg border bg-card p-3.5 space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                <Layers className="size-3.5 text-muted-foreground" />
-                <span>支持的接口协议</span>
-              </div>
-
-              <div className="space-y-2 pt-1 text-xs">
-                <div className="rounded border bg-muted/20 p-2 space-y-0.5">
-                  <div className="font-medium text-foreground">OpenAI 兼容 · Chat Completions</div>
-                  <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    标准 <code className="font-mono bg-muted px-1 rounded">/v1/chat/completions</code> 接口，支持 OpenAI、DeepSeek、OpenRouter、Ollama、Kimi、GLM 等主流端点。
-                  </div>
-                </div>
-
-                <div className="rounded border bg-muted/20 p-2 space-y-0.5">
-                  <div className="font-medium text-foreground">OpenAI 兼容 · Responses</div>
-                  <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    标准 <code className="font-mono bg-muted px-1 rounded">/v1/responses</code> 接口协议。
-                  </div>
-                </div>
-
-                <div className="rounded border bg-muted/20 p-2 space-y-0.5">
-                  <div className="font-medium text-foreground">Anthropic Messages</div>
-                  <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    标准 <code className="font-mono bg-muted px-1 rounded">/v1/messages</code> 接口，支持 Claude 官方 API 及兼容格式。
-                  </div>
-                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed pt-1.5 border-t border-border/50">
+                  开源自带 API Key（BYOK）浏览器侧边栏扩展，使用您自己的 API 密钥连接各大模型端点，提供网页上下文感知、页面动作与流式对话能力。
+                </p>
               </div>
             </div>
 
-            {/* Card: Security & Privacy */}
-            <div className="rounded-lg border bg-card p-3.5 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                <ShieldCheck className="size-3.5 text-muted-foreground" />
-                <span>数据与安全</span>
+            {/* Section 2: Supported Protocols */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Layers className="size-3.5 text-muted-foreground" />
+                  <span>支持的接口协议</span>
+                </h2>
+                <span className="text-[10px] text-muted-foreground font-mono">3 类协议</span>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                API 请求直接由浏览器发起连接至目标端点，不经过任何中间代理服务器；API Key 仅保存在本地浏览器扩展存储中。
-              </p>
+
+              <div className="rounded-lg border bg-card p-3 space-y-2">
+                <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
+                  <div className="font-medium text-foreground text-xs">OpenAI 兼容 · Chat Completions</div>
+                  <div className="text-[11px] text-muted-foreground leading-relaxed">
+                    标准 <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/chat/completions</code> 接口，支持 OpenAI、DeepSeek、OpenRouter、Ollama、Kimi、GLM 等主流端点。
+                  </div>
+                </div>
+
+                <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
+                  <div className="font-medium text-foreground text-xs">OpenAI 兼容 · Responses</div>
+                  <div className="text-[11px] text-muted-foreground leading-relaxed">
+                    标准 <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/responses</code> 接口协议。
+                  </div>
+                </div>
+
+                <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
+                  <div className="font-medium text-foreground text-xs">Anthropic Messages</div>
+                  <div className="text-[11px] text-muted-foreground leading-relaxed">
+                    标准 <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/messages</code> 接口，支持 Claude 官方 API 及兼容格式。
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Security & Privacy */}
+            <div className="rounded-lg border bg-muted/20 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
+              <ShieldCheck className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
+              <div>
+                <span className="font-medium text-foreground">数据与安全：</span>
+                API 请求直接由浏览器发起连接至目标端点，不经过任何第三方代理服务器；API Key 仅保存在本地浏览器扩展存储中。
+              </div>
             </div>
           </div>
         )}

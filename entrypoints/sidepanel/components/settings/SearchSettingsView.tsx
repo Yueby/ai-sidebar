@@ -106,88 +106,94 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
   const keyConfig = isKeyBasedProvider(currentProvider) ? PROVIDER_CONFIG[currentProvider] : null;
 
   return (
-    <div className="space-y-3 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-      {/* Card: 搜索源 */}
-      <div className="rounded-lg border bg-card p-3.5 space-y-2.5">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <Globe className="size-3.5 text-muted-foreground" />
-          <span>搜索源</span>
+    <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Globe className="size-3.5 text-muted-foreground" />
+            <span>网络搜索设置</span>
+          </h2>
+          <span className="text-[10px] text-muted-foreground font-mono">
+            {currentProvider === 'none' ? '未启用' : PROVIDER_OPTIONS.find((p) => p.value === currentProvider)?.label}
+          </span>
         </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-[11px] text-muted-foreground">搜索提供商</Label>
-          <Select
-            value={webSearch.provider}
-            onValueChange={(value) => update({ provider: value as WebSearchProvider })}
-          >
-            <SelectTrigger className="h-8 text-sm w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROVIDER_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {webSearch.provider === 'searxng' && (
+        <div className="rounded-lg border bg-card p-3 space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-[11px] text-muted-foreground">SearXNG 实例地址</Label>
-            <Input
-              value={webSearch.searxngBaseUrl}
-              onChange={(e) => update({ searxngBaseUrl: e.target.value })}
-              placeholder="https://searx.example.com"
-              className="h-8 text-sm font-mono"
-            />
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              自托管或公共实例的根地址(不含 /search 路径)。
-            </p>
+            <Label className="text-[11px] text-muted-foreground">搜索提供商</Label>
+            <Select
+              value={webSearch.provider}
+              onValueChange={(value) => update({ provider: value as WebSearchProvider })}
+            >
+              <SelectTrigger className="h-8 text-xs w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PROVIDER_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
 
-        {isKeyBasedProvider(currentProvider) && keyConfig && (
-          <div className="space-y-1.5">
-            <Label className="text-[11px] text-muted-foreground">API Key</Label>
-            <div className="relative">
+          {webSearch.provider === 'searxng' && (
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-muted-foreground">SearXNG 实例地址</Label>
               <Input
-                type={showKey ? 'text' : 'password'}
-                value={webSearch.apiKeys[currentProvider] ?? ''}
-                onChange={(e) => updateApiKey(currentProvider, e.target.value)}
-                placeholder={keyConfig.placeholder}
-                className="h-8 text-sm pr-8"
+                value={webSearch.searxngBaseUrl}
+                onChange={(e) => update({ searxngBaseUrl: e.target.value })}
+                placeholder="https://searx.example.com"
+                className="h-8 text-xs font-mono"
               />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowKey((v) => !v)}
-                className="absolute right-1 top-1/2 -translate-y-1/2 size-6 text-muted-foreground hover:text-foreground"
-              >
-                {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-              </Button>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                自托管或公共实例的根地址（不含 /search 路径）。
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              {keyConfig.applyUrl && (
-                <>
-                  申请地址:{' '}
-                  <a
-                    href={keyConfig.applyUrl.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="text-primary underline"
-                  >
-                    {keyConfig.applyUrl.label}
-                  </a>
-                  ;
-                </>
-              )}
-              Key 仅保存在本地浏览器扩展存储中。
-            </p>
-          </div>
-        )}
+          )}
+
+          {isKeyBasedProvider(currentProvider) && keyConfig && (
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-muted-foreground">API Key</Label>
+              <div className="relative">
+                <Input
+                  type={showKey ? 'text' : 'password'}
+                  value={webSearch.apiKeys[currentProvider] ?? ''}
+                  onChange={(e) => updateApiKey(currentProvider, e.target.value)}
+                  placeholder={keyConfig.placeholder}
+                  className="h-8 text-xs pr-8 font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowKey((v) => !v)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                {keyConfig.applyUrl && (
+                  <>
+                    申请地址：{' '}
+                    <a
+                      href={keyConfig.applyUrl.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-primary underline hover:opacity-80 transition-opacity"
+                    >
+                      {keyConfig.applyUrl.label}
+                    </a>
+                    ；
+                  </>
+                )}
+                Key 仅保存在本地浏览器扩展存储中。
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
