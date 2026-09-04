@@ -56,12 +56,18 @@ export function usePageContextRefs(params: {
     };
     const onUpdated = (
       tabId: number,
-      changeInfo: { title?: string; url?: string; status?: string }
+      changeInfo: { title?: string; url?: string; status?: string; favIconUrl?: string },
+      tab?: { favIconUrl?: string },
     ) => {
-      // 导航/重载完成:清空该 tab 的元素选择记录(页面引用保留,title/url 继续同步)
+      // 导航/重载完成:清空该 tab 的元素选择记录(页面引用保留,title/url/favicon 继续同步)
       const clearPicked = changeInfo.status === 'complete';
-      const syncMeta = Boolean(changeInfo.title || changeInfo.url);
+      const syncMeta = Boolean(changeInfo.title || changeInfo.url || changeInfo.favIconUrl);
       if (!clearPicked && !syncMeta) return;
+      // favicon 取第三参 Tab 的实时值(标签条正在显示的图标);页内导航后旧值失效,不能保留
+      const liveFav =
+        typeof tab?.favIconUrl === 'string' && /^https?:/i.test(tab.favIconUrl)
+          ? tab.favIconUrl
+          : undefined;
       patchAllDrafts((d) => {
         let nd = d;
         if (clearPicked && nd.pickedElements.some((p) => p.tabId === tabId)) {
@@ -72,7 +78,12 @@ export function usePageContextRefs(params: {
             ...nd,
             refTabs: nd.refTabs.map((t) =>
               t.id === tabId
-                ? { ...t, title: changeInfo.title ?? t.title, url: changeInfo.url ?? t.url }
+                ? {
+                    ...t,
+                    title: changeInfo.title ?? t.title,
+                    url: changeInfo.url ?? t.url,
+                    ...(liveFav !== undefined ? { favIconUrl: liveFav } : {}),
+                  }
                 : t
             ),
           };
