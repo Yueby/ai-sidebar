@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Download, Upload, FileJson, TriangleAlert, Info } from 'lucide-react';
+import { Download, Upload, FileJson, TriangleAlert } from 'lucide-react';
 import type { Settings } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { sanitizeSettings } from '@/lib/storage';
@@ -80,65 +80,51 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
   };
 
   return (
-    <div className="space-y-3 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-      {/* 导出 */}
-      <div className="rounded-lg border bg-card p-3 space-y-2">
+    <div className="space-y-3 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+      {/* 导出/导入合并区块 */}
+      <div className="rounded-lg border bg-card p-3 space-y-2.5">
         <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
           <FileJson className="size-3.5 text-muted-foreground" />
-          <span>导出配置</span>
+          <span>配置备份</span>
         </div>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          将所有提供商配置、API Key、模型参数与设置导出为 JSON 文件。重启开发环境或更换浏览器
-          Profile 后,导入该文件即可一键恢复。
-        </p>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={busy !== null}
-          onClick={handleExport}
-          className="gap-1.5 h-7 text-xs"
-        >
-          <Download className="size-3.5" />
-          <span>导出配置文件</span>
-        </Button>
-      </div>
-
-      {/* 导入 */}
-      <div className="rounded-lg border bg-card p-3 space-y-2">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-          <Upload className="size-3.5 text-muted-foreground" />
-          <span>导入配置</span>
-        </div>
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
-          从备份 JSON 文件恢复配置。
+          将所有提供商配置、API Key、模型参数与设置导出为 JSON 文件;重启开发环境或更换
+          Profile 后导入即可一键恢复。
           <span className="text-amber-600 dark:text-amber-400">
             导入将覆盖当前的全部配置
           </span>
-          ,且备份中的 API Key 会一并恢复。
+          。
         </p>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={busy !== null}
-          onClick={() => fileInputRef.current?.click()}
-          className="gap-1.5 h-7 text-xs"
-        >
-          <Upload className="size-3.5" />
-          <span>选择备份文件…</span>
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json,application/json"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (file) void handleImportFile(file);
-          }}
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy !== null}
+            onClick={handleExport}
+            className="gap-1.5 h-6.5 text-[11px] flex-1"
+          >
+            <Download className="size-3.5" />
+            <span>导出配置文件</span>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy !== null}
+            onClick={() => fileInputRef.current?.click()}
+            className="gap-1.5 h-6.5 text-[11px] flex-1"
+          >
+            <Upload className="size-3.5" />
+            <span>导入备份文件…</span>
+          </Button>
+        </div>
+        <div className="rounded-md bg-amber-500/10 border border-amber-500/30 p-2 flex items-start gap-1.5 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
+          <TriangleAlert className="size-3 shrink-0 mt-0.5" />
+          <span>
+            备份文件包含全部 API Key 明文,等同于账号凭据——请像保管密码一样保管,不要分享给他人。
+          </span>
+        </div>
       </div>
 
       {/* 反馈条 */}
@@ -154,16 +140,6 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
           <span>{feedback.message}</span>
         </div>
       )}
-
-      {/* 提示 */}
-      <div className="rounded-lg border bg-muted/20 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
-        <TriangleAlert className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
-        <div>
-          <span className="font-medium text-foreground">安全提示:</span>
-          备份文件包含全部 API Key
-          明文,等同于账号凭据——请像保管密码一样保管它,不要提交到代码仓库或分享给他人。
-        </div>
-      </div>
     </div>
   );
 }

@@ -36,7 +36,7 @@ export function SettingsPermissionsView() {
   };
 
   return (
-    <div className="space-y-4 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+    <div className="space-y-3 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
       {/* 1. 网页访问(host <all_urls>:随安装授予) */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">

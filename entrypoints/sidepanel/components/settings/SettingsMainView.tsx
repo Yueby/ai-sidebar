@@ -193,28 +193,27 @@ export function SettingsMainView({
           </div>
         </div>
 
-        {currentTab === 'providers' && (
-          <Button
-            type="button"
-            size="sm"
-            onClick={onAddProvider}
-            className="gap-1 h-7 text-xs px-2.5 shrink-0"
-          >
-            <Plus className="size-3" />
-            <span>添加提供商</span>
-          </Button>
-        )}
+        {/* Main Content Area */}
       </header>
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
         {/* VIEW 1: Providers List */}
         {currentTab === 'providers' && (
-          <div className="space-y-2 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <div className="space-y-3 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-medium text-muted-foreground">
                 AI 提供商 ({settings.providers.length})
               </h2>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onAddProvider}
+                className="gap-1 h-7 text-xs px-2.5 shrink-0"
+              >
+                <Plus className="size-3" />
+                <span>添加提供商</span>
+              </Button>
             </div>
 
             {settings.providers.length === 0 ? (
@@ -227,15 +226,6 @@ export function SettingsMainView({
                 <p className="mt-1 text-xs text-muted-foreground max-w-[240px] leading-relaxed">
                   支持 OpenAI 兼容、Responses 协议及 Anthropic 格式
                 </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={onAddProvider}
-                  className="mt-3.5 h-7 text-xs gap-1.5"
-                >
-                  <Plus className="size-3" />
-                  <span>立即添加提供商</span>
-                </Button>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
@@ -403,7 +393,7 @@ export function SettingsMainView({
 
         {/* VIEW 4: About Page */}
         {currentTab === 'about' && (
-          <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <div className="space-y-3 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* Card: Basic Info */}
             <div className="rounded-lg border bg-card p-3.5 space-y-2">
               <div className="flex items-center justify-between">

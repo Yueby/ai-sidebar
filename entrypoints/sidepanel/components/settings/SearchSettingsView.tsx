@@ -106,7 +106,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
   const keyConfig = isKeyBasedProvider(currentProvider) ? PROVIDER_CONFIG[currentProvider] : null;
 
   return (
-    <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+    <div className="space-y-3 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
       {/* Card: 搜索源 */}
       <div className="rounded-lg border bg-card p-3.5 space-y-2.5">
         <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
