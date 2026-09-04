@@ -11,8 +11,9 @@ import type { Session } from '@/lib/types';
 import type { AssistantMessage, ToolResultMessage, UserMessage } from '@earendil-works/pi-ai';
 import { collectPageRefs } from './pageRefs';
 
-/** 单个工具结果文本上限(反馈可读性 vs 完整性折中) */
+/** 单个工具结果文本上限;超限时保留头尾(尾部是指纹/状态等元数据行,反馈场景需要) */
 const TOOL_OUTPUT_LIMIT = 1500;
+const TOOL_OUTPUT_TAIL_KEEP = 400;
 
 /** 本地时间格式化:YYYY-MM-DD HH:mm */
 function fmtTime(ts: number): string {
@@ -50,9 +51,13 @@ function details(summary: string, body: string): string {
   return `<details>\n<summary>${summary}</summary>\n\n${body}\n\n</details>`;
 }
 
-/** 文本截断并标注 */
+/** 文本截断:超限保留头尾两段,中间以省略标注衔接(尾部常是指纹/状态行) */
 function truncate(text: string, limit: number): string {
-  return text.length <= limit ? text : `${text.slice(0, limit)}\n…(截断,共 ${text.length} 字符)`;
+  if (text.length <= limit) return text;
+  const tailKeep = Math.min(TOOL_OUTPUT_TAIL_KEEP, Math.floor(limit / 4));
+  const head = text.slice(0, limit - tailKeep);
+  const tail = text.slice(-tailKeep);
+  return `${head}\n…(中间省略,原文共 ${text.length} 字符)…\n${tail}`;
 }
 
 /** 工具调用折叠段:参数 JSON + 结果文本 */
