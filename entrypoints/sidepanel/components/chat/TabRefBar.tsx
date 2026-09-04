@@ -9,17 +9,33 @@ interface TabRefBarProps {
   onRemoveRefTab: (id: number) => void;
 }
 
-/** 单个网站图标(加载失败自动回退 Globe) */
-function FaviconIcon({ url, className = 'size-3.5' }: { url: string; className?: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed || !url) {
+/**
+ * 单个网站图标(三级回退:标签条实时 favIconUrl → _favicon 服务(浏览器历史库) → Globe):
+ * _favicon 只在页面提交进历史后才有条目(不实时、时有时无),实时源优先(决策:导出反馈修复)
+ */
+export function FaviconIcon({
+  url,
+  favIconUrl,
+  className = 'size-3.5',
+}: {
+  url: string;
+  favIconUrl?: string;
+  className?: string;
+}) {
+  const [stage, setStage] = useState<'live' | 'service' | 'failed'>(favIconUrl ? 'live' : 'service');
+  // favIconUrl 变化(导航/新元数据)时重置回 live
+  useEffect(() => {
+    setStage(favIconUrl ? 'live' : 'service');
+  }, [favIconUrl, url]);
+  const src = stage === 'live' && favIconUrl ? favIconUrl : faviconUrl(url, 32);
+  if (stage === 'failed' || !src) {
     return <Globe className={`${className} text-muted-foreground shrink-0`} />;
   }
   return (
     <img
-      src={faviconUrl(url, 32)}
+      src={src}
       alt=""
-      onError={() => setFailed(true)}
+      onError={() => setStage((s) => (s === 'live' ? 'service' : 'failed'))}
       className={`${className} rounded-[2px] shrink-0 object-contain`}
       loading="lazy"
     />
@@ -95,7 +111,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                 key={t.id}
                 className="relative ring-1 ring-background rounded-[2px] bg-background"
               >
-                <FaviconIcon url={t.url} className="size-3.5" />
+                <FaviconIcon url={t.url} favIconUrl={t.favIconUrl} className="size-3.5" />
               </div>
             ))}
             {count > 4 && (
@@ -140,7 +156,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                 title={t.url}
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <FaviconIcon url={t.url} className="size-3.5" />
+                  <FaviconIcon url={t.url} favIconUrl={t.favIconUrl} className="size-3.5" />
                   <span className="truncate font-normal text-foreground">
                     {t.title || t.url}
                   </span>
