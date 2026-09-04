@@ -30,21 +30,43 @@ export function FaviconIcon({
   useEffect(() => {
     setLive(favIconUrl);
     setStage(favIconUrl ? 'live' : 'service');
-    // 数据链路缺实时值时按 tabId 自愈:新开 tab 的 favicon 异步生成,任何时序竞态都在这里补齐
+    // 数据链路缺实时值时自愈(新开 tab 的 favicon 异步生成,事件时序无保证):
+    // (a) 订阅本 tabId 的 onUpdated——任意 changeInfo(含 status:'complete')都读第三参实时值,就绪即升级;
+    // (b) 1s/2s/4s 退避重试 tabs.get 兜底(Chromium 不保证发 favIconUrl changeInfo);tab 关闭即停
     if (favIconUrl || tabId === undefined) return;
     let alive = true;
-    void browser.tabs
-      .get(tabId)
-      .then((t) => {
-        const fav = typeof t?.favIconUrl === 'string' && /^https?:/i.test(t.favIconUrl) ? t.favIconUrl : undefined;
-        if (alive && fav) {
-          setLive(fav);
-          setStage('live');
-        }
-      })
-      .catch(() => {});
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const readLive = (t: { favIconUrl?: string } | undefined): string | undefined =>
+      typeof t?.favIconUrl === 'string' && /^https?:/i.test(t.favIconUrl) ? t.favIconUrl : undefined;
+    const upgrade = (fav: string) => {
+      if (!alive) return;
+      setLive(fav);
+      setStage('live');
+      stop();
+    };
+    const onUpdated = (updatedTabId: number, _ci: unknown, tab?: { favIconUrl?: string }) => {
+      if (updatedTabId !== tabId) return;
+      const fav = readLive(tab);
+      if (fav) upgrade(fav);
+    };
+    const checkOnce = () => {
+      void browser.tabs
+        .get(tabId)
+        .then((t) => {
+          const fav = readLive(t);
+          if (alive && fav) upgrade(fav);
+        })
+        .catch(() => stop());
+    };
+    const stop = () => {
+      timers.forEach((t) => clearTimeout(t));
+      browser.tabs.onUpdated.removeListener(onUpdated);
+    };
+    browser.tabs.onUpdated.addListener(onUpdated);
+    [1000, 2000, 4000].forEach((delay) => timers.push(setTimeout(checkOnce, delay)));
     return () => {
       alive = false;
+      stop();
     };
   }, [tabId, favIconUrl, url]);
   const src = stage === 'live' && live ? live : faviconUrl(url, 32);

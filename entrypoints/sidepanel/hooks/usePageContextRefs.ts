@@ -61,13 +61,16 @@ export function usePageContextRefs(params: {
     ) => {
       // 导航/重载完成:清空该 tab 的元素选择记录(页面引用保留,title/url/favicon 继续同步)
       const clearPicked = changeInfo.status === 'complete';
-      const syncMeta = Boolean(changeInfo.title || changeInfo.url || changeInfo.favIconUrl);
-      if (!clearPicked && !syncMeta) return;
-      // favicon 取第三参 Tab 的实时值(标签条正在显示的图标);页内导航后旧值失效,不能保留
+      // favicon 取第三参 Tab 的实时值(标签条正在显示的图标);页内导航后旧值失效,不能保留。
+      // complete 事件每次加载必发且常已带就绪 favicon —— 是唯一可靠的确定性写入点,不能只看 title/url
       const liveFav =
         typeof tab?.favIconUrl === 'string' && /^https?:/i.test(tab.favIconUrl)
           ? tab.favIconUrl
           : undefined;
+      const syncMeta = Boolean(
+        changeInfo.title || changeInfo.url || changeInfo.favIconUrl || liveFav,
+      );
+      if (!clearPicked && !syncMeta) return;
       patchAllDrafts((d) => {
         let nd = d;
         if (clearPicked && nd.pickedElements.some((p) => p.tabId === tabId)) {
@@ -214,7 +217,8 @@ export function usePageContextRefs(params: {
       ) {
         return;
       }
-      const self = { id: tabId, title: meta.title, url: meta.url };
+      // 全量透传(含 favIconUrl):getTabMeta 已带实时图标,丢弃会让隐式芯片 100% 走 service/自愈路径
+      const self: RefTab = { ...meta };
       groupMapRef.current.set(tabId, { refTabs: [self], pickedElements: [] });
       patchActiveDraft((d) => ({ ...d, refTabs: [self], pickedElements: [] }));
     },
