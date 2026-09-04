@@ -9,8 +9,10 @@ import {
   Pencil,
   Sparkles,
   Loader2,
+  Download,
 } from 'lucide-react';
 import type { Session } from '@/lib/types';
+import { downloadSessionMarkdown } from '@/lib/sessionExport';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -240,6 +242,20 @@ export function ChatHeader({
                                 <Sparkles className="size-3" />
                               </button>
                             )}
+
+                            {/* 导出会话按钮 */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                downloadSessionMarkdown(s);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                              title="导出为 Markdown"
+                              aria-label="导出为 Markdown"
+                            >
+                              <Download className="size-3" />
+                            </button>
 
                             {/* 手动重命名按钮 */}
                             {onRenameSession && (
