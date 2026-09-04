@@ -50,7 +50,7 @@ export const INSTALL_PERMISSIONS: PermissionDef[] = [
     id: 'userScripts',
     raw: 'userScripts',
     name: '用户脚本',
-    description: 'execute_js 工具的隔离执行通道(Chrome 135+;需在扩展详情页开启 Allow User Scripts)',
+    description: 'execute_js 的首选执行通道:隔离环境、不受页面 CSP 限制(Chrome 135+)。未开启时自动降级为 scripting 注入执行,功能不受影响,仅极严格 CSP 的站点可能失败',
   },
   {
     id: 'unlimitedStorage',

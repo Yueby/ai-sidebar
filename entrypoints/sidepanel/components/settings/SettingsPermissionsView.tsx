@@ -100,7 +100,7 @@ export function SettingsPermissionsView() {
                         'text-[9px] px-1 py-0.2 rounded font-medium',
                         userScriptsReady
                           ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/15'
-                          : 'text-amber-700 dark:text-amber-300 bg-amber-500/15',
+                          : 'text-muted-foreground bg-muted',
                       )}
                     >
                       {userScriptsReady ? '已开启' : '未开启'}
@@ -120,7 +120,7 @@ export function SettingsPermissionsView() {
                         <span>前往扩展详情页开启</span>
                       </Button>
                       <span className="text-[10px] text-muted-foreground">
-                        开启后 execute_js 可在隔离通道执行
+                        可选增强:隔离执行、不受页面 CSP 限制;未开启时 execute_js 自动经 scripting 降级,仍可执行
                       </span>
                     </div>
                   )}
