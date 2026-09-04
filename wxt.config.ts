@@ -25,6 +25,9 @@ export default defineConfig({
     resolve: {
       alias: { '@': path.resolve() },
     },
+    // dev 产物不清空:重建后旧 hash chunk 保留,长活侧边栏页面的动态 import 不断链
+    // (发布前需手动清 .output/chrome-mv3,避免旧 chunk 混入 zip)
+    build: { emptyOutDir: false },
     // dev server 层的文件监听同样强制轮询(watchOptions 只覆盖部分监听层)
     server: { watch: { usePolling: true, interval: 500 } },
   }),
