@@ -4,6 +4,7 @@ import type { Settings, WebSearchProvider } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { i18n } from '#i18n';
 import {
   Select,
   SelectContent,
@@ -17,17 +18,17 @@ interface SearchSettingsViewProps {
   onUpdateSettings: (settings: Settings) => void;
 }
 
-const PROVIDER_OPTIONS: { value: WebSearchProvider; label: string }[] = [
-  { value: 'none', label: '不启用' },
+const getProviderOptions = (): { value: WebSearchProvider; label: string }[] => [
+  { value: 'none', label: i18n.t('search.providerNone') },
   { value: 'duckduckgo', label: 'DuckDuckGo' },
   { value: 'searxng', label: 'SearXNG' },
   { value: 'brave', label: 'Brave Search' },
   { value: 'tavily', label: 'Tavily' },
-  { value: 'bocha', label: '博查' },
+  { value: 'bocha', label: i18n.t('search.providerBocha') },
   { value: 'serper', label: 'Serper' },
   { value: 'exa', label: 'Exa' },
-  { value: 'zhipu', label: '智谱' },
-  { value: 'metaso', label: '秘塔' },
+  { value: 'zhipu', label: i18n.t('search.providerZhipu') },
+  { value: 'metaso', label: i18n.t('search.providerMetaso') },
   { value: 'bing', label: 'Bing' },
 ];
 
@@ -47,13 +48,13 @@ function isKeyBasedProvider(provider: WebSearchProvider): provider is KeyBasedPr
   return (KEY_BASED_PROVIDERS as readonly string[]).includes(provider);
 }
 
-const PROVIDER_CONFIG: Record<
+const getProviderConfig = (): Record<
   KeyBasedProvider,
   {
     placeholder: string;
     applyUrl?: { url: string; label: string };
   }
-> = {
+> => ({
   brave: {
     placeholder: 'Brave Search API Key',
     applyUrl: { url: 'https://brave.com/search/api/', label: 'brave.com/search/api' },
@@ -63,7 +64,7 @@ const PROVIDER_CONFIG: Record<
     applyUrl: { url: 'https://tavily.com', label: 'tavily.com' },
   },
   bocha: {
-    placeholder: '博查 API Key',
+    placeholder: i18n.t('search.keyPlaceholder', { name: i18n.t('search.providerBocha') }),
     applyUrl: { url: 'https://open.bochaai.com', label: 'open.bochaai.com' },
   },
   serper: {
@@ -75,14 +76,14 @@ const PROVIDER_CONFIG: Record<
     applyUrl: { url: 'https://exa.ai', label: 'exa.ai' },
   },
   zhipu: {
-    placeholder: '智谱 API Key',
+    placeholder: i18n.t('search.keyPlaceholder', { name: i18n.t('search.providerZhipu') }),
     applyUrl: { url: 'https://open.bigmodel.cn', label: 'open.bigmodel.cn' },
   },
   metaso: {
-    placeholder: '秘塔 API Key',
+    placeholder: i18n.t('search.keyPlaceholder', { name: i18n.t('search.providerMetaso') }),
     applyUrl: { url: 'https://metaso.cn', label: 'metaso.cn' },
   },
-};
+});
 
 /** 网络搜索设置:搜索源选择 + 条件字段(修改即经 updateSettings 持久化) */
 export function SearchSettingsView({ settings, onUpdateSettings }: SearchSettingsViewProps) {
@@ -103,7 +104,9 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
   };
 
   const currentProvider = webSearch.provider;
-  const keyConfig = isKeyBasedProvider(currentProvider) ? PROVIDER_CONFIG[currentProvider] : null;
+  const providerOptions = getProviderOptions();
+  const providerConfig = getProviderConfig();
+  const keyConfig = isKeyBasedProvider(currentProvider) ? providerConfig[currentProvider] : null;
 
   return (
     <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
@@ -111,16 +114,16 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
             <Globe className="size-3.5 text-muted-foreground" />
-            <span>网络搜索设置</span>
+            <span>{i18n.t('search.title')}</span>
           </h2>
           <span className="text-[10px] text-muted-foreground font-mono">
-            {currentProvider === 'none' ? '未启用' : PROVIDER_OPTIONS.find((p) => p.value === currentProvider)?.label}
+            {currentProvider === 'none' ? i18n.t('search.providerNone') : providerOptions.find((p) => p.value === currentProvider)?.label}
           </span>
         </div>
 
         <div className="rounded-lg border bg-card p-3 space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-[11px] text-muted-foreground">搜索提供商</Label>
+            <Label className="text-[11px] text-muted-foreground">{i18n.t('search.providerLabel')}</Label>
             <Select
               value={webSearch.provider}
               onValueChange={(value) => update({ provider: value as WebSearchProvider })}
@@ -129,7 +132,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PROVIDER_OPTIONS.map((opt) => (
+                {providerOptions.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value} className="text-xs">
                     {opt.label}
                   </SelectItem>
@@ -140,7 +143,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
 
           {webSearch.provider === 'searxng' && (
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">SearXNG 实例地址</Label>
+              <Label className="text-[11px] text-muted-foreground">{i18n.t('search.searxngLabel')}</Label>
               <Input
                 value={webSearch.searxngBaseUrl}
                 onChange={(e) => update({ searxngBaseUrl: e.target.value })}
@@ -148,7 +151,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                 className="h-8 text-xs font-mono"
               />
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                自托管或公共实例的根地址（不含 /search 路径）。
+                {i18n.t('search.searxngHelp')}
               </p>
             </div>
           )}
@@ -177,7 +180,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 {keyConfig.applyUrl && (
                   <>
-                    申请地址：{' '}
+                    {i18n.t('search.applyUrlPrefix')}
                     <a
                       href={keyConfig.applyUrl.url}
                       target="_blank"
@@ -189,7 +192,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                     ；
                   </>
                 )}
-                Key 仅保存在本地浏览器扩展存储中。
+                {i18n.t('search.keyStorageNote')}
               </p>
             </div>
           )}

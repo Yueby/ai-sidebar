@@ -1,4 +1,5 @@
 import type { PickedElement, RefElementMeta } from './types';
+import { i18n } from '#i18n';
 
 /**
  * 元素徽章 label 构造:徽章/气泡/引用列表统一显示内容预览,"元素 N"字样
@@ -47,7 +48,7 @@ function basePreview(el: { preview?: string; tagName?: string }): string {
   const collapsed = (el.preview ?? '').replace(/\s+/g, ' ').trim();
   if (collapsed) return collapsed;
   if (el.tagName) return `<${el.tagName}>`;
-  return '页面元素';
+  return i18n.t('refBar.defaultElementLabel');
 }
 
 /** 元素内容预览(徽章/气泡 chip 用,24 视觉单位) */

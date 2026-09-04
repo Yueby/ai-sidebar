@@ -4,6 +4,7 @@ import { Download, Upload, FileJson, TriangleAlert } from 'lucide-react';
 import type { Settings } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { sanitizeSettings } from '@/lib/storage';
+import { i18n } from '#i18n';
 
 interface SettingsBackupViewProps {
   settings: Settings;
@@ -35,9 +36,9 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
       a.download = `ai-sidebar-backup-${stamp}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('备份文件已导出并下载。');
+      toast.success(i18n.t('backup.toast.exportSuccess'));
     } catch {
-      toast.error('导出失败，请重试。');
+      toast.error(i18n.t('backup.toast.exportFailed'));
     } finally {
       setBusy(null);
     }
@@ -54,13 +55,13 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
           : parsed;
       const next = sanitizeSettings(raw);
       if (next.providers.length === 0) {
-        toast.error('导入失败：文件中未包含有效提供商配置。');
+        toast.error(i18n.t('backup.toast.importNoValidConfig'));
         return;
       }
       onUpdateSettings(next);
-      toast.success(`已成功导入 ${next.providers.length} 个提供商配置（已覆盖当前设置）。`);
+      toast.success(i18n.t('backup.toast.importSuccess', { count: next.providers.length }));
     } catch {
-      toast.error('导入失败：文件不是合法的 JSON 备份。');
+      toast.error(i18n.t('backup.toast.importInvalidJson'));
     } finally {
       setBusy(null);
     }
@@ -72,14 +73,14 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
             <FileJson className="size-3.5 text-muted-foreground" />
-            <span>配置备份与恢复</span>
+            <span>{i18n.t('backup.title')}</span>
           </h2>
           <span className="text-[10px] text-muted-foreground font-mono">JSON</span>
         </div>
 
         <div className="rounded-lg border bg-card p-3 space-y-2.5">
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            导出所有提供商配置、API Key 与模型设置；在环境重置或换机时导入即可一键恢复。
+            {i18n.t('backup.desc')}
           </p>
 
           <div className="flex items-center gap-2">
@@ -92,7 +93,7 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
               className="gap-1.5 h-7 text-xs flex-1 cursor-pointer"
             >
               <Download className="size-3.5" />
-              <span>导出配置文件</span>
+              <span>{i18n.t('backup.exportButton')}</span>
             </Button>
             <Button
               type="button"
@@ -103,7 +104,7 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
               className="gap-1.5 h-7 text-xs flex-1 cursor-pointer"
             >
               <Upload className="size-3.5" />
-              <span>导入备份文件…</span>
+              <span>{i18n.t('backup.importButton')}</span>
             </Button>
             <input
               ref={fileInputRef}
@@ -122,7 +123,7 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
           <div className="flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5">
             <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
             <span className="leading-snug">
-              备份含 API Key 明文请妥善保管；导入将直接覆盖当前配置。
+              {i18n.t('backup.warning')}
             </span>
           </div>
         </div>

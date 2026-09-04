@@ -10,6 +10,7 @@ import { buildProvider } from '@/lib/agent';
 import { collectPageRefs, renderPageRefsBlock } from '@/lib/pageRefs';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave } from '../store/sessionSlice';
+import { i18n } from '#i18n';
 
 /**
  * 上下文压缩域 hook(编排层):isCompacting 状态 + handleCompact(互斥守卫 → runCompact →
@@ -41,7 +42,7 @@ export function useCompact() {
       if (!session || session.messages.length === 0) return false;
       const active = findActiveModel(store.settings);
       if (!active) {
-        setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
+        setErrorMessage(i18n.t('compaction.toast.noModel'));
         return false;
       }
 
@@ -93,7 +94,7 @@ export function useCompact() {
         return true;
       } catch (err: unknown) {
         if (abortCtrl.signal.aborted) return false; // 中止:静默,不落盘
-        setErrorMessage(getErrorMessage(err) || '上下文压缩失败,请重试');
+        setErrorMessage(getErrorMessage(err) || i18n.t('compaction.toast.failed'));
         return false;
       } finally {
         setIsCompacting(false);

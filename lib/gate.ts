@@ -28,7 +28,12 @@ export type GateRequest =
     };
 
 export type GateResponse =
-  | { kind: 'confirm'; approved: boolean; /** 用户勾了会话级 grant(UI 侧应只在 grantable 时提供) */ grant?: boolean }
+  | {
+      kind: 'confirm';
+      approved: boolean;
+      /** 用户勾了会话级 grant(UI 侧应只在 grantable 时提供) */
+      grant?: boolean;
+    }
   | { kind: 'ask'; answer: string; cancelled?: boolean };
 
 export type GateHandler = (req: GateRequest) => Promise<GateResponse>;

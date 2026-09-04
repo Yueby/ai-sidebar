@@ -1,5 +1,6 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { i18n } from '#i18n';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import {
@@ -53,7 +54,7 @@ export function createClosePageToolDefinition(): AgentTool<
         kind: 'confirm',
         toolName: 'close_page',
         label: toolLabel('close_page'),
-        summary: '关闭本 agent 打开的标签页',
+        summary: i18n.t('gateCard.closePage.summary'),
         detail: `Close tab #${tabId}`,
         toolCallId,
       });

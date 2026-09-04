@@ -1,5 +1,6 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { i18n } from '#i18n';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { performPageAction, type ActionLocator } from '../pageContext';
@@ -108,7 +109,7 @@ export function createFillElementToolDefinition(): AgentTool<typeof FILL_ELEMENT
         kind: 'confirm',
         toolName: 'fill_element',
         label: toolLabel('fill_element'),
-        summary: '在页面中填写元素',
+        summary: i18n.t('gateCard.fillElement.summary'),
         detail: `Fill [${formatLocator(locator)}] on tab #${tabId} (${resolved.url}) with:\n${JSON.stringify(valuePreview)}\nResolved: <${resolved.element?.tagName}> ${resolved.element?.preview}`,
         toolCallId,
         grantable: true,

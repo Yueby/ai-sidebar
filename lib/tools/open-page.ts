@@ -1,5 +1,6 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { i18n } from '#i18n';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { openTab, findTabByUrl, registerAgentOpenedTab } from '../pageContext';
@@ -54,7 +55,9 @@ export function createOpenPageToolDefinition(): AgentTool<typeof OPEN_PAGE_PARAM
         kind: 'confirm',
         toolName: 'open_page',
         label: toolLabel('open_page'),
-        summary: existing ? '复用已打开的标签页并设为可读' : '在浏览器中打开新标签页',
+        summary: existing
+          ? i18n.t('gateCard.openPage.summaryReuse')
+          : i18n.t('gateCard.openPage.summaryOpen'),
         detail: `${existing ? `Reuse existing tab #${existing.id}` : `Open ${url}`}${background ? ' (background tab)' : ' (focused)'}`,
         toolCallId,
         grantable: true,

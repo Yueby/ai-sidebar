@@ -1,5 +1,6 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { i18n } from '#i18n';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { performPageAction, snapshotTabs, describeTabChanges, type ActionLocator } from '../pageContext';
@@ -96,7 +97,7 @@ export function createClickElementToolDefinition(): AgentTool<typeof CLICK_ELEME
         kind: 'confirm',
         toolName: 'click_element',
         label: toolLabel('click_element'),
-        summary: '在页面中点击元素',
+        summary: i18n.t('gateCard.clickElement.summary'),
         detail: `Click [${formatLocator(locator)}] on tab #${tabId} (${resolved.url})\nResolved: <${resolved.element?.tagName}> ${resolved.element?.preview}`,
         toolCallId,
         grantable: true,

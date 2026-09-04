@@ -1,6 +1,7 @@
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper } from '@tiptap/react';
 import { Link, SquareMousePointer, X } from 'lucide-react';
+import { i18n } from '#i18n';
 
 /**
  * inlineBadge 节点的 React NodeView:
@@ -43,7 +44,7 @@ export function BadgeNodeView({ node, editor, getPos, deleteNode }: NodeViewProp
         className="element-chip-delete"
         onMouseDown={(e) => e.preventDefault()}
         onClick={deleteBadgeWithSpace}
-        title="移除该元素引用"
+        title={i18n.t('refBar.removeElementRefTitle')}
       >
         <X className="size-2.5" />
       </button>

@@ -1,5 +1,6 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { i18n } from '#i18n';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
@@ -84,7 +85,7 @@ export function createScreenshotPageToolDefinition(
         kind: 'confirm',
         toolName: 'screenshot_page',
         label: toolLabel('screenshot_page'),
-        summary: '截取当前页面画面',
+        summary: i18n.t('gateCard.screenshotPage.summary'),
         detail: `Capture the visible viewport of tab #${tabId} (${meta.url}) and attach it as an image.\nPage: ${refInfo?.title ?? meta.title}`,
         toolCallId,
         grantable: true,

@@ -24,6 +24,8 @@ refBar:
   referencingCount: Referencing {count} tabs
   expandList: Expand reference list
   collapseList: Collapse reference list
+  removeElementRefTitle: Remove this element reference
+  defaultElementLabel: Page element
 
 header:
   newSession: New chat
@@ -112,6 +114,9 @@ compaction:
   title: Context compacted {before} → summary
   fullTitle: Full compaction summary
   originalTokens: "{tokens} tokens before"
+  toast:
+    noModel: Configure an available AI provider and model in settings first
+    failed: Context compaction failed, please try again
 
 approval:
   showCode: Show code details
@@ -168,3 +173,189 @@ app:
   close: Close
   settingsSr: Settings
   settingsDesc: Configure AI providers, search, permissions and preferences
+
+
+settings:
+  backToChat: Back to chat
+  navAria: Settings navigation
+  tabs:
+    providers: Providers
+    search: Search
+    permissions: Permissions
+    backup: Backup
+    about: About
+  pref:
+    title: Preferences
+    desc: Global content preferences
+    langLabel: Language
+    langDesc: "Language for AI-generated content (replies, titles, starter prompts); explicit user language in messages takes precedence"
+    langAuto: Auto
+  assignment:
+    title: Model Assignment
+    desc: Thinking levels are configured per role; the chat model thinking depth syncs with the composer selector
+    chatModel: Chat Model
+    chatModelDesc: Primary model for main interface chat and tool execution
+    titleModel: Title Generation Model
+    titleModelDesc: Generates short titles automatically after the first turn
+    promptModel: Starter Prompt Model
+    promptModelDesc: Dynamically generates suggestions based on the current page for new chats
+    noModelsAvailable: No models available
+    notSelected: Not selected
+    followChatModel: Follow chat model
+    chatReasoningTitle: Chat model thinking depth
+    unsupportedReasoning: This model does not support thinking
+    thinkingOff: Off
+    titleReasoningTitle: Title generation thinking level
+    promptReasoningTitle: Starter prompt thinking level
+  providers:
+    title: "AI Providers ({count})"
+    addProvider: Add Provider
+    emptyTitle: No AI providers configured yet
+    emptyDesc: Supports OpenAI-compatible, Responses API, and Anthropic format
+    emptyAction: Add a provider now
+    unnamed: Unnamed provider
+    defaultProviderName: Provider
+    activeBadge: Active
+    noBaseUrl: No Base URL
+    modelsCount: "{count} models"
+    testing: Testing…
+    test: Test
+    setActive: Set as active
+    editTitle: Edit provider
+    deleteTitle: Delete provider
+    testSuccess: "{name}: {msg}"
+    testFailed: "{name}: {error}"
+    defaultTestFailed: Connection failed, please check configuration
+  deleteConfirm:
+    title: Delete Provider
+    desc: "Are you sure you want to delete \"{name}\" and its {count} model configurations? This action cannot be undone."
+    cancel: Cancel
+    deleteAction: Delete
+  about:
+    extInfo: Extension Info
+    extDesc: BYOK Browser AI Sidebar
+    extIntro: An open-source Bring-Your-Own-Key (BYOK) browser sidebar extension connecting directly to major LLM endpoints with page context awareness, page actions, and streaming chat.
+    protocolsTitle: Supported Protocols
+    protocolsCount: 3 protocols
+    chatCompletionsTitle: OpenAI Compatible · Chat Completions
+    chatCompletionsDesc: "Standard /v1/chat/completions endpoint, supporting OpenAI, DeepSeek, OpenRouter, Ollama, Kimi, GLM and more."
+    responsesTitle: OpenAI Compatible · Responses
+    responsesDesc: "Standard /v1/responses protocol."
+    messagesTitle: Anthropic Messages
+    messagesDesc: "Standard /v1/messages endpoint, supporting official Claude API and compatible formats."
+    dataSecurityTitle: "Data & Security:"
+    dataSecurityDesc: API requests are initiated directly from the browser to target endpoints without passing through any third-party proxy servers. API keys are stored only in local browser extension storage.
+
+providerDialog:
+  addTitle: Add AI Provider
+  editTitle: Edit Provider Configuration
+  subtitle: Configure endpoint URL, protocol format, and model list
+  nameLabel: Provider Name
+  namePlaceholder: "e.g. DeepSeek, OpenRouter, local Ollama"
+  apiLabel: Protocol
+  apiPlaceholder: Select protocol
+  hideApiKey: Hide API key
+  showApiKey: Show API key
+  testConnectivity: Test Connectivity
+  testing: Testing...
+  pickModels: Select Models to Import
+  selectAll: Select / Invert all
+  filterCandidatePlaceholder: Filter fetched models...
+  noMatchingModels: No matching models
+  added: Added
+  badgeReasoning: Reasoning
+  badgeTools: Tools
+  cancel: Cancel
+  importSelected: "Import Selected ({count})"
+  modelList: Model List
+  fetchModelsTitle: Fetch model list from provider endpoint
+  fetch: Fetch
+  fetching: Fetching
+  syncModelsTitle: Automatically sync and fill model parameters from models.dev
+  sync: Sync
+  syncing: Syncing
+  addManualTitle: Add model manually
+  manual: Manual
+  filterModelsPlaceholder: Filter models...
+  noModelsTitle: No models yet
+  noModelsDesc: Click "Fetch" or "Manual" above to add models
+  configParamsTitle: Configure parameters
+  deleteModelTitle: Delete model
+  save: Save
+  defaultConnectFailed: Connection failed, please check Base URL and API Key
+  noModelsFetched: No available models found
+  fetchFailed: Failed to fetch models, please check endpoint and key
+  importedSuccess: "Successfully imported {count} models"
+  syncUpdated: "Completed parameters for {count} models from models.dev"
+  syncUpToDate: All model parameters are already up to date
+  syncFailed: Failed to sync models.dev parameters
+  unnamedProvider: Unnamed provider
+
+modelConfig:
+  editTitle: Configure Model Parameters
+  addTitle: Add Model Manually
+  subtitle: Set model identifier, context window, and capability toggles
+  modelIdLabel: Model ID (required)
+  modelIdPlaceholder: "e.g. deepseek-chat, gpt-4o"
+  nameLabel: Display Name (optional)
+  namePlaceholder: "e.g. DeepSeek V3"
+  contextWindowLabel: Context Window
+  maxOutputLabel: Max Output
+  tools: Tool Calling (Tools)
+  vision: Vision Input (Vision)
+  reasoning: Thinking / Reasoning
+  supportedLevelsHint: "Supported levels (default: Low/Medium/High if none selected):"
+  cancel: Cancel
+  confirm: OK
+
+search:
+  title: Web Search Settings
+  providerNone: Disabled
+  providerBocha: Bocha
+  providerZhipu: Zhipu (GLM)
+  providerMetaso: Metaso
+  keyPlaceholder: "{name} API Key"
+  providerLabel: Search Provider
+  searxngLabel: SearXNG Instance URL
+  searxngHelp: "Base URL of self-hosted or public instance (without /search path)."
+  applyUrlPrefix: "Get API key: "
+  keyStorageNote: Keys are stored only in local browser extension storage.
+
+permissions:
+  webAccessTitle: Web Page Access
+  grantedWithInstall: Granted at install
+  installedListTitle: "Permissions Granted at Install ({count})"
+  enabled: Enabled
+  disabled: Disabled
+  openDetails: Open extension details to enable
+  userScriptsHint: "Prompted on panel open; execute_js automatically falls back to scripting if disabled"
+  declarationTitle: "Least-Privilege Declaration:"
+  declarationText: ai-sidebar only requests permissions necessary for functionality. All network requests connect directly to target services without intermediary servers. Any future permissions required for new features will be transparently listed here.
+
+backup:
+  title: Backup & Restore
+  desc: Export all provider configurations, API keys, and model settings; restore with one click when resetting or switching machines.
+  exportButton: Export Config File
+  importButton: Import Backup File…
+  warning: Backup contains API keys in plain text; keep it secure. Importing will overwrite current settings.
+  toast:
+    exportSuccess: Backup file exported and downloaded.
+    exportFailed: Export failed, please try again.
+    importNoValidConfig: "Import failed: file does not contain valid provider configurations."
+    importSuccess: "Successfully imported {count} provider configurations (overwrote current settings)."
+    importInvalidJson: "Import failed: file is not valid JSON backup."
+
+gateCard:
+  clickElement:
+    summary: Click element on page
+  fillElement:
+    summary: Fill element on page
+  screenshotPage:
+    summary: Capture page screenshot
+  executeJs:
+    summary: Execute JavaScript on page
+  openPage:
+    summaryReuse: Reuse open tab and make readable
+    summaryOpen: Open new browser tab
+  closePage:
+    summary: Close tab opened by agent

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { ModelConfig, ReasoningLevel } from '@/lib/types';
 import { REASONING_LEVELS, REASONING_LEVEL_LABELS } from '@/lib/types';
+import { i18n } from '#i18n';
 import {
   Dialog,
   DialogContent,
@@ -102,33 +103,33 @@ export function ModelConfigDialog({
       <DialogContent className="w-[calc(100vw-24px)] max-w-[380px] p-4 gap-3">
         <DialogHeader className="gap-1 text-left">
           <DialogTitle className="text-base font-semibold">
-            {isEditing ? '配置模型参数' : '手动添加模型'}
+            {isEditing ? i18n.t('modelConfig.editTitle') : i18n.t('modelConfig.addTitle')}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            设置模型标识、上下文大小与能力开关
+            {i18n.t('modelConfig.subtitle')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1 max-h-[60vh] overflow-y-auto pr-0.5">
           {/* Model ID */}
           <div className="space-y-1">
-            <Label className="text-xs">模型 ID (必填)</Label>
+            <Label className="text-xs">{i18n.t('modelConfig.modelIdLabel')}</Label>
             <Input
               value={id}
               onChange={(e) => setId(e.target.value)}
               disabled={isEditing}
-              placeholder="如 deepseek-chat, gpt-4o"
+              placeholder={i18n.t('modelConfig.modelIdPlaceholder')}
               className="h-8 text-xs font-mono"
             />
           </div>
 
           {/* Display Name */}
           <div className="space-y-1">
-            <Label className="text-xs">显示别名 (可选)</Label>
+            <Label className="text-xs">{i18n.t('modelConfig.nameLabel')}</Label>
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="如 DeepSeek V3"
+              placeholder={i18n.t('modelConfig.namePlaceholder')}
               className="h-8 text-xs"
             />
           </div>
@@ -136,7 +137,7 @@ export function ModelConfigDialog({
           {/* Token limits: 2-column */}
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label className="text-xs">上下文窗口</Label>
+              <Label className="text-xs">{i18n.t('modelConfig.contextWindowLabel')}</Label>
               <Input
                 type="number"
                 value={contextWindow}
@@ -146,7 +147,7 @@ export function ModelConfigDialog({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">最大输出</Label>
+              <Label className="text-xs">{i18n.t('modelConfig.maxOutputLabel')}</Label>
               <Input
                 type="number"
                 value={maxTokens}
@@ -160,18 +161,18 @@ export function ModelConfigDialog({
           {/* Capability Switches */}
           <div className="rounded-lg border bg-muted/30 p-2.5 space-y-2.5 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-foreground">工具调用 (Tools)</span>
+              <span className="text-foreground">{i18n.t('modelConfig.tools')}</span>
               <Switch checked={tools} onCheckedChange={setTools} size="sm" />
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-foreground">图像识别 (Vision)</span>
+              <span className="text-foreground">{i18n.t('modelConfig.vision')}</span>
               <Switch checked={vision} onCheckedChange={setVision} size="sm" />
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-foreground">思考 / 推理 (Reasoning)</span>
+                <span className="text-foreground">{i18n.t('modelConfig.reasoning')}</span>
                 <Switch checked={reasoning} onCheckedChange={setReasoning} size="sm" />
               </div>
 
@@ -179,7 +180,7 @@ export function ModelConfigDialog({
               {reasoning && (
                 <div className="pt-2 border-t space-y-1.5 animate-in fade-in duration-150">
                   <div className="text-[11px] text-muted-foreground">
-                    支持档位 (全不选默认为 低/中/高):
+                    {i18n.t('modelConfig.supportedLevelsHint')}
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-0.5">
                     {CANDIDATE_REASONING_LEVELS.map((opt) => {
@@ -212,7 +213,7 @@ export function ModelConfigDialog({
             onClick={() => onOpenChange(false)}
             className="h-7 text-xs"
           >
-            取消
+            {i18n.t('modelConfig.cancel')}
           </Button>
           <Button
             type="button"
@@ -221,7 +222,7 @@ export function ModelConfigDialog({
             onClick={handleSave}
             className="h-7 text-xs"
           >
-            确定
+            {i18n.t('modelConfig.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

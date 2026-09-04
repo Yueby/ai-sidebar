@@ -1,5 +1,6 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { i18n } from '#i18n';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { buildUnreadableTabError, type RefTab } from '../pageContext';
@@ -67,7 +68,7 @@ export function createExecuteJsToolDefinition(
       };
     },
   };
-  return createGatedTool(base, '在页面中执行 JavaScript 代码', undefined, (params) => {
+  return createGatedTool(base, i18n.t('gateCard.executeJs.summary'), undefined, (params) => {
     const p = (params ?? {}) as { code?: unknown; tabId?: unknown };
     const code = typeof p.code === 'string' ? p.code : '';
     const tabId = typeof p.tabId === 'number' ? p.tabId : (p.tabId ?? 'unknown');

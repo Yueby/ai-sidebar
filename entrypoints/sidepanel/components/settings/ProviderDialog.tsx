@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { i18n } from '#i18n';
 import {
   Eye,
   EyeOff,
@@ -145,7 +146,7 @@ export function ProviderDialog({
     } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: getErrorMessage(err) || '连接失败，请检查 Base URL 与 API Key',
+        message: getErrorMessage(err) || i18n.t('providerDialog.defaultConnectFailed'),
       });
     } finally {
       setTesting(false);
@@ -173,7 +174,7 @@ export function ProviderDialog({
       ]);
 
       if (remoteIds.length === 0) {
-        setFetchResultMsg('未拉取到可用模型');
+        setFetchResultMsg(i18n.t('providerDialog.noModelsFetched'));
         return;
       }
 
@@ -190,7 +191,7 @@ export function ProviderDialog({
       const newIds = new Set(candidateList.filter((c) => !c.isExisting).map((c) => c.id));
       setSelectedCandidateIds(newIds);
     } catch (err: unknown) {
-      setFetchErrorMsg(getErrorMessage(err) || '拉取模型失败，请检查端点与密钥');
+      setFetchErrorMsg(getErrorMessage(err) || i18n.t('providerDialog.fetchFailed'));
     } finally {
       setFetchingModels(false);
     }
@@ -242,7 +243,7 @@ export function ProviderDialog({
 
     setDraft((prev) => ({ ...prev, models: Array.from(existingMap.values()) }));
     setCandidates(null);
-    setFetchResultMsg(`已成功导入 ${count} 个模型`);
+    setFetchResultMsg(i18n.t('providerDialog.importedSuccess', { count }));
   };
 
   // Sync parameters with models.dev
@@ -256,12 +257,12 @@ export function ProviderDialog({
       const { models: updatedModels, updatedCount } = await syncModelsWithModelsDev(draft.models);
       setDraft((prev) => ({ ...prev, models: updatedModels }));
       if (updatedCount > 0) {
-        setFetchResultMsg(`已从 models.dev 补全 ${updatedCount} 个模型的参数`);
+        setFetchResultMsg(i18n.t('providerDialog.syncUpdated', { count: updatedCount }));
       } else {
-        setFetchResultMsg('所有模型参数已是最新');
+        setFetchResultMsg(i18n.t('providerDialog.syncUpToDate'));
       }
     } catch (err: unknown) {
-      setFetchErrorMsg(getErrorMessage(err) || '同步 models.dev 参数失败');
+      setFetchErrorMsg(getErrorMessage(err) || i18n.t('providerDialog.syncFailed'));
     } finally {
       setSyncingModels(false);
     }
@@ -290,7 +291,7 @@ export function ProviderDialog({
   const handleSave = () => {
     const finalProvider: ProviderConfig = {
       ...draft,
-      name: draft.name.trim() || '未命名提供商',
+      name: draft.name.trim() || i18n.t('providerDialog.unnamedProvider'),
       baseUrl: draft.baseUrl.trim(),
       apiKey: draft.apiKey.trim(),
     };
@@ -344,10 +345,10 @@ export function ProviderDialog({
         <DialogContent className="w-[calc(100vw-24px)] max-w-[380px] p-4 gap-3 max-h-[88vh] flex flex-col">
           <DialogHeader className="gap-1 text-left">
             <DialogTitle className="text-base font-semibold">
-              {isNew ? '添加 AI 提供商' : '编辑提供商配置'}
+              {isNew ? i18n.t('providerDialog.addTitle') : i18n.t('providerDialog.editTitle')}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              配置端点地址、协议格式与模型列表
+              {i18n.t('providerDialog.subtitle')}
             </DialogDescription>
           </DialogHeader>
 
@@ -355,21 +356,21 @@ export function ProviderDialog({
           <div className="flex-1 overflow-y-auto space-y-3 pr-1">
             {/* Provider Name */}
             <div className="space-y-1">
-              <Label className="text-xs">提供商名称</Label>
+              <Label className="text-xs">{i18n.t('providerDialog.nameLabel')}</Label>
               <Input
                 value={draft.name}
                 onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
-                placeholder="如 DeepSeek, OpenRouter, 本地 Ollama"
+                placeholder={i18n.t('providerDialog.namePlaceholder')}
                 className="h-8 text-xs"
               />
             </div>
 
             {/* Protocol */}
             <div className="space-y-1">
-              <Label className="text-xs">接口协议</Label>
+              <Label className="text-xs">{i18n.t('providerDialog.apiLabel')}</Label>
               <Select value={draft.api} onValueChange={(v) => handleApiChange(v as ApiType)}>
                 <SelectTrigger className="h-8 text-xs w-full">
-                  <SelectValue placeholder="选择协议" />
+                  <SelectValue placeholder={i18n.t('providerDialog.apiPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {API_TYPE_OPTIONS.map((opt) => (
@@ -407,7 +408,7 @@ export function ProviderDialog({
                   type="button"
                   onClick={() => setShowApiKey((v) => !v)}
                   className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                  title={showApiKey ? '隐藏密钥' : '显示密钥'}
+                  title={showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
                 >
                   {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                 </button>
@@ -429,7 +430,7 @@ export function ProviderDialog({
                 ) : (
                   <Zap className="size-3" />
                 )}
-                <span>{testing ? '测试中...' : '测试连通性'}</span>
+                <span>{testing ? i18n.t('providerDialog.testing') : i18n.t('providerDialog.testConnectivity')}</span>
               </Button>
 
               {testResult && (
@@ -448,7 +449,7 @@ export function ProviderDialog({
               <div className="rounded-lg border bg-muted/20 p-2.5 space-y-2 text-xs">
                 <div className="flex items-center justify-between gap-1">
                   <div className="font-medium text-foreground text-xs flex items-center gap-1 min-w-0">
-                    <span className="truncate">挑选导入模型</span>
+                    <span className="truncate">{i18n.t('providerDialog.pickModels')}</span>
                     <Badge variant="secondary" className="text-[10px] h-4 px-1 font-normal">
                       {candidates.length}
                     </Badge>
@@ -461,7 +462,7 @@ export function ProviderDialog({
                     onClick={() => toggleSelectAllCandidates(filteredCandidates)}
                     className="h-6 text-[11px] px-1.5 font-normal"
                   >
-                    全选 / 反选
+                    {i18n.t('providerDialog.selectAll')}
                   </Button>
                 </div>
 
@@ -472,7 +473,7 @@ export function ProviderDialog({
                     <Input
                       value={candidateSearch}
                       onChange={(e) => setCandidateSearch(e.target.value)}
-                      placeholder="过滤拉取的模型..."
+                      placeholder={i18n.t('providerDialog.filterCandidatePlaceholder')}
                       className="h-7 pl-7 text-xs font-mono"
                     />
                   </div>
@@ -482,7 +483,7 @@ export function ProviderDialog({
                 <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-0.5">
                   {filteredCandidates.length === 0 ? (
                     <div className="py-4 text-center text-xs text-muted-foreground">
-                      未匹配到模型
+                      {i18n.t('providerDialog.noMatchingModels')}
                     </div>
                   ) : (
                     filteredCandidates.map((c) => {
@@ -520,7 +521,7 @@ export function ProviderDialog({
                               )}
                               {isExisting && (
                                 <Badge variant="secondary" className="text-[9px] h-3.5 px-1 font-normal">
-                                  已添加
+                                  {i18n.t('providerDialog.added')}
                                 </Badge>
                               )}
                             </div>
@@ -536,12 +537,12 @@ export function ProviderDialog({
                                 )}
                                 {c.meta.reasoning && (
                                   <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
-                                    推理
+                                    {i18n.t('providerDialog.badgeReasoning')}
                                   </Badge>
                                 )}
                                 {c.meta.tools && (
                                   <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
-                                    工具
+                                    {i18n.t('providerDialog.badgeTools')}
                                   </Badge>
                                 )}
                               </div>
@@ -562,7 +563,7 @@ export function ProviderDialog({
                     onClick={() => setCandidates(null)}
                     className="h-6.5 text-xs px-2"
                   >
-                    取消
+                    {i18n.t('providerDialog.cancel')}
                   </Button>
 
                   <Button
@@ -572,7 +573,7 @@ export function ProviderDialog({
                     onClick={handleImportSelectedCandidates}
                     className="h-6.5 text-xs px-2.5"
                   >
-                    导入已选 ({selectedCandidateIds.size})
+                    {i18n.t('providerDialog.importSelected', { count: selectedCandidateIds.size })}
                   </Button>
                 </div>
               </div>
@@ -581,7 +582,7 @@ export function ProviderDialog({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-medium text-foreground flex items-center gap-1.5 min-w-0">
-                    <span className="truncate">模型列表</span>
+                    <span className="truncate">{i18n.t('providerDialog.modelList')}</span>
                     <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-normal">
                       {draft.models.length}
                     </Badge>
@@ -595,14 +596,14 @@ export function ProviderDialog({
                       disabled={fetchingModels || syncingModels || !draft.baseUrl}
                       onClick={handleFetchModels}
                       className="h-6.5 text-xs gap-1 px-1.5"
-                      title="从提供商端点拉取模型列表"
+                      title={i18n.t('providerDialog.fetchModelsTitle')}
                     >
                       {fetchingModels ? (
                         <Loader2 className="size-3 animate-spin" />
                       ) : (
                         <CloudDownload className="size-3" />
                       )}
-                      <span>{fetchingModels ? '拉取中' : '拉取'}</span>
+                      <span>{fetchingModels ? i18n.t('providerDialog.fetching') : i18n.t('providerDialog.fetch')}</span>
                     </Button>
 
                     <Button
@@ -612,14 +613,14 @@ export function ProviderDialog({
                       disabled={syncingModels || fetchingModels || draft.models.length === 0}
                       onClick={handleSyncModels}
                       className="h-6.5 text-xs gap-1 px-1.5"
-                      title="从 models.dev 自动同步并补全模型参数"
+                      title={i18n.t('providerDialog.syncModelsTitle')}
                     >
                       {syncingModels ? (
                         <Loader2 className="size-3 animate-spin" />
                       ) : (
                         <RefreshCw className="size-3" />
                       )}
-                      <span>{syncingModels ? '同步中' : '同步'}</span>
+                      <span>{syncingModels ? i18n.t('providerDialog.syncing') : i18n.t('providerDialog.sync')}</span>
                     </Button>
 
                     <Button
@@ -631,10 +632,10 @@ export function ProviderDialog({
                         setModelConfigOpen(true);
                       }}
                       className="h-6.5 text-xs gap-1 px-1.5"
-                      title="手动添加模型"
+                      title={i18n.t('providerDialog.addManualTitle')}
                     >
                       <Plus className="size-3" />
-                      <span>手动</span>
+                      <span>{i18n.t('providerDialog.manual')}</span>
                     </Button>
                   </div>
                 </div>
@@ -658,7 +659,7 @@ export function ProviderDialog({
                     <Input
                       value={modelSearch}
                       onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder="过滤模型..."
+                      placeholder={i18n.t('providerDialog.filterModelsPlaceholder')}
                       className="h-7 pl-7 text-xs font-mono"
                     />
                   </div>
@@ -667,9 +668,9 @@ export function ProviderDialog({
                 {/* Model items */}
                 {draft.models.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
-                    <p>暂无模型</p>
+                    <p>{i18n.t('providerDialog.noModelsTitle')}</p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground/70">
-                      点击上方「拉取」或「手动」添加
+                      {i18n.t('providerDialog.noModelsDesc')}
                     </p>
                   </div>
                 ) : (
@@ -705,12 +706,12 @@ export function ProviderDialog({
                               )}
                               {m.reasoning && (
                                 <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
-                                  推理
+                                  {i18n.t('providerDialog.badgeReasoning')}
                                 </Badge>
                               )}
                               {m.tools && (
                                 <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
-                                  工具
+                                  {i18n.t('providerDialog.badgeTools')}
                                 </Badge>
                               )}
                             </div>
@@ -726,7 +727,7 @@ export function ProviderDialog({
                                 setModelConfigOpen(true);
                               }}
                               className="size-6 text-muted-foreground hover:text-foreground"
-                              title="配置参数"
+                              title={i18n.t('providerDialog.configParamsTitle')}
                             >
                               <Pencil className="size-3" />
                             </Button>
@@ -736,7 +737,7 @@ export function ProviderDialog({
                               size="icon"
                               onClick={() => handleDeleteModel(m.id)}
                               className="size-6 text-muted-foreground hover:text-destructive"
-                              title="删除模型"
+                              title={i18n.t('providerDialog.deleteModelTitle')}
                             >
                               <Trash2 className="size-3" />
                             </Button>
@@ -758,7 +759,7 @@ export function ProviderDialog({
               onClick={() => onOpenChange(false)}
               className="h-7 text-xs"
             >
-              取消
+              {i18n.t('providerDialog.cancel')}
             </Button>
             <Button
               type="button"
@@ -767,7 +768,7 @@ export function ProviderDialog({
               onClick={handleSave}
               className="h-7 text-xs"
             >
-              保存
+              {i18n.t('providerDialog.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -9,6 +9,7 @@ import { isUserScriptsAvailable } from '@/lib/pageScripting';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { i18n } from '#i18n';
 
 export function SettingsPermissionsView() {
   // 用户脚本开关(Chrome 138+ 扩展详情页手动开启,无 API 可代开;仅检测+直达引导)
@@ -38,14 +39,14 @@ export function SettingsPermissionsView() {
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
             <Globe className="size-3.5 text-muted-foreground" />
-            <span>网页访问权限</span>
+            <span>{i18n.t('permissions.webAccessTitle')}</span>
           </h2>
           <Badge
             variant="outline"
             className="text-[10px] h-4.5 px-1.5 font-normal flex items-center gap-1 bg-emerald-600 dark:bg-emerald-500 text-white dark:text-neutral-950 border-transparent"
           >
             <ShieldCheck className="size-2.5" />
-            <span>随安装授予</span>
+            <span>{i18n.t('permissions.grantedWithInstall')}</span>
           </Badge>
         </div>
 
@@ -69,7 +70,7 @@ export function SettingsPermissionsView() {
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
             <Lock className="size-3.5 text-muted-foreground" />
-            <span>安装时已授予权限 ({INSTALL_PERMISSIONS.length})</span>
+            <span>{i18n.t('permissions.installedListTitle', { count: INSTALL_PERMISSIONS.length })}</span>
           </h2>
           <span className="text-[10px] text-muted-foreground font-mono">MANIFEST</span>
         </div>
@@ -99,7 +100,7 @@ export function SettingsPermissionsView() {
                           : 'text-amber-700 dark:text-amber-300 bg-amber-500/15',
                       )}
                     >
-                      {userScriptsReady ? '已开启' : '未开启'}
+                      {userScriptsReady ? i18n.t('permissions.enabled') : i18n.t('permissions.disabled')}
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground leading-normal">{p.description}</p>
@@ -113,10 +114,10 @@ export function SettingsPermissionsView() {
                         className="h-6 text-[11px] px-2 gap-1 cursor-pointer w-fit"
                       >
                         <ExternalLink className="size-3 shrink-0" />
-                        <span>前往扩展详情页开启</span>
+                        <span>{i18n.t('permissions.openDetails')}</span>
                       </Button>
                       <span className="text-[10px] text-muted-foreground">
-                        打开面板时会引导开启;未开启时 execute_js 自动经 scripting 降级,仍可执行
+                        {i18n.t('permissions.userScriptsHint')}
                       </span>
                     </div>
                   )}
@@ -146,8 +147,8 @@ export function SettingsPermissionsView() {
       <div className="rounded-lg border bg-muted/20 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
         <Shield className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
         <div>
-          <span className="font-medium text-foreground">权限最小化声明：</span>
-          ai-sidebar 仅申请实现功能所需的权限，所有网络请求直连目标服务，无中间服务器拦截。未来若引入更多能力所需的权限，也会在此处集中透明列出。
+          <span className="font-medium text-foreground">{i18n.t('permissions.declarationTitle')}</span>
+          {i18n.t('permissions.declarationText')}
         </div>
       </div>
     </div>

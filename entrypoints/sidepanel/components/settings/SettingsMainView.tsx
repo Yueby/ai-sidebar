@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { i18n } from '#i18n';
 import {
   ArrowLeft,
   Plus,
@@ -100,7 +101,7 @@ export function SettingsMainView({
         providerId: p.id,
         modelId: m.id,
         value: `${p.id}::${m.id}`,
-        label: `${p.name || '未命名提供商'} / ${m.displayName || m.id}`,
+        label: `${p.name || i18n.t('settings.providers.unnamed')} / ${m.displayName || m.id}`,
       }))
     );
   }, [settings.providers]);
@@ -117,7 +118,7 @@ export function SettingsMainView({
         {idx > 0 && <SelectSeparator />}
         <SelectGroup>
           <SelectLabel className="text-[11px] text-muted-foreground font-normal px-2 py-1">
-            {p.name || '未命名提供商'}
+            {p.name || i18n.t('settings.providers.unnamed')}
           </SelectLabel>
           {p.models.map((m) => (
             <SelectItem
@@ -220,9 +221,9 @@ export function SettingsMainView({
         baseUrl: p.baseUrl,
         apiKey: p.apiKey,
       });
-      toast.success(`${p.name || '提供商'}: ${msg}`);
+      toast.success(i18n.t('settings.providers.testSuccess', { name: p.name || i18n.t('settings.providers.defaultProviderName'), msg }));
     } catch (err: unknown) {
-      toast.error(`${p.name || '提供商'}: ${getErrorMessage(err) || '连接失败，请检查配置'}`);
+      toast.error(i18n.t('settings.providers.testFailed', { name: p.name || i18n.t('settings.providers.defaultProviderName'), error: getErrorMessage(err) || i18n.t('settings.providers.defaultTestFailed') }));
     } finally {
       setTestingId(null);
     }
@@ -265,20 +266,20 @@ export function SettingsMainView({
           className="size-7 shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
         >
           <ArrowLeft className="size-4" />
-          <span className="sr-only">返回聊天</span>
+          <span className="sr-only">{i18n.t('settings.backToChat')}</span>
         </Button>
 
         {/* Tab Switcher in Header (Segmented Control) */}
         <nav
-          aria-label="设置导航"
+          aria-label={i18n.t('settings.navAria')}
           className="flex items-center rounded-lg border border-border/60 bg-muted/50 p-0.5 text-xs"
         >
           {[
-            { id: 'providers', label: '提供商' },
-            { id: 'search', label: '搜索' },
-            { id: 'permissions', label: '权限' },
-            { id: 'backup', label: '备份' },
-            { id: 'about', label: '关于' },
+            { id: 'providers', label: i18n.t('settings.tabs.providers') },
+            { id: 'search', label: i18n.t('settings.tabs.search') },
+            { id: 'permissions', label: i18n.t('settings.tabs.permissions') },
+            { id: 'backup', label: i18n.t('settings.tabs.backup') },
+            { id: 'about', label: i18n.t('settings.tabs.about') },
           ].map((tab) => {
             const isActive = currentTab === tab.id;
             return (
@@ -310,22 +311,22 @@ export function SettingsMainView({
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5 font-medium text-foreground">
                   <Languages className="size-3.5 text-muted-foreground" />
-                  <span>偏好</span>
+                  <span>{i18n.t('settings.pref.title')}</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-normal">
-                  全局内容偏好设定
+                  {i18n.t('settings.pref.desc')}
                 </p>
               </div>
 
               <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
                 <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">语言</div>
+                    <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.pref.langLabel')}</div>
                     <div
                       className="text-[10px] text-muted-foreground truncate"
-                      title="AI 生成内容(回复、标题、快捷指令)的语言;对话中明确要求其他语言时以用户要求为准"
+                      title={i18n.t('settings.pref.langDesc')}
                     >
-                      AI 生成内容(回复、标题、快捷指令)的语言;对话中明确要求其他语言时以用户要求为准
+                      {i18n.t('settings.pref.langDesc')}
                     </div>
                   </div>
                   <div className="w-36 shrink-0">
@@ -339,11 +340,11 @@ export function SettingsMainView({
                       }}
                     >
                       <SelectTrigger className="h-7 text-xs w-full">
-                        <SelectValue placeholder="自动" />
+                        <SelectValue placeholder={i18n.t('settings.pref.langAuto')} />
                       </SelectTrigger>
                       <SelectContent align="end" className="max-w-[280px]">
                         <SelectItem value="auto" className="text-xs font-medium">
-                          自动
+                          {i18n.t('settings.pref.langAuto')}
                         </SelectItem>
                         {AI_LANGUAGES.map((lang) => (
                           <SelectItem key={lang.tag} value={lang.tag} className="text-xs">
@@ -362,10 +363,10 @@ export function SettingsMainView({
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5 font-medium text-foreground">
                   <Sparkles className="size-3.5 text-muted-foreground" />
-                  <span>模型分工</span>
+                  <span>{i18n.t('settings.assignment.title')}</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-normal">
-                  思考等级按行独立配置；对话模型的思考深度与输入框选择器同步
+                  {i18n.t('settings.assignment.desc')}
                 </p>
               </div>
 
@@ -373,9 +374,9 @@ export function SettingsMainView({
                 {/* 1. 对话模型 */}
                 <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">对话模型</div>
+                    <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.assignment.chatModel')}</div>
                     <div className="text-[10px] text-muted-foreground truncate">
-                      主界面对话及工具调用的主力模型
+                      {i18n.t('settings.assignment.chatModelDesc')}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -396,11 +397,11 @@ export function SettingsMainView({
                         disabled={allModelOptions.length === 0}
                       >
                         <SelectTrigger className="h-7 text-xs w-full">
-                          <SelectValue placeholder={allModelOptions.length === 0 ? '暂无可用模型' : '未选择'} />
+                          <SelectValue placeholder={allModelOptions.length === 0 ? i18n.t('settings.assignment.noModelsAvailable') : i18n.t('settings.assignment.notSelected')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
                           <SelectItem value="__none__" disabled className="hidden">
-                            {allModelOptions.length === 0 ? '暂无可用模型' : '未选择'}
+                            {allModelOptions.length === 0 ? i18n.t('settings.assignment.noModelsAvailable') : i18n.t('settings.assignment.notSelected')}
                           </SelectItem>
                           {renderModelGroups()}
                         </SelectContent>
@@ -419,13 +420,13 @@ export function SettingsMainView({
                       >
                         <SelectTrigger
                           className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
-                          title={chatModel && chatModelSupportsReasoning ? '对话模型思考深度' : '该模型不支持思考'}
+                          title={chatModel && chatModelSupportsReasoning ? i18n.t('settings.assignment.chatReasoningTitle') : i18n.t('settings.assignment.unsupportedReasoning')}
                         >
-                          <SelectValue placeholder="关闭" />
+                          <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="w-28">
                           <SelectItem value="off" className="text-xs">
-                            关闭
+                            {i18n.t('settings.assignment.thinkingOff')}
                           </SelectItem>
                           {chatSupportedLevels.map((lvl) => (
                             <SelectItem key={lvl} value={lvl} className="text-xs">
@@ -441,9 +442,9 @@ export function SettingsMainView({
                 {/* 2. 标题生成模型 */}
                 <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">标题生成模型</div>
+                    <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.assignment.titleModel')}</div>
                     <div className="text-[10px] text-muted-foreground truncate">
-                      会话首轮问答后自动起短标题
+                      {i18n.t('settings.assignment.titleModelDesc')}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -465,11 +466,11 @@ export function SettingsMainView({
                         }}
                       >
                         <SelectTrigger className="h-7 text-xs w-full">
-                          <SelectValue placeholder="跟随对话模型" />
+                          <SelectValue placeholder={i18n.t('settings.assignment.followChatModel')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
                           <SelectItem value="follow" className="text-xs font-medium">
-                            跟随对话模型
+                            {i18n.t('settings.assignment.followChatModel')}
                           </SelectItem>
                           {providersWithModels.length > 0 && <SelectSeparator />}
                           {renderModelGroups()}
@@ -488,9 +489,9 @@ export function SettingsMainView({
                       >
                         <SelectTrigger
                           className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
-                          title="标题生成思考等级"
+                          title={i18n.t('settings.assignment.titleReasoningTitle')}
                         >
-                          <SelectValue placeholder="关闭" />
+                          <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="w-28">
                           {AUX_THINKING_OPTIONS.map((opt) => (
@@ -507,9 +508,9 @@ export function SettingsMainView({
                 {/* 3. 快捷指令生成模型 */}
                 <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">快捷指令生成模型</div>
+                    <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.assignment.promptModel')}</div>
                     <div className="text-[10px] text-muted-foreground truncate">
-                      新会话基于当前网页动态生成建议
+                      {i18n.t('settings.assignment.promptModelDesc')}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -531,11 +532,11 @@ export function SettingsMainView({
                         }}
                       >
                         <SelectTrigger className="h-7 text-xs w-full">
-                          <SelectValue placeholder="跟随对话模型" />
+                          <SelectValue placeholder={i18n.t('settings.assignment.followChatModel')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
                           <SelectItem value="follow" className="text-xs font-medium">
-                            跟随对话模型
+                            {i18n.t('settings.assignment.followChatModel')}
                           </SelectItem>
                           {providersWithModels.length > 0 && <SelectSeparator />}
                           {renderModelGroups()}
@@ -554,9 +555,9 @@ export function SettingsMainView({
                       >
                         <SelectTrigger
                           className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
-                          title="快捷指令思考等级"
+                          title={i18n.t('settings.assignment.promptReasoningTitle')}
                         >
-                          <SelectValue placeholder="关闭" />
+                          <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="w-28">
                           {AUX_THINKING_OPTIONS.map((opt) => (
@@ -575,7 +576,7 @@ export function SettingsMainView({
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                 <Bot className="size-3.5 text-muted-foreground" />
-                <span>AI 提供商 ({settings.providers.length})</span>
+                <span>{i18n.t('settings.providers.title', { count: settings.providers.length })}</span>
               </h2>
               <Button
                 type="button"
@@ -584,7 +585,7 @@ export function SettingsMainView({
                 className="gap-1 h-7 text-xs px-2.5 shrink-0 cursor-pointer"
               >
                 <Plus className="size-3" />
-                <span>添加提供商</span>
+                <span>{i18n.t('settings.providers.addProvider')}</span>
               </Button>
             </div>
 
@@ -595,9 +596,9 @@ export function SettingsMainView({
                   <Bot className="size-5" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-xs font-semibold text-foreground">尚未配置 AI 提供商</h3>
+                  <h3 className="text-xs font-semibold text-foreground">{i18n.t('settings.providers.emptyTitle')}</h3>
                   <p className="text-[11px] text-muted-foreground max-w-[240px] leading-relaxed">
-                    支持 OpenAI 兼容、Responses 协议及 Anthropic 格式
+                    {i18n.t('settings.providers.emptyDesc')}
                   </p>
                 </div>
                 <Button
@@ -607,7 +608,7 @@ export function SettingsMainView({
                   className="h-7 text-xs gap-1.5 cursor-pointer"
                 >
                   <Plus className="size-3" />
-                  <span>立即添加提供商</span>
+                  <span>{i18n.t('settings.providers.emptyAction')}</span>
                 </Button>
               </div>
             ) : (
@@ -631,14 +632,14 @@ export function SettingsMainView({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="truncate text-xs font-semibold text-foreground">
-                            {p.name || '未命名提供商'}
+                            {p.name || i18n.t('settings.providers.unnamed')}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
                           {isActive && (
                             <Badge variant="default" className="text-[10px] h-4.5 px-1.5 font-normal">
-                              已激活
+                              {i18n.t('settings.providers.activeBadge')}
                             </Badge>
                           )}
                           <Badge variant="secondary" className="text-[10px] h-4.5 px-1.5 font-normal">
@@ -649,9 +650,9 @@ export function SettingsMainView({
 
                       {/* Base URL and Models info */}
                       <div className="text-xs text-muted-foreground space-y-0.5">
-                        <div className="truncate font-mono text-[11px]">{p.baseUrl || '无 Base URL'}</div>
+                        <div className="truncate font-mono text-[11px]">{p.baseUrl || i18n.t('settings.providers.noBaseUrl')}</div>
                         <div className="text-[11px]">
-                          <span>{p.models.length} 个模型</span>
+                          <span>{i18n.t('settings.providers.modelsCount', { count: p.models.length })}</span>
                           {p.models.length > 0 && (
                             <span className="ml-1">
                               ({p.models.map((m) => m.displayName || m.id).slice(0, 3).join(', ')}
@@ -663,7 +664,7 @@ export function SettingsMainView({
 
                       {/* Test result banner */}
                       {isTesting && (
-                        <span className="text-[11px] text-muted-foreground">测试中…</span>
+                        <span className="text-[11px] text-muted-foreground">{i18n.t('settings.providers.testing')}</span>
                       )}
 
                       {/* Action Bar */}
@@ -682,7 +683,7 @@ export function SettingsMainView({
                           ) : (
                             <Zap className="size-3" />
                           )}
-                          <span>{isTesting ? '测试中' : '测试'}</span>
+                          <span>{isTesting ? i18n.t('settings.providers.testing') : i18n.t('settings.providers.test')}</span>
                         </Button>
 
                         {/* Right: Set Active / Edit / Delete */}
@@ -695,7 +696,7 @@ export function SettingsMainView({
                               onClick={() => handleSetActiveProvider(p.id)}
                               className="h-6 text-[11px] px-2"
                             >
-                              设为当前
+                              {i18n.t('settings.providers.setActive')}
                             </Button>
                           )}
 
@@ -705,7 +706,7 @@ export function SettingsMainView({
                             size="icon"
                             onClick={() => onEditProvider(p)}
                             className="size-6 text-muted-foreground hover:text-foreground"
-                            title="编辑提供商"
+                            title={i18n.t('settings.providers.editTitle')}
                           >
                             <Pencil className="size-3" />
                           </Button>
@@ -716,7 +717,7 @@ export function SettingsMainView({
                             size="icon"
                             onClick={() => setDeleteProviderTarget(p)}
                             className="size-6 text-muted-foreground hover:text-destructive"
-                            title="删除提供商"
+                            title={i18n.t('settings.providers.deleteTitle')}
                           >
                             <Trash2 className="size-3" />
                           </Button>
@@ -753,7 +754,7 @@ export function SettingsMainView({
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                   <Bot className="size-3.5 text-muted-foreground" />
-                  <span>扩展信息</span>
+                  <span>{i18n.t('settings.about.extInfo')}</span>
                 </h2>
                 <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 font-mono">
                   v{appVersion}
@@ -767,12 +768,12 @@ export function SettingsMainView({
                   </div>
                   <div>
                     <h3 className="text-xs font-semibold text-foreground">{appName}</h3>
-                    <p className="text-[11px] text-muted-foreground">BYOK 浏览器 AI 侧边栏</p>
+                    <p className="text-[11px] text-muted-foreground">{i18n.t('settings.about.extDesc')}</p>
                   </div>
                 </div>
 
                 <p className="text-[11px] text-muted-foreground leading-relaxed pt-1.5 border-t border-border/50">
-                  开源自带 API Key（BYOK）浏览器侧边栏扩展，使用您自己的 API 密钥连接各大模型端点，提供网页上下文感知、页面动作与流式对话能力。
+                  {i18n.t('settings.about.extIntro')}
                 </p>
               </div>
             </div>
@@ -782,30 +783,30 @@ export function SettingsMainView({
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                   <Layers className="size-3.5 text-muted-foreground" />
-                  <span>支持的接口协议</span>
+                  <span>{i18n.t('settings.about.protocolsTitle')}</span>
                 </h2>
-                <span className="text-[10px] text-muted-foreground font-mono">3 类协议</span>
+                <span className="text-[10px] text-muted-foreground font-mono">{i18n.t('settings.about.protocolsCount')}</span>
               </div>
 
               <div className="rounded-lg border bg-card p-3 space-y-2">
                 <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
-                  <div className="font-medium text-foreground text-xs">OpenAI 兼容 · Chat Completions</div>
+                  <div className="font-medium text-foreground text-xs">{i18n.t('settings.about.chatCompletionsTitle')}</div>
                   <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    标准 <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/chat/completions</code> 接口，支持 OpenAI、DeepSeek、OpenRouter、Ollama、Kimi、GLM 等主流端点。
+                    <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/chat/completions</code> {i18n.t('settings.about.chatCompletionsDesc')}
                   </div>
                 </div>
 
                 <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
-                  <div className="font-medium text-foreground text-xs">OpenAI 兼容 · Responses</div>
+                  <div className="font-medium text-foreground text-xs">{i18n.t('settings.about.responsesTitle')}</div>
                   <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    标准 <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/responses</code> 接口协议。
+                    <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/responses</code> {i18n.t('settings.about.responsesDesc')}
                   </div>
                 </div>
 
                 <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
                   <div className="font-medium text-foreground text-xs">Anthropic Messages</div>
                   <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    标准 <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/messages</code> 接口，支持 Claude 官方 API 及兼容格式。
+                    <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/messages</code> {i18n.t('settings.about.messagesDesc')}
                   </div>
                 </div>
               </div>
@@ -815,8 +816,8 @@ export function SettingsMainView({
             <div className="rounded-lg border bg-muted/20 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
               <ShieldCheck className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
               <div>
-                <span className="font-medium text-foreground">数据与安全：</span>
-                API 请求直接由浏览器发起连接至目标端点，不经过任何第三方代理服务器；API Key 仅保存在本地浏览器扩展存储中。
+                <span className="font-medium text-foreground">{i18n.t('settings.about.dataSecurityTitle')}</span>
+                {i18n.t('settings.about.dataSecurityDesc')}
               </div>
             </div>
           </div>
@@ -828,14 +829,14 @@ export function SettingsMainView({
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>删除提供商</AlertDialogTitle>
+              <AlertDialogTitle>{i18n.t('settings.deleteConfirm.title')}</AlertDialogTitle>
               <AlertDialogDescription>
-                将删除「{deleteProviderTarget?.name || '未命名提供商'}」及其 {deleteProviderTarget?.models.length ?? 0} 个模型的配置，此操作不可撤销。
+                {i18n.t('settings.deleteConfirm.desc', { name: deleteProviderTarget?.name || i18n.t('settings.providers.unnamed'), count: deleteProviderTarget?.models.length ?? 0 })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => setDeleteProviderTarget(null)}>
-                取消
+                {i18n.t('settings.deleteConfirm.cancel')}
               </AlertDialogCancel>
               <AlertDialogAction
                 className={buttonVariants({ variant: 'destructive' })}
@@ -844,7 +845,7 @@ export function SettingsMainView({
                   setDeleteProviderTarget(null);
                 }}
               >
-                删除
+                {i18n.t('settings.deleteConfirm.deleteAction')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

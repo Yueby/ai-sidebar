@@ -24,6 +24,8 @@ refBar:
   referencingCount: 正在引用 {count} 个标签页
   expandList: 展开引用列表
   collapseList: 收起引用列表
+  removeElementRefTitle: 移除该元素引用
+  defaultElementLabel: 页面元素
 
 header:
   newSession: 新建会话
@@ -112,6 +114,9 @@ compaction:
   title: 上下文已压缩 {before} → 摘要
   fullTitle: 压缩摘要全文
   originalTokens: 原 {tokens} tokens
+  toast:
+    noModel: 请先在设置中配置可用的 AI 提供商与模型
+    failed: 上下文压缩失败，请重试
 
 approval:
   showCode: 查看代码详情
@@ -168,3 +173,189 @@ app:
   close: 关闭
   settingsSr: 设置
   settingsDesc: 配置 AI 提供商、搜索、权限与偏好设置
+
+
+settings:
+  backToChat: 返回聊天
+  navAria: 设置导航
+  tabs:
+    providers: 提供商
+    search: 搜索
+    permissions: 权限
+    backup: 备份
+    about: 关于
+  pref:
+    title: 偏好
+    desc: 全局内容偏好设定
+    langLabel: 语言
+    langDesc: "AI 生成内容(回复、标题、快捷指令)的语言;对话中明确要求其他语言时以用户要求为准"
+    langAuto: 自动
+  assignment:
+    title: 模型分工
+    desc: 思考等级按行独立配置；对话模型的思考深度与输入框选择器同步
+    chatModel: 对话模型
+    chatModelDesc: 主界面对话及工具调用的主力模型
+    titleModel: 标题生成模型
+    titleModelDesc: 会话首轮问答后自动起短标题
+    promptModel: 快捷指令生成模型
+    promptModelDesc: 新会话基于当前网页动态生成建议
+    noModelsAvailable: 暂无可用模型
+    notSelected: 未选择
+    followChatModel: 跟随对话模型
+    chatReasoningTitle: 对话模型思考深度
+    unsupportedReasoning: 该模型不支持思考
+    thinkingOff: 关闭
+    titleReasoningTitle: 标题生成思考等级
+    promptReasoningTitle: 快捷指令思考等级
+  providers:
+    title: "AI 提供商 ({count})"
+    addProvider: 添加提供商
+    emptyTitle: 尚未配置 AI 提供商
+    emptyDesc: 支持 OpenAI 兼容、Responses 协议及 Anthropic 格式
+    emptyAction: 立即添加提供商
+    unnamed: 未命名提供商
+    defaultProviderName: 提供商
+    activeBadge: 已激活
+    noBaseUrl: 无 Base URL
+    modelsCount: "{count} 个模型"
+    testing: 测试中…
+    test: 测试
+    setActive: 设为当前
+    editTitle: 编辑提供商
+    deleteTitle: 删除提供商
+    testSuccess: "{name}: {msg}"
+    testFailed: "{name}: {error}"
+    defaultTestFailed: 连接失败，请检查配置
+  deleteConfirm:
+    title: 删除提供商
+    desc: "将删除「{name}」及其 {count} 个模型的配置，此操作不可撤销。"
+    cancel: 取消
+    deleteAction: 删除
+  about:
+    extInfo: 扩展信息
+    extDesc: BYOK 浏览器 AI 侧边栏
+    extIntro: 开源自带 API Key（BYOK）浏览器侧边栏扩展，使用您自己的 API 密钥连接各大模型端点，提供网页上下文感知、页面动作与流式对话能力。
+    protocolsTitle: 支持的接口协议
+    protocolsCount: 3 类协议
+    chatCompletionsTitle: OpenAI 兼容 · Chat Completions
+    chatCompletionsDesc: "标准 /v1/chat/completions 接口，支持 OpenAI、DeepSeek、OpenRouter、Ollama、Kimi、GLM 等主流端点。"
+    responsesTitle: OpenAI 兼容 · Responses
+    responsesDesc: "标准 /v1/responses 接口协议。"
+    messagesTitle: Anthropic Messages
+    messagesDesc: "标准 /v1/messages 接口，支持 Claude 官方 API 及兼容格式。"
+    dataSecurityTitle: "数据与安全："
+    dataSecurityDesc: API 请求直接由浏览器发起连接至目标端点，不经过任何第三方代理服务器；API Key 仅保存在本地浏览器扩展存储中。
+
+providerDialog:
+  addTitle: 添加 AI 提供商
+  editTitle: 编辑提供商配置
+  subtitle: 配置端点地址、协议格式与模型列表
+  nameLabel: 提供商名称
+  namePlaceholder: "如 DeepSeek, OpenRouter, 本地 Ollama"
+  apiLabel: 接口协议
+  apiPlaceholder: 选择协议
+  hideApiKey: 隐藏密钥
+  showApiKey: 显示密钥
+  testConnectivity: 测试连通性
+  testing: 测试中...
+  pickModels: 挑选导入模型
+  selectAll: 全选 / 反选
+  filterCandidatePlaceholder: 过滤拉取的模型...
+  noMatchingModels: 未匹配到模型
+  added: 已添加
+  badgeReasoning: 推理
+  badgeTools: 工具
+  cancel: 取消
+  importSelected: "导入已选 ({count})"
+  modelList: 模型列表
+  fetchModelsTitle: 从提供商端点拉取模型列表
+  fetch: 拉取
+  fetching: 拉取中
+  syncModelsTitle: 从 models.dev 自动同步并补全模型参数
+  sync: 同步
+  syncing: 同步中
+  addManualTitle: 手动添加模型
+  manual: 手动
+  filterModelsPlaceholder: 过滤模型...
+  noModelsTitle: 暂无模型
+  noModelsDesc: 点击上方「拉取」或「手动」添加
+  configParamsTitle: 配置参数
+  deleteModelTitle: 删除模型
+  save: 保存
+  defaultConnectFailed: 连接失败，请检查 Base URL 与 API Key
+  noModelsFetched: 未拉取到可用模型
+  fetchFailed: 拉取模型失败，请检查端点与密钥
+  importedSuccess: "已成功导入 {count} 个模型"
+  syncUpdated: "已从 models.dev 补全 {count} 个模型的参数"
+  syncUpToDate: 所有模型参数已是最新
+  syncFailed: 同步 models.dev 参数失败
+  unnamedProvider: 未命名提供商
+
+modelConfig:
+  editTitle: 配置模型参数
+  addTitle: 手动添加模型
+  subtitle: 设置模型标识、上下文大小与能力开关
+  modelIdLabel: 模型 ID (必填)
+  modelIdPlaceholder: "如 deepseek-chat, gpt-4o"
+  nameLabel: 显示别名 (可选)
+  namePlaceholder: 如 DeepSeek V3
+  contextWindowLabel: 上下文窗口
+  maxOutputLabel: 最大输出
+  tools: 工具调用 (Tools)
+  vision: 图像识别 (Vision)
+  reasoning: 思考 / 推理 (Reasoning)
+  supportedLevelsHint: "支持档位 (全不选默认为 低/中/高):"
+  cancel: 取消
+  confirm: 确定
+
+search:
+  title: 网络搜索设置
+  providerNone: 不启用
+  providerBocha: 博查
+  providerZhipu: 智谱
+  providerMetaso: 秘塔
+  keyPlaceholder: "{name} API Key"
+  providerLabel: 搜索提供商
+  searxngLabel: SearXNG 实例地址
+  searxngHelp: "自托管或公共实例的根地址（不含 /search 路径）。"
+  applyUrlPrefix: "申请地址： "
+  keyStorageNote: Key 仅保存在本地浏览器扩展存储中。
+
+permissions:
+  webAccessTitle: 网页访问权限
+  grantedWithInstall: 随安装授予
+  installedListTitle: "安装时已授予权限 ({count})"
+  enabled: 已开启
+  disabled: 未开启
+  openDetails: 前往扩展详情页开启
+  userScriptsHint: "打开面板时会引导开启;未开启时 execute_js 自动经 scripting 降级,仍可执行"
+  declarationTitle: "权限最小化声明："
+  declarationText: ai-sidebar 仅申请实现功能所需的权限，所有网络请求直连目标服务，无中间服务器拦截。未来若引入更多能力所需的权限，也会在此处集中透明列出。
+
+backup:
+  title: 配置备份与恢复
+  desc: 导出所有提供商配置、API Key 与模型设置；在环境重置或换机时导入即可一键恢复。
+  exportButton: 导出配置文件
+  importButton: 导入备份文件…
+  warning: 备份含 API Key 明文请妥善保管；导入将直接覆盖当前配置。
+  toast:
+    exportSuccess: 备份文件已导出并下载。
+    exportFailed: 导出失败，请重试。
+    importNoValidConfig: "导入失败：文件中未包含有效提供商配置。"
+    importSuccess: "已成功导入 {count} 个提供商配置（已覆盖当前设置）。"
+    importInvalidJson: "导入失败：文件不是合法的 JSON 备份。"
+
+gateCard:
+  clickElement:
+    summary: 在页面中点击元素
+  fillElement:
+    summary: 在页面中填写元素
+  screenshotPage:
+    summary: 截取当前页面画面
+  executeJs:
+    summary: 在页面中执行 JavaScript 代码
+  openPage:
+    summaryReuse: 复用已打开的标签页并设为可读
+    summaryOpen: 在浏览器中打开新标签页
+  closePage:
+    summary: 关闭本 agent 打开的标签页
