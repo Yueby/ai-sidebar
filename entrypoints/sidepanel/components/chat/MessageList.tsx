@@ -5,6 +5,8 @@ import {
   Lightbulb,
   HelpCircle,
   CheckSquare,
+  Sparkles,
+  RefreshCw,
   AlertCircle,
   ArrowDown,
   X,
@@ -15,9 +17,11 @@ import {
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
+import type { QuickPromptsState } from '@/entrypoints/sidepanel/hooks/useQuickPrompts';
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface MessageListProps {
   /** 所属会话标识:透传 MessageItem 作为入场动画抑制的重估边界 */
@@ -45,34 +49,10 @@ interface MessageListProps {
   hasModel: boolean;
   activeModelName?: string;
   onOpenSettings: () => void;
+  quickPrompts: QuickPromptsState;
 }
 
-const PRESET_PROMPTS = [
-  {
-    icon: FileText,
-    title: '总结此网页',
-    desc: '提炼 3-5 个核心要点',
-    prompt: '请用清晰结构总结当前网页的核心内容，列出 3-5 个关键要点。',
-  },
-  {
-    icon: Lightbulb,
-    title: '提炼核心观点',
-    desc: '分析论点与核心逻辑',
-    prompt: '提炼当前网页的核心观点和结论，分析其主要论据与支持论点。',
-  },
-  {
-    icon: HelpCircle,
-    title: '通俗解释概念',
-    desc: '用平实语言拆解内容',
-    prompt: '用通俗易懂、生动的语言解释当前网页所讨论的主题和关键概念。',
-  },
-  {
-    icon: CheckSquare,
-    title: '提取行动建议',
-    desc: '提炼可落地的待办事项',
-    prompt: '根据当前网页的内容，提取出可以落地的实用行动建议或待办清单。',
-  },
-];
+const PROMPT_ICONS = [FileText, Lightbulb, HelpCircle, CheckSquare];
 
 export function MessageList({
   messages,
@@ -93,6 +73,7 @@ export function MessageList({
   hasModel,
   activeModelName,
   onOpenSettings,
+  quickPrompts,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -379,30 +360,60 @@ export function MessageList({
 
             {/* Quick Prompt Cards */}
             <div className="space-y-1.5 text-left">
-              <p className="px-1 text-xs font-medium text-muted-foreground">推荐快捷指令</p>
-              <div className="grid grid-cols-1 gap-1.5">
-                {PRESET_PROMPTS.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.title}
-                      type="button"
-                      onClick={() => onSelectPrompt(item.prompt)}
-                      className="group flex items-start gap-2.5 rounded-lg border bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
-                    >
-                      <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-foreground">
-                          {item.title}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {item.desc}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+              <div className="flex items-center justify-between px-1">
+                <p className="text-xs font-medium text-muted-foreground">推荐快捷指令</p>
+                <button
+                  type="button"
+                  onClick={quickPrompts.regenerate}
+                  disabled={quickPrompts.loading}
+                  className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/60 transition-colors disabled:opacity-40 cursor-pointer"
+                  title="换一批"
+                  aria-label="换一批"
+                >
+                  <RefreshCw className={cn('size-3', quickPrompts.loading && 'animate-spin')} />
+                </button>
               </div>
+
+              {quickPrompts.loading ? (
+                <div className="grid grid-cols-1 gap-1.5">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2.5 rounded-lg border bg-card/60 p-2.5 animate-pulse"
+                    >
+                      <div className="size-4 rounded bg-muted shrink-0 mt-0.5" />
+                      <div className="flex-1 space-y-1.5 py-0.5">
+                        <div className="h-3 w-1/3 rounded bg-muted" />
+                        <div className="h-2.5 w-2/3 rounded bg-muted/70" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-1.5">
+                  {quickPrompts.items.map((item, idx) => {
+                    const Icon = PROMPT_ICONS[idx] ?? Sparkles;
+                    return (
+                      <button
+                        key={`${item.title}-${idx}`}
+                        type="button"
+                        onClick={() => onSelectPrompt(item.prompt)}
+                        className="group flex items-start gap-2.5 rounded-lg border bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                      >
+                        <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-foreground">
+                            {item.title}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {item.desc}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         ) : (

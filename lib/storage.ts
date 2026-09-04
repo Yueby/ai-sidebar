@@ -69,6 +69,15 @@ function sanitizeWebSearch(value: unknown): Settings['webSearch'] {
   };
 }
 
+/** 辅助模型引用形状校验(引用失效不做深度校验,调用侧回退对话模型) */
+function sanitizeAuxModelRef(v: unknown): Settings['titleModel'] {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as { providerId?: unknown; modelId?: unknown };
+  return typeof r.providerId === 'string' && typeof r.modelId === 'string'
+    ? { providerId: r.providerId, modelId: r.modelId }
+    : null;
+}
+
 export function sanitizeSettings(value: unknown): Settings {
   if (!value || typeof value !== 'object') return DEFAULT_SETTINGS;
   const v = value as Partial<Settings>;
@@ -76,6 +85,8 @@ export function sanitizeSettings(value: unknown): Settings {
     providers: Array.isArray(v.providers) ? v.providers : [],
     activeProviderId: typeof v.activeProviderId === 'string' ? v.activeProviderId : null,
     activeModelId: typeof v.activeModelId === 'string' ? v.activeModelId : null,
+    titleModel: sanitizeAuxModelRef(v.titleModel),
+    quickPromptModel: sanitizeAuxModelRef(v.quickPromptModel),
     includePageContext: v.includePageContext === true,
     reasoningLevel: REASONING_LEVELS.includes(v.reasoningLevel as never)
       ? (v.reasoningLevel as Settings['reasoningLevel'])

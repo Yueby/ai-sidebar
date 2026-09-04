@@ -3,7 +3,7 @@ import { createModels, type AssistantMessage, type Context, type SimpleStreamOpt
 import type { Session, SessionDraft, Settings } from '@/lib/types';
 import { settingsItem, activeSessionIdItem, sanitizeSettings, createSession } from '@/lib/storage';
 import { migrateLegacySessions, saveSession, deleteSession } from '@/lib/sessionStore';
-import { findActiveModel } from '@/lib/providers';
+import { resolveAuxModel } from '@/lib/providers';
 import { buildProvider } from '@/lib/agent';
 import { useAppStore } from '../store';
 import { flushDraftSaves, dropPendingDraftSave } from '../store/sessionSlice';
@@ -21,7 +21,7 @@ async function generateTitleWithAi(
   messages: Session['messages'],
   signal?: AbortSignal,
 ): Promise<string> {
-  const active = findActiveModel(settings);
+  const active = resolveAuxModel(settings, settings.titleModel);
   if (!active) throw new Error('No active model');
 
   // 取前几条关键消息(用户与助手)做上下文

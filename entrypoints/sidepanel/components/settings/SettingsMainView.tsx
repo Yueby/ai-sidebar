@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -9,6 +9,7 @@ import {
   Loader2,
   ShieldCheck,
   Layers,
+  Sparkles,
 } from 'lucide-react';
 import type { Settings, ProviderConfig } from '@/lib/types';
 import { apiTypeLabel } from '@/lib/providers';
@@ -27,6 +28,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { SettingsPermissionsView } from './SettingsPermissionsView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +62,46 @@ export function SettingsMainView({
   const [testingId, setTestingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteProviderTarget, setDeleteProviderTarget] = useState<ProviderConfig | null>(null);
+
+  // 所有提供商已导入的模型列表（用于模型分工下拉选择）
+  const allModelOptions = useMemo(() => {
+    return settings.providers.flatMap((p) =>
+      p.models.map((m) => ({
+        providerId: p.id,
+        modelId: m.id,
+        value: `${p.id}::${m.id}`,
+        label: `${p.name || '未命名提供商'} / ${m.displayName || m.id}`,
+      }))
+    );
+  }, [settings.providers]);
+
+  // 对话模型受控值：未选或模型已不在列表时为 '__none__'
+  const chatModelValue =
+    settings.activeProviderId && settings.activeModelId
+      ? `${settings.activeProviderId}::${settings.activeModelId}`
+      : '__none__';
+
+  // 标题生成模型受控值：null 或失效时跟随对话模型
+  const titleModelValue =
+    settings.titleModel &&
+    allModelOptions.some(
+      (o) =>
+        o.providerId === settings.titleModel?.providerId &&
+        o.modelId === settings.titleModel?.modelId
+    )
+      ? `${settings.titleModel.providerId}::${settings.titleModel.modelId}`
+      : 'follow';
+
+  // 快捷指令模型受控值：null 或失效时跟随对话模型
+  const quickPromptModelValue =
+    settings.quickPromptModel &&
+    allModelOptions.some(
+      (o) =>
+        o.providerId === settings.quickPromptModel?.providerId &&
+        o.modelId === settings.quickPromptModel?.modelId
+    )
+      ? `${settings.quickPromptModel.providerId}::${settings.quickPromptModel.modelId}`
+      : 'follow';
 
   // Read extension manifest info safely
   let appName = 'ai-sidebar';
@@ -179,6 +227,146 @@ export function SettingsMainView({
         {/* VIEW 1: Providers List */}
         {currentTab === 'providers' && (
           <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+            {/* 模型分工卡片（参考 CherryStudio 辅助模型配置模式） */}
+            <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-1.5 font-medium text-foreground">
+                  <Sparkles className="size-3.5 text-muted-foreground" />
+                  <span>模型分工</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-normal">
+                  对话模型可在输入框随时切换；标题与快捷指令生成建议使用更轻量的模型
+                </p>
+              </div>
+
+              <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
+                {/* 1. 对话模型 */}
+                <div className="flex items-center justify-between gap-2 p-2.5">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="font-medium text-foreground text-[11px]">对话模型</div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      主界面对话及工具调用的主力模型
+                    </div>
+                  </div>
+                  <div className="w-36 shrink-0">
+                    <Select
+                      value={chatModelValue}
+                      onValueChange={(val) => {
+                        if (val === '__none__') return;
+                        const [pId, mId] = val.split('::');
+                        if (pId && mId) {
+                          onUpdateSettings({
+                            ...settings,
+                            activeProviderId: pId,
+                            activeModelId: mId,
+                          });
+                        }
+                      }}
+                      disabled={allModelOptions.length === 0}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder={allModelOptions.length === 0 ? '暂无可用模型' : '未选择'} />
+                      </SelectTrigger>
+                      <SelectContent align="end" className="max-w-[280px]">
+                        <SelectItem value="__none__" disabled className="hidden">
+                          {allModelOptions.length === 0 ? '暂无可用模型' : '未选择'}
+                        </SelectItem>
+                        {allModelOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* 2. 标题生成模型 */}
+                <div className="flex items-center justify-between gap-2 p-2.5">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="font-medium text-foreground text-[11px]">标题生成模型</div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      会话首轮问答后自动起短标题
+                    </div>
+                  </div>
+                  <div className="w-36 shrink-0">
+                    <Select
+                      value={titleModelValue}
+                      onValueChange={(val) => {
+                        if (val === 'follow') {
+                          onUpdateSettings({ ...settings, titleModel: null });
+                        } else {
+                          const [pId, mId] = val.split('::');
+                          if (pId && mId) {
+                            onUpdateSettings({
+                              ...settings,
+                              titleModel: { providerId: pId, modelId: mId },
+                            });
+                          }
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder="跟随对话模型" />
+                      </SelectTrigger>
+                      <SelectContent align="end" className="max-w-[280px]">
+                        <SelectItem value="follow" className="text-xs font-medium">
+                          跟随对话模型
+                        </SelectItem>
+                        {allModelOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* 3. 快捷指令生成模型 */}
+                <div className="flex items-center justify-between gap-2 p-2.5">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="font-medium text-foreground text-[11px]">快捷指令生成模型</div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      新会话基于当前网页动态生成建议
+                    </div>
+                  </div>
+                  <div className="w-36 shrink-0">
+                    <Select
+                      value={quickPromptModelValue}
+                      onValueChange={(val) => {
+                        if (val === 'follow') {
+                          onUpdateSettings({ ...settings, quickPromptModel: null });
+                        } else {
+                          const [pId, mId] = val.split('::');
+                          if (pId && mId) {
+                            onUpdateSettings({
+                              ...settings,
+                              quickPromptModel: { providerId: pId, modelId: mId },
+                            });
+                          }
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder="跟随对话模型" />
+                      </SelectTrigger>
+                      <SelectContent align="end" className="max-w-[280px]">
+                        <SelectItem value="follow" className="text-xs font-medium">
+                          跟随对话模型
+                        </SelectItem>
+                        {allModelOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                 <Bot className="size-3.5 text-muted-foreground" />

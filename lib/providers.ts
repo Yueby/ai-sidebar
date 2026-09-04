@@ -44,6 +44,8 @@ export const DEFAULT_SETTINGS: Settings = {
   providers: [],
   activeProviderId: null,
   activeModelId: null,
+  titleModel: null,
+  quickPromptModel: null,
   includePageContext: true,
   reasoningLevel: 'off',
   webSearch: { provider: 'none', searxngBaseUrl: '', apiKeys: {} },
@@ -68,6 +70,19 @@ export function findActiveModel(
   const model = provider?.models.find((m) => m.id === settings.activeModelId);
   if (!provider || !model) return null;
   return { provider, model };
+}
+
+/** 解析辅助模型引用(标题/快捷指令生成):null 或引用失效均回退对话模型 */
+export function resolveAuxModel(
+  settings: Settings,
+  aux: Settings['titleModel'],
+): { provider: ProviderConfig; model: ModelConfig } | null {
+  if (aux) {
+    const provider = settings.providers.find((p) => p.id === aux.providerId);
+    const model = provider?.models.find((m) => m.id === aux.modelId);
+    if (provider && model) return { provider, model };
+  }
+  return findActiveModel(settings);
 }
 
 /** 模型支持的思考等级(不含 off);未配置/非法值回退默认三档 low/medium/high */

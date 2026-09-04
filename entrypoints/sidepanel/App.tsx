@@ -14,6 +14,7 @@ import { useSessionManager } from './hooks/useSessionManager';
 import { useChatTurn } from './hooks/useChatTurn';
 import { usePageContextRefs } from './hooks/usePageContextRefs';
 import { useCompact } from './hooks/useCompact';
+import { useQuickPrompts } from './hooks/useQuickPrompts';
 import { useAppStore, selectCurrentSession } from './store';
 import { EMPTY_DRAFT } from './store/sessionSlice';
 
@@ -283,6 +284,12 @@ export default function App() {
       ? inFlight.messages.filter((m) => m.role !== 'toolResult').length
       : 0;
 
+  // 新会话快捷指令:空会话展示时异步生成(模型失败静默回退静态四条)
+  const quickPrompts = useQuickPrompts(
+    settings,
+    displayedMessages.length === 0 && !isStreaming,
+  );
+
   if (!loaded) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
@@ -337,6 +344,7 @@ export default function App() {
               activeModelInfo?.model.displayName || activeModelInfo?.model.id
             }
             onOpenSettings={handleOpenSettings}
+            quickPrompts={quickPrompts}
           />
 
           {/* 槽位区:溢出建议 → 压缩状态条 → 审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}
