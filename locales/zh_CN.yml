@@ -1,0 +1,45 @@
+toolLabels:
+  read_page: 读取网页内容
+  extract_page: 读取网页内容
+  read_element: 读取页面元素
+  fetch_url: 抓取网页内容
+  read_time: 读取设备时间
+  ask_user: 询问用户
+  execute_js: 执行页面脚本
+  compact_context: 压缩上下文
+  search_web: 网络搜索
+  search_page: 查找标签页
+  open_page: 打开网页
+  activate_page: 切到标签页
+  close_page: 关闭标签页
+  search_element: 查找交互元素
+  click_element: 点击页面元素
+  fill_element: 填写页面元素
+  scroll_page: 滚动页面
+  screenshot_page: 截取页面画面
+
+refBar:
+  referencing: 正在引用
+  removeRefTitle: 移除该标签页引用
+  referencingCount: 正在引用 {count} 个标签页
+  expandList: 展开引用列表
+  collapseList: 收起引用列表
+
+header:
+  newSession: 新建会话
+  history: 历史会话
+  historyCount: 历史会话 ({count})
+  emptyHistory: 暂无历史会话
+  untitled: 新会话
+  saveTitle: 保存 (Enter)
+  cancelEdit: 取消 (Esc)
+  aiTitling: AI 正在生成标题…
+  aiTitle: AI 生成标题
+  exportMd: 导出为 Markdown
+  rename: 重命名会话
+  delete: 删除会话
+  settings: 设置
+  deleteConfirmTitle: 删除会话
+  deleteConfirmDesc: 将删除「{title}」的全部聊天记录，此操作不可撤销。
+  cancel: 取消
+  deleteAction: 删除

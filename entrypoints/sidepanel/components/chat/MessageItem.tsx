@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, PageRefs, RefElementMeta, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
-import { toolLabel } from '@/lib/types';
+import { toolLabel } from '@/lib/toolLabels';
 import { messageText } from '@/lib/storage';
 import { parsePageRefs } from '@/lib/pageRefs';
 import { elementChipLabel, elementListLabel } from '@/lib/elementLabel';

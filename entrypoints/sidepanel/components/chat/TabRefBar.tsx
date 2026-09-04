@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { i18n } from '#i18n';
 import { Globe, ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { RefTab } from '@/lib/pageContext';
 import { faviconUrl } from '@/lib/favicon';
@@ -71,7 +72,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             <FaviconIcon url={tab.url} tabId={tab.id} className="size-3.5" />
             <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
-              正在引用
+              {i18n.t('refBar.referencing')}
             </span>
             <span className="font-medium truncate text-[11px] text-foreground max-w-[calc(100%-90px)]">
               “{tab.title || tab.url}”
@@ -88,7 +89,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
               onRemoveRefTab(tab.id);
             }}
             className="text-muted-foreground/70 hover:text-foreground rounded p-0.5 hover:bg-background/80 transition-colors shrink-0 cursor-pointer"
-            title="移除该标签页引用"
+            title={i18n.t('refBar.removeRefTitle')}
           >
             <X className="size-3" />
           </button>
@@ -126,7 +127,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
           </div>
 
           <span className="text-[11px] text-foreground font-medium truncate">
-            正在引用 {count} 个标签页
+            {i18n.t('refBar.referencingCount', { count })}
           </span>
         </div>
 
@@ -137,7 +138,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
             setExpanded((prev) => !prev);
           }}
           className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors shrink-0 cursor-pointer"
-          title={expanded ? '收起引用列表' : '展开引用列表'}
+          title={i18n.t(expanded ? 'refBar.collapseList' : 'refBar.expandList')}
         >
           {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
         </button>

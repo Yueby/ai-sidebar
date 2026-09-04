@@ -1,6 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { toolLabel, type ToolRisk } from '../types';
+import { toolLabel } from '../toolLabels';
+import { type ToolRisk } from '../types';
 import { fetchAndExtractPage, FETCH_CONTENT_LIMIT } from '../fetchPage';
 
 const FETCH_URL_PARAMS = Type.Object({

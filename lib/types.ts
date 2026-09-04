@@ -57,32 +57,6 @@ export const REASONING_LEVEL_LABELS: Record<ReasoningLevel, { short: string; ful
  * Agent 工具展示文案的**唯一来源**(AgentTool.label / 流式执行 chip / 历史 toolCall chip 全部消费此处)。
  * 暂时统一中文;多语言以后再做。
  */
-export const TOOL_LABELS: Record<string, string> = {
-  read_page: '读取网页内容',
-  // 旧名,兼容历史会话 ToolCallCard(旧持久化消息 toolCall.name 仍是 extract_page)
-  extract_page: '读取网页内容',
-  read_element: '读取页面元素',
-  fetch_url: '抓取网页内容',
-  read_time: '读取设备时间',
-  ask_user: '询问用户',
-  execute_js: '执行页面脚本',
-  compact_context: '压缩上下文',
-  search_web: '网络搜索',
-  search_page: '查找标签页',
-  open_page: '打开网页',
-  activate_page: '切到标签页',
-  close_page: '关闭标签页',
-  search_element: '查找交互元素',
-  click_element: '点击页面元素',
-  fill_element: '填写页面元素',
-  scroll_page: '滚动页面',
-  screenshot_page: '截取页面画面',
-};
-
-/** 取工具展示文案:未知工具名原样返回 */
-export function toolLabel(name: string): string {
-  return TOOL_LABELS[name] ?? name;
-}
 
 /** Agent 工具风险元数据:safe=直接执行;confirm=执行前需经 lib/gate.ts 发 UI 确认(如 execute_js) */
 export type ToolRisk = 'safe' | 'confirm';

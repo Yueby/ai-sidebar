@@ -1,6 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { toolLabel, SEARCH_ELEMENT_LIMIT, type ToolRisk } from '../types';
+import { toolLabel } from '../toolLabels';
+import { SEARCH_ELEMENT_LIMIT, type ToolRisk } from '../types';
 import {
   getActiveTabMeta,
   searchElementsInTab,

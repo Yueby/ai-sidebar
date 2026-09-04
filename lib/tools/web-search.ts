@@ -1,6 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { toolLabel, type ToolRisk, type WebSearchConfig } from '../types';
+import { toolLabel } from '../toolLabels';
+import { type ToolRisk, type WebSearchConfig } from '../types';
 import { searchWeb } from '../webSearch';
 
 const SEARCH_WEB_PARAMS = Type.Object({

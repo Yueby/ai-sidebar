@@ -1,7 +1,8 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ImageContent, TextContent } from '@earendil-works/pi-ai';
-import { toolLabel, type PickedElement, type ToolRisk } from '../types';
+import { toolLabel } from '../toolLabels';
+import { type PickedElement, type ToolRisk } from '../types';
 import { resolveElement, buildUnreadableTabError, type RefTab } from '../pageContext';
 import { fetchImageForModel, captureCropForModel } from '../imageFetch';
 

@@ -12,6 +12,7 @@ import {
   Download,
 } from 'lucide-react';
 import type { Session } from '@/lib/types';
+import { i18n } from '#i18n';
 import { downloadSessionMarkdown } from '@/lib/sessionExport';
 import { Button } from '@/components/ui/button';
 import {
@@ -69,7 +70,7 @@ export function ChatHeader({
   const handleStartRename = (s: Session) => {
     setDeletingId(null);
     setEditingId(s.id);
-    setEditTitleValue(s.title || '新会话');
+    setEditTitleValue(s.title || i18n.t('header.untitled'));
   };
 
   const handleSaveRename = (id: string) => {
@@ -100,11 +101,11 @@ export function ChatHeader({
                 className="size-7"
               >
                 <Plus className="size-3.5" />
-                <span className="sr-only">新建会话</span>
+                <span className="sr-only">{i18n.t('header.newSession')}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
-              <p>新建会话</p>
+              <p>{i18n.t('header.newSession')}</p>
             </TooltipContent>
           </Tooltip>
 
@@ -127,12 +128,12 @@ export function ChatHeader({
                     className="size-7"
                   >
                     <History className="size-3.5" />
-                    <span className="sr-only">历史会话</span>
+                    <span className="sr-only">{i18n.t('header.history')}</span>
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
-                <p>历史会话</p>
+                <p>{i18n.t('header.history')}</p>
               </TooltipContent>
             </Tooltip>
 
@@ -142,18 +143,18 @@ export function ChatHeader({
                 className="text-xs cursor-pointer gap-2"
               >
                 <Plus className="size-3.5" />
-                <span>新建会话</span>
+                <span>{i18n.t('header.newSession')}</span>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
               <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                历史会话 ({sessions.length})
+                {i18n.t('header.historyCount', { count: sessions.length })}
               </DropdownMenuLabel>
 
               {sortedSessions.length === 0 ? (
                 <div className="px-2 py-3 text-center text-xs text-muted-foreground italic">
-                  暂无历史会话
+                  {i18n.t('header.emptyHistory')}
                 </div>
               ) : (
                 sortedSessions.map((s) => {
@@ -192,7 +193,7 @@ export function ChatHeader({
                           type="button"
                           onClick={() => handleSaveRename(s.id)}
                           className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
-                          title="保存 (Enter)"
+                          title={i18n.t('header.saveTitle')}
                         >
                           <Check className="size-3 text-foreground" />
                         </button>
@@ -200,7 +201,7 @@ export function ChatHeader({
                           type="button"
                           onClick={handleCancelRename}
                           className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
-                          title="取消 (Esc)"
+                          title={i18n.t('header.cancelEdit')}
                         >
                           <X className="size-3" />
                         </button>
@@ -217,13 +218,13 @@ export function ChatHeader({
                       )}
                       onClick={() => onSelectSession(s.id)}
                     >
-                      <span className="truncate flex-1 pr-1.5" title={s.title || '新会话'}>
-                        {s.title || '新会话'}
+                      <span className="truncate flex-1 pr-1.5" title={s.title || i18n.t('header.untitled')}>
+                        {s.title || i18n.t('header.untitled')}
                       </span>
 
                       <div className="flex items-center gap-0.5 shrink-0">
                         {isAiTitling ? (
-                          <span className="p-0.5 text-muted-foreground" title="AI 正在生成标题…">
+                          <span className="p-0.5 text-muted-foreground" title={i18n.t('header.aiTitling')}>
                             <Loader2 className="size-3 animate-spin" />
                           </span>
                         ) : (
@@ -237,7 +238,7 @@ export function ChatHeader({
                                   onAiTitleSession(s.id);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                                title="AI 生成标题"
+                                title={i18n.t('header.aiTitle')}
                               >
                                 <Sparkles className="size-3" />
                               </button>
@@ -251,8 +252,8 @@ export function ChatHeader({
                                 downloadSessionMarkdown(s);
                               }}
                               className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                              title="导出为 Markdown"
-                              aria-label="导出为 Markdown"
+                              title={i18n.t('header.exportMd')}
+                              aria-label={i18n.t('header.exportMd')}
                             >
                               <Download className="size-3" />
                             </button>
@@ -266,7 +267,7 @@ export function ChatHeader({
                                   handleStartRename(s);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                                title="重命名会话"
+                                title={i18n.t('header.rename')}
                               >
                                 <Pencil className="size-3" />
                               </button>
@@ -282,7 +283,7 @@ export function ChatHeader({
                             setDeleteTarget(s);
                           }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                          title="删除会话"
+                          title={i18n.t('header.delete')}
                         >
                           <Trash2 className="size-3" />
                         </button>
@@ -308,11 +309,11 @@ export function ChatHeader({
                 className="size-7"
               >
                 <SettingsIcon className="size-3.5" />
-                <span className="sr-only">设置</span>
+                <span className="sr-only">{i18n.t('header.settings')}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
-              <p>设置</p>
+              <p>{i18n.t('header.settings')}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -322,13 +323,13 @@ export function ChatHeader({
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除会话</AlertDialogTitle>
+            <AlertDialogTitle>{i18n.t('header.deleteConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              将删除「{deleteTarget?.title || '未命名会话'}」的全部聊天记录,此操作不可撤销。
+              {i18n.t('header.deleteConfirmDesc', { title: deleteTarget?.title || i18n.t('header.untitled') })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteTarget(null)}>取消</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDeleteTarget(null)}>{i18n.t('header.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: 'destructive' })}
               onClick={() => {
@@ -336,8 +337,8 @@ export function ChatHeader({
                 setDeleteTarget(null);
               }}
             >
-              删除
-            </AlertDialogAction>
+              {i18n.t('header.deleteAction')}
+                        </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

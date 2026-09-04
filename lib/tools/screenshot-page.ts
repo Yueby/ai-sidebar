@@ -1,7 +1,8 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ImageContent } from '@earendil-works/pi-ai';
-import { toolLabel, type ToolRisk } from '../types';
+import { toolLabel } from '../toolLabels';
+import { type ToolRisk } from '../types';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '../pageContext';
 import { captureVisibleForModel } from '../imageFetch';
 import { requestGate } from '../gate';

@@ -1,0 +1,45 @@
+toolLabels:
+  read_page: Read page content
+  extract_page: Read page content
+  read_element: Read page element
+  fetch_url: Fetch web content
+  read_time: Read device time
+  ask_user: Ask the user
+  execute_js: Execute page script
+  compact_context: Compact context
+  search_web: Web search
+  search_page: Find tabs
+  open_page: Open page
+  activate_page: Switch to tab
+  close_page: Close tab
+  search_element: Find interactive elements
+  click_element: Click page element
+  fill_element: Fill page element
+  scroll_page: Scroll page
+  screenshot_page: Capture page screenshot
+
+refBar:
+  referencing: Referencing
+  removeRefTitle: Remove this tab reference
+  referencingCount: Referencing {count} tabs
+  expandList: Expand reference list
+  collapseList: Collapse reference list
+
+header:
+  newSession: New chat
+  history: History
+  historyCount: History ({count})
+  emptyHistory: No chats yet
+  untitled: New chat
+  saveTitle: Save (Enter)
+  cancelEdit: Cancel (Esc)
+  aiTitling: AI is generating a title…
+  aiTitle: AI title
+  exportMd: Export as Markdown
+  rename: Rename chat
+  delete: Delete chat
+  settings: Settings
+  deleteConfirmTitle: Delete chat
+  deleteConfirmDesc: This will permanently delete all messages in "{title}". This action cannot be undone.
+  cancel: Cancel
+  deleteAction: Delete

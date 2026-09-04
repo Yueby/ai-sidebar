@@ -1,5 +1,6 @@
 import type { AgentTool, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
-import { toolLabel, type ToolRisk } from './types';
+import { toolLabel } from './toolLabels';
+import { type ToolRisk } from './types';
 
 /**
  * 工具门控契约:UI 确认卡(confirm)与向用户提问(ask)的统一通道。

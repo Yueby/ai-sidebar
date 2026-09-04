@@ -4,12 +4,15 @@ import { defineConfig } from 'wxt';
 
 // 项目代号 ai-sidebar(内部用,产品名后续再定)
 export default defineConfig({
-  modules: ['@wxt-dev/module-react'],
+  modules: ['@wxt-dev/module-react', '@wxt-dev/i18n/module'],
+  // locales 目录(默认 <srcDir>/locales)自动发现语言;默认语言 = manifest.default_locale(zh_CN)
   // dev 文件监听在部分 Windows 会话下静默失效(chokidar 事件丢失):强制 1s 轮询保证 rebuild 可靠
   watchOptions: { usePolling: true, interval: 1000 },
   manifest: {
     name: 'AI Sidebar',
     description: 'BYOK AI sidebar — chat with any page using your own API key.',
+    // chrome.i18n 必需,@wxt-dev/i18n 也以它为开关(未设置时模块自我禁用)
+    default_locale: 'zh_CN',
     // scripting: 程序化注入 content script(兜底扩展加载前已存在的标签页)+ execute_js 降级路线(MAIN world)
     // activeTab: 用户点击工具栏图标时临时授权,便于对未持 host 权限的页面执行注入
     // userScripts: execute_js 主路线 chrome.userScripts.execute(Chrome 135+;138+ 需在扩展详情页开 Allow User Scripts)

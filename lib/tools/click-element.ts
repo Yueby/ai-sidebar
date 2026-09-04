@@ -1,6 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { toolLabel, type ToolRisk } from '../types';
+import { toolLabel } from '../toolLabels';
+import { type ToolRisk } from '../types';
 import { performPageAction, snapshotTabs, describeTabChanges, type ActionLocator } from '../pageContext';
 import { requestGate } from '../gate';
 import { formatLocator, renderActionFailure, renderActionSuccess, resolveActionTab } from './page-action-shared';

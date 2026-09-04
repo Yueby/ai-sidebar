@@ -23,6 +23,7 @@
     "@tiptap/pm": "3.31.0",
     "@tiptap/react": "3.31.0",
     "@tiptap/starter-kit": "3.31.0",
+    "@wxt-dev/i18n": "^0.2.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dom-accessibility-api": "^0.7.1",
