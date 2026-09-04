@@ -58,9 +58,13 @@ export function createPageReadTools(options: GetToolsOptions): AgentTool[] {
 }
 
 /** 页面发现组(safe):search_element 列交互元素清单 —— 动作支柱的 ARIA 定位发现层;
- *  寻址 = 默认 focused tab、tabId 可选(用户拍板:自动化任务可不引用页),故不设 tab 白名单、无条件注册 */
-export function createPageDiscoveryTools(): AgentTool[] {
-  return [createSearchElementToolDefinition(), createSearchPageToolDefinition()];
+ *  寻址 = 默认 focused tab、tabId 可选(用户拍板:自动化任务可不引用页),故不设 tab 白名单、无条件注册;
+ *  search_page 枚举所有 http(s) tab 并标注可读性(需 refTabs/dynamicTabs 判断) */
+export function createPageDiscoveryTools(options: GetToolsOptions): AgentTool[] {
+  return [
+    createSearchElementToolDefinition(),
+    createSearchPageToolDefinition(options.refTabs, options.dynamicTabs),
+  ];
 }
 
 /** 页面动作组:click/fill(confirm + 会话级 grant,grantScope=工具@tabId)+ scroll(safe);
@@ -109,7 +113,7 @@ export function getTools(options: GetToolsOptions): AgentTool[] {
     ...createUtilityTools(options.onCompactContext),
     ...createWebSearchTools(options.webSearch),
     ...createPageReadTools(options),
-    ...createPageDiscoveryTools(),
+    ...createPageDiscoveryTools(options),
     ...createPageActionTools(options),
     ...createFetchTools(),
     ...createGatedTools(options),

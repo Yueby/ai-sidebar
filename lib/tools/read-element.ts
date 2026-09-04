@@ -2,7 +2,7 @@ import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ImageContent, TextContent } from '@earendil-works/pi-ai';
 import { toolLabel, type PickedElement, type ToolRisk } from '../types';
-import { resolveElement, type RefTab } from '../pageContext';
+import { resolveElement, buildUnreadableTabError, type RefTab } from '../pageContext';
 import { fetchImageForModel, captureCropForModel } from '../imageFetch';
 
 const READ_ELEMENT_PARAMS = Type.Object({
@@ -46,9 +46,7 @@ export function createReadElementToolDefinition(
           content: [
             {
               type: 'text',
-              text: `Invalid tabId: ${JSON.stringify(tabId ?? null)}. Readable tabs: ${
-                [...validTabIds].map((id) => `#${id}`).join(', ') || '(none)'
-              }.`,
+              text: await buildUnreadableTabError(tabId, [...validTabIds], dynamicTabs),
             },
           ],
           details: null,

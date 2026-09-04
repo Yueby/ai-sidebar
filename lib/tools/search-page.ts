@@ -1,7 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel, type ToolRisk } from '../types';
-import { listCandidateTabs } from '../pageContext';
+import { listCandidateTabs, type RefTab } from '../pageContext';
 
 const SEARCH_PAGE_PARAMS = Type.Object({
   query: Type.Optional(
@@ -15,16 +15,19 @@ const SEARCH_PAGE_PARAMS = Type.Object({
 /**
  * search_page 工具定义(safe):枚举当前窗口所有 http(s) 标签页(tabId/标题/URL/活动标记),
  * 是 open_page / fill_element(tabId) 等多标签编排的寻址入口。
+ * 行内标注可读性:[readable] = read_page 可直接读(<page-refs> 引用或 open_page 注册);
+ * [external] = 可发现但不可读,需先 open_page 拿可读句柄(反馈:两套寻址体系曾让模型白烧多轮)。
  */
-export function createSearchPageToolDefinition(): AgentTool<
-  typeof SEARCH_PAGE_PARAMS
-> & { risk: ToolRisk } {
+export function createSearchPageToolDefinition(
+  refTabs: RefTab[] = [],
+  dynamicTabs?: ReadonlySet<number>,
+): AgentTool<typeof SEARCH_PAGE_PARAMS> & { risk: ToolRisk } {
   return {
     name: 'search_page',
     label: toolLabel('search_page'),
     risk: 'safe',
     description:
-      'List the browser tabs that are currently open (http/https pages only): one row per tab with its tabId, title and URL, the currently active tab flagged. Pass `query` to filter by a case-insensitive substring of title or URL. Use it to discover tabs before reading or acting on a specific one (pass its tabId), or to check what the user has open.',
+      'List the browser tabs that are currently open (http/https pages only): one row per tab with its tabId, title and URL, the currently active tab flagged. Rows are marked [readable] (read_page can read them: referenced tabs or tabs opened via open_page) or [external] (discoverable but NOT readable yet — use open_page with the URL to get a readable handle). Pass `query` to filter by a case-insensitive substring of title or URL.',
     parameters: SEARCH_PAGE_PARAMS,
     execute: async (_toolCallId, args) => {
       const query = typeof args?.query === 'string' ? args.query.trim().toLowerCase() : '';
@@ -50,14 +53,16 @@ export function createSearchPageToolDefinition(): AgentTool<
           details: null,
         };
       }
-      const lines = filtered.map(
-        (t) => `- #${t.id} ${t.active ? '[active] ' : ''}${t.title} — ${t.url}`,
-      );
+      const dynamicIds = dynamicTabs ?? new Set<number>();
+      const lines = filtered.map((t) => {
+        const readable = refTabs.some((r) => r.id === t.id) || dynamicIds.has(t.id);
+        return `- #${t.id} ${t.active ? '[active] ' : ''}${readable ? '[readable]' : '[external]'} ${t.title} — ${t.url}`;
+      });
       return {
         content: [
           {
             type: 'text',
-            text: `Open browser tabs (${filtered.length}):\n${lines.join('\n')}\n\nUse the tabId with read_page / click_element / fill_element / scroll_page (pass tabId explicitly) to act on a specific tab.`,
+            text: `Open browser tabs (${filtered.length}):\n${lines.join('\n')}\n\n[readable] tabs can be addressed by read_page / click_element / fill_element / scroll_page (pass tabId explicitly). For [external] tabs, use open_page with the URL first to get a readable handle.`,
           },
         ],
         details: { count: filtered.length },

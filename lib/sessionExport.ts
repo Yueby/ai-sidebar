@@ -72,7 +72,11 @@ function toolCallSection(call: { name: string; arguments: Record<string, unknown
 }
 
 /** 助手消息正文:文本平铺;思考/工具调用折叠 */
-function assistantSections(m: AssistantMessage, resultsByCallId: Map<string, ToolResultMessage>): string[] {
+function assistantSections(
+  m: AssistantMessage,
+  resultsByCallId: Map<string, ToolResultMessage>,
+  consumedResults: Set<string>,
+): string[] {
   const sections: string[] = [];
   const thinking = m.content
     .filter((b) => b.type === 'thinking' && typeof (b as { thinking?: string }).thinking === 'string')
@@ -96,7 +100,7 @@ function assistantSections(m: AssistantMessage, resultsByCallId: Map<string, Too
   }>;
   for (const call of calls) {
     sections.push(toolCallSection(call, resultsByCallId.get(call.id)));
-    resultsByCallId.delete(call.id);
+    consumedResults.add(call.id);
   }
 
   if (m.stopReason === 'error' && m.errorMessage) {
@@ -107,11 +111,13 @@ function assistantSections(m: AssistantMessage, resultsByCallId: Map<string, Too
 
 /** 会话 → Markdown 全文 */
 export function buildSessionMarkdown(session: Session): string {
-  // 工具结果按 toolCallId 索引,渲染时挂到对应调用下;余下的独立渲染(兜底不丢内容)
+  // 工具结果按 toolCallId 索引,渲染时挂到对应调用下;余下的独立渲染(兜底不丢内容)。
+  // consumed 标记已挂载的结果:不能 delete(map 还要用),否则孤儿判断失效 → 双重渲染。
   const resultsByCallId = new Map<string, ToolResultMessage>();
   for (const m of session.messages) {
     if (m.role === 'toolResult') resultsByCallId.set(m.toolCallId, m);
   }
+  const consumedResults = new Set<string>();
 
   const refs = collectPageRefs(session.messages);
   const lines: string[] = [
@@ -146,9 +152,9 @@ export function buildSessionMarkdown(session: Session): string {
       } else {
         lines.push('', `## 🤖 助手`, '');
       }
-      const sections = assistantSections(m, resultsByCallId);
+      const sections = assistantSections(m, resultsByCallId, consumedResults);
       lines.push(sections.length > 0 ? sections.join('\n\n') : '*(空回复)*');
-    } else if (m.role === 'toolResult' && resultsByCallId.has(m.toolCallId)) {
+    } else if (m.role === 'toolResult' && consumedResults.has(m.toolCallId)) {
       // 已挂到对应调用下,跳过;只有找不到主的孤儿结果才独立渲染
       continue;
     } else if (m.role === 'toolResult') {

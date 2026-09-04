@@ -33,6 +33,36 @@ async function tabToRefTab(tabId: number): Promise<RefTab | null> {
   }
 }
 
+/**
+ * 构造可行动的「tab 不可读」错误文本(read_page/read_element 共用):
+ * 区分三种情况 —— 非数字 tabId / tab 不存在(已关闭) / tab 存在但不在可读白名单,
+ * 并给出修复路径(open_page 拿可读句柄,或请用户引用页面)。
+ * 背景(search_page 与 read 白名单脱节的反馈):search_page 能枚举任意 http(s) tab,
+ * 但 read_page 只接受 <page-refs> 引用 + open_page 注册的 tab —— 错误文本必须讲清这一点。
+ */
+export async function buildUnreadableTabError(
+  tabId: unknown,
+  validIds: readonly number[],
+  dynamicTabs?: ReadonlySet<number>,
+): Promise<string> {
+  const dynamicList = [...(dynamicTabs ?? [])];
+  const readable = [...validIds, ...dynamicList].map((id) => `#${id}`).join(', ') || '(none)';
+  if (typeof tabId !== 'number') {
+    return `Invalid tabId: ${JSON.stringify(tabId ?? null)}. A numeric tab id is required. Readable tabs: ${readable}.`;
+  }
+  let exists = false;
+  try {
+    const tab = await browser.tabs.get(tabId);
+    exists = Boolean(tab?.id);
+  } catch {
+    exists = false;
+  }
+  if (!exists) {
+    return `Tab #${tabId} does not exist (it may have been closed). Readable tabs: ${readable}. Use search_page to list currently open tabs.`;
+  }
+  return `Tab #${tabId} exists but is not readable in this conversation: only referenced tabs (from <page-refs>) and tabs opened via open_page are readable; currently readable: ${readable}. To read it, call open_page with its URL (the new tab becomes readable), or ask the user to reference the page and resend.`;
+}
+
 /** 当前活动标签页(仅 http/https);失败返回 null */
 export async function getActiveTabMeta(): Promise<RefTab | null> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });

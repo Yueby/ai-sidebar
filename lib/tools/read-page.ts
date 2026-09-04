@@ -1,7 +1,7 @@
 import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel, type ToolRisk } from '../types';
-import { extractFromTab, renderPageContext, type RefTab } from '../pageContext';
+import { extractFromTab, renderPageContext, buildUnreadableTabError, type RefTab } from '../pageContext';
 
 const READ_PAGE_PARAMS = Type.Object({
   tabId: Type.Number({ description: 'Id of the tab to read (referenced tabs are annotated with tabId in the <page-refs> block of user messages)' }),
@@ -45,14 +45,7 @@ export function createReadPageToolDefinition(
         (!validIds.includes(tabId) && !(dynamicTabs?.has(tabId) ?? false))
       ) {
         return {
-          content: [
-            {
-              type: 'text',
-              text: `Invalid tabId: ${JSON.stringify(tabId ?? null)}. Readable tabs: ${
-                validIds.map((id) => `#${id}`).join(', ') || '(none)'
-              }.`,
-            },
-          ],
+          content: [{ type: 'text', text: await buildUnreadableTabError(tabId, validIds, dynamicTabs) }],
           details: null,
         };
       }
