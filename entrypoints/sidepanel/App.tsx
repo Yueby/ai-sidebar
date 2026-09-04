@@ -24,6 +24,7 @@ import { ChatInput } from './components/chat/ChatInput';
 import { ApprovalSection } from './components/chat/ApprovalSection';
 import { SettingsMainView } from './components/settings/SettingsMainView';
 import { ProviderDialog } from './components/settings/ProviderDialog';
+import { UserScriptsGateDialog } from './components/UserScriptsGateDialog';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 
@@ -492,6 +493,9 @@ export default function App() {
         isNew={isCreatingNewProvider}
         onSave={handleSaveProvider}
       />
+
+      {/* 允许用户脚本 (userScripts) 强引导弹窗 */}
+      <UserScriptsGateDialog />
     </main>
   );
 }

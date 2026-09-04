@@ -50,7 +50,8 @@ export const INSTALL_PERMISSIONS: PermissionDef[] = [
     id: 'userScripts',
     raw: 'userScripts',
     name: '用户脚本',
-    description: 'execute_js 的首选执行通道:隔离环境、不受页面 CSP 限制(Chrome 135+)。未开启时自动降级为 scripting 注入执行,功能不受影响,仅极严格 CSP 的站点可能失败',
+    description:
+      'execute_js 的首选执行通道:隔离环境、不受页面 CSP 限制(Chrome 135+);面板启动时会引导开启,未开启时自动降级执行',
   },
   {
     id: 'unlimitedStorage',
@@ -68,3 +69,9 @@ export const WEB_ACCESS_PERMISSION: PermissionDef = {
   description:
     '读取与操作网页的宿主权限:页面截图与图片兜底取图的硬依赖;页面读取、元素清单、点击/填充由 content_scripts 声明同样随安装授予。',
 };
+
+/** 直达扩展详情页(「允许运行用户脚本」开关所在;Chrome 无 API 可代开,只能引导) */
+export function openExtensionDetails(): void {
+  void browser.tabs.create({ url: `chrome://extensions/?id=${browser.runtime.id}` });
+}
+

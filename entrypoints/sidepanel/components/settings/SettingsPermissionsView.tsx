@@ -3,6 +3,7 @@ import { Shield, ShieldCheck, Globe, Lock, ExternalLink } from 'lucide-react';
 import {
   INSTALL_PERMISSIONS,
   WEB_ACCESS_PERMISSION,
+  openExtensionDetails,
 } from '@/lib/permissions';
 import { isUserScriptsAvailable } from '@/lib/pageScripting';
 import { Button } from '@/components/ui/button';
@@ -29,11 +30,6 @@ export function SettingsPermissionsView() {
       clearInterval(interval);
     };
   }, []);
-
-  /** 直达扩展详情页(「允许运行用户脚本」开关所在;Chrome 无 API 可代开,只能引导) */
-  const openExtensionDetails = () => {
-    void browser.tabs.create({ url: `chrome://extensions/?id=${browser.runtime.id}` });
-  };
 
   return (
     <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
@@ -100,7 +96,7 @@ export function SettingsPermissionsView() {
                         'text-[9px] px-1 py-0.2 rounded font-medium',
                         userScriptsReady
                           ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/15'
-                          : 'text-muted-foreground bg-muted',
+                          : 'text-amber-700 dark:text-amber-300 bg-amber-500/15',
                       )}
                     >
                       {userScriptsReady ? '已开启' : '未开启'}
@@ -120,7 +116,7 @@ export function SettingsPermissionsView() {
                         <span>前往扩展详情页开启</span>
                       </Button>
                       <span className="text-[10px] text-muted-foreground">
-                        可选增强:隔离执行、不受页面 CSP 限制;未开启时 execute_js 自动经 scripting 降级,仍可执行
+                        打开面板时会引导开启;未开启时 execute_js 自动经 scripting 降级,仍可执行
                       </span>
                     </div>
                   )}
