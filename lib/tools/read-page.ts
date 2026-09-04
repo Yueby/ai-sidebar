@@ -17,6 +17,12 @@ const READ_PAGE_PARAMS = Type.Object({
         'Wait up to this many milliseconds for the page content to stabilize before extracting (text length unchanged across samples). Use after actions that trigger streaming updates (e.g. submitting a chat message); cap ~15000.',
     }),
   ),
+  waitText: Type.Optional(
+    Type.String({
+      description:
+        'Wait (up to waitStableMs) until the extracted text CONTAINS this substring (case-insensitive) — e.g. wait for an AI reply to mention a keyword before reading. Requires waitStableMs > 0; returns as soon as it matches or the timeout expires.',
+    }),
+  ),
 });
 
 /** read_page 工具定义(safe):AI 按需读取某个被引用标签页的当前正文(执行体消费 pageContext 的 extractFromTab) */
@@ -55,7 +61,8 @@ export function createReadPageToolDefinition(
         typeof args?.waitStableMs === 'number' && args.waitStableMs > 0
           ? Math.min(Math.round(args.waitStableMs), 30000)
           : 0;
-      const page = await extractFromTab(tabId, section, waitStableMs);
+      const waitText = typeof args?.waitText === 'string' && args.waitText.trim() ? args.waitText.trim() : undefined;
+      const page = await extractFromTab(tabId, section, waitStableMs, waitText);
       if (!page) {
         return {
           content: [
@@ -67,8 +74,19 @@ export function createReadPageToolDefinition(
           details: null,
         };
       }
+      const waitNote =
+        waitText && !page.text.toLowerCase().includes(waitText.toLowerCase())
+          ? `Note: waitText "${waitText}" was not found within the wait window — the page may not have reached the expected state.`
+          : '';
       return {
-        content: [{ type: 'text', text: renderPageContext(page) }],
+        content: [
+          {
+            type: 'text',
+            text:
+              renderPageContext(page) +
+              (waitNote ? `\n\n${waitNote}` : ''),
+          },
+        ],
         details: { title: page.title, url: page.url },
       };
     },

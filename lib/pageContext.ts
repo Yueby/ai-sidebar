@@ -88,6 +88,7 @@ export async function extractFromTab(
   tabId: number,
   section: 'head' | 'tail' = 'head',
   waitStableMs = 0,
+  waitText?: string,
 ): Promise<ExtractedPage | null> {
   let url: string;
   try {
@@ -103,6 +104,7 @@ export async function extractFromTab(
       type: READ_PAGE_MESSAGE,
       section,
       waitStableMs,
+      waitText,
     })) as Partial<ExtractedPage> | undefined;
     return res;
   };

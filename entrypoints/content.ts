@@ -374,6 +374,7 @@ export default defineContentScript({
     async function extractStable(
       section: 'head' | 'tail',
       waitStableMs = 0,
+      waitText?: string,
     ): Promise<{
       title: string;
       url: string;
@@ -391,10 +392,12 @@ export default defineContentScript({
       if (waitStableMs > 0) {
         const deadline = Date.now() + waitStableMs;
         let lastLen = result.text.length;
+        const needle = waitText?.trim().toLowerCase();
         while (Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 500));
           result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
-          if (result.text.length === lastLen) break;
+          const found = needle ? result.text.toLowerCase().includes(needle) : false;
+          if (found || result.text.length === lastLen) break;
           lastLen = result.text.length;
         }
       }
