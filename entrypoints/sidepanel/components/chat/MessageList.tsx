@@ -359,7 +359,7 @@ export function MessageList({
             )}
 
             {/* Quick Prompt Cards */}
-            {hasModel && (
+            {hasModel && quickPrompts.available && (
               <div className="space-y-1.5 text-left">
                 <div className="flex items-center justify-between px-1">
                   <p className="text-xs font-medium text-muted-foreground">推荐快捷指令</p>

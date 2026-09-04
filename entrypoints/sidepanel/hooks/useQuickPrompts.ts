@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Settings } from '@/lib/types';
-import { FALLBACK_PROMPTS, generateQuickPrompts, type QuickPrompt } from '@/lib/quickPrompts';
+import {
+  FALLBACK_PROMPTS,
+  generateQuickPrompts,
+  isPromptWorthyUrl,
+  type QuickPrompt,
+} from '@/lib/quickPrompts';
 import { getActiveTabMeta } from '@/lib/pageContext';
 import { resolveAuxModel } from '@/lib/providers';
 
@@ -11,6 +16,8 @@ import { resolveAuxModel } from '@/lib/providers';
  * - active(空会话可见)翻转时触发一次生成;消息出现 → 中止在途请求
  * - **聚焦 tab 导航跟随**:空态期间聚焦 tab 换了地址(onUpdated url / onActivated),
  *   自动重新生成,建议始终对应当前页面;同 URL 结果走内存缓存,来回切 tab 不重复请求
+ * - **非正常页面隐藏**:聚焦页非 http(s)(chrome://、新标签页、about:blank 等)→
+ *   available=false 不生成,UI 侧隐藏区块
  * - regenerate() 手动换一批(同 URL 强制重新生成,绕过缓存)
  * - settings 经 ref 读取,配置变更不触发重新生成(避免打字式刷新建议)
  * - 无任何可用模型(对话+辅助均未配置)时不发请求,UI 侧由 hasModel 隐藏区块
@@ -19,12 +26,15 @@ export interface QuickPromptsState {
   /** 当前展示的建议;loading 期间为 [](UI 显示骨架) */
   items: QuickPrompt[];
   loading: boolean;
+  /** 当前聚焦页是否值得出指令(仅 http(s));false 时 UI 隐藏整个区块 */
+  available: boolean;
   regenerate: () => void;
 }
 
 export function useQuickPrompts(settings: Settings, active: boolean): QuickPromptsState {
   const [items, setItems] = useState<QuickPrompt[]>([]);
   const [loading, setLoading] = useState(false);
+  const [available, setAvailable] = useState(false);
   const [seed, setSeed] = useState(0);
 
   // settings 走 ref:生成时机只由 active/seed 驱动
@@ -40,6 +50,7 @@ export function useQuickPrompts(settings: Settings, active: boolean): QuickPromp
       // 空会话不可见:中止在途生成并复位,下次进入重新生成
       setItems([]);
       setLoading(false);
+      setAvailable(false);
       return;
     }
 
@@ -47,6 +58,7 @@ export function useQuickPrompts(settings: Settings, active: boolean): QuickPromp
     if (!resolveAuxModel(settingsRef.current, settingsRef.current.quickPromptModel)) {
       setItems([]);
       setLoading(false);
+      setAvailable(false);
       return;
     }
 
@@ -58,6 +70,15 @@ export function useQuickPrompts(settings: Settings, active: boolean): QuickPromp
       try {
         const meta = await getActiveTabMeta();
         if (cancelled || controller.signal.aborted) return;
+
+        // 非正常页面(chrome://、新标签页等):不生成,区块隐藏
+        if (!isPromptWorthyUrl(meta?.url)) {
+          setAvailable(false);
+          setItems([]);
+          setLoading(false);
+          return;
+        }
+        setAvailable(true);
 
         // 缓存命中:同 URL 已生成过,直接展示(不闪骨架)
         const url = meta?.url ?? null;
@@ -90,7 +111,8 @@ export function useQuickPrompts(settings: Settings, active: boolean): QuickPromp
     };
   }, [active, seed]);
 
-  // 聚焦 tab 导航跟随:空态期间页面换了地址 → 自动重新生成(对新鲜度敏感,缓存只挡同 URL 重复)
+  // 聚焦 tab 导航跟随:空态期间页面换了地址 → 自动重新生成(对新鲜度敏感,缓存只挡同 URL 重复);
+  // 导航到非 http(s) 页面同样经由 seed 重估 → available=false → 区块隐藏
   useEffect(() => {
     if (!active) return;
     if (typeof browser === 'undefined' || !browser.tabs?.onUpdated) return;
@@ -145,5 +167,5 @@ export function useQuickPrompts(settings: Settings, active: boolean): QuickPromp
     });
   }, []);
 
-  return { items, loading, regenerate };
+  return { items, loading, available, regenerate };
 }

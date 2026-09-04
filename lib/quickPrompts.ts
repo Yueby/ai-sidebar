@@ -56,6 +56,15 @@ Write all values in ${language}. Output ONLY the JSON array, no markdown fences,
 const MAX_TOKENS = 500;
 
 /**
+ * 当前页面是否值得出推荐指令:仅 http(s) 算正常页面。
+ * chrome://、新标签页、about:blank、file:// 等非 http(s) 页面 → false(整体隐藏,不生成)。
+ */
+export function isPromptWorthyUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  return url.startsWith('http://') || url.startsWith('https://');
+}
+
+/**
  * 生成快捷建议;任何失败 throw,由调用方(hook)回退 FALLBACK_PROMPTS。
  * context 取当前活动 tab 的 title/url(可选,缺省时生成通用建议)。
  */
