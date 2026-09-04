@@ -408,6 +408,7 @@ export function ChatInput({
                 <FaviconIcon
                   url={activeTabMeta.url}
                   favIconUrl={activeTabMeta.favIconUrl}
+                  tabId={activeTabMeta.id}
                   className="size-3.5 mt-0.5"
                 />
                 <div className="flex flex-col min-w-0 flex-1">
@@ -444,6 +445,7 @@ export function ChatInput({
               <FaviconIcon
                 url={tab.url}
                 favIconUrl={tab.favIconUrl}
+                tabId={tab.id}
                 className="size-3.5 mt-0.5"
               />
               <div className="flex flex-col min-w-0 flex-1">

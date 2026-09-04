@@ -10,24 +10,44 @@ interface TabRefBarProps {
 }
 
 /**
- * 单个网站图标(三级回退:标签条实时 favIconUrl → _favicon 服务(浏览器历史库) → Globe):
- * _favicon 只在页面提交进历史后才有条目(不实时、时有时无),实时源优先(决策:导出反馈修复)
+ * 单个网站图标(多级回退:标签条实时 favIconUrl → 现场按 tabId 重查(事件时序竞态自愈) → _favicon 服务 → Globe):
+ * _favicon 只在页面提交进历史后才有条目(不实时、时有时无);新开 tab 激活瞬间 favIconUrl 常未生成,
+ * 数据链路任何环节漏掉实时值,渲染层按 tabId 自行补偿一次(决策:导出反馈修复)
  */
 export function FaviconIcon({
   url,
   favIconUrl,
+  tabId,
   className = 'size-3.5',
 }: {
   url: string;
   favIconUrl?: string;
+  tabId?: number;
   className?: string;
 }) {
+  const [live, setLive] = useState<string | undefined>(favIconUrl);
   const [stage, setStage] = useState<'live' | 'service' | 'failed'>(favIconUrl ? 'live' : 'service');
-  // favIconUrl 变化(导航/新元数据)时重置回 live
   useEffect(() => {
+    setLive(favIconUrl);
     setStage(favIconUrl ? 'live' : 'service');
-  }, [favIconUrl, url]);
-  const src = stage === 'live' && favIconUrl ? favIconUrl : faviconUrl(url, 32);
+    // 数据链路缺实时值时按 tabId 自愈:新开 tab 的 favicon 异步生成,任何时序竞态都在这里补齐
+    if (favIconUrl || tabId === undefined) return;
+    let alive = true;
+    void browser.tabs
+      .get(tabId)
+      .then((t) => {
+        const fav = typeof t?.favIconUrl === 'string' && /^https?:/i.test(t.favIconUrl) ? t.favIconUrl : undefined;
+        if (alive && fav) {
+          setLive(fav);
+          setStage('live');
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [tabId, favIconUrl, url]);
+  const src = stage === 'live' && live ? live : faviconUrl(url, 32);
   if (stage === 'failed' || !src) {
     return <Globe className={`${className} text-muted-foreground shrink-0`} />;
   }
@@ -65,7 +85,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
           title={tab.url}
         >
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <FaviconIcon url={tab.url} className="size-3.5" />
+            <FaviconIcon url={tab.url} favIconUrl={tab.favIconUrl} tabId={tab.id} className="size-3.5" />
             <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
               正在引用
             </span>
@@ -111,7 +131,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                 key={t.id}
                 className="relative ring-1 ring-background rounded-[2px] bg-background"
               >
-                <FaviconIcon url={t.url} favIconUrl={t.favIconUrl} className="size-3.5" />
+                <FaviconIcon url={t.url} favIconUrl={t.favIconUrl} tabId={t.id} className="size-3.5" />
               </div>
             ))}
             {count > 4 && (
@@ -156,7 +176,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                 title={t.url}
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <FaviconIcon url={t.url} favIconUrl={t.favIconUrl} className="size-3.5" />
+                  <FaviconIcon url={t.url} favIconUrl={t.favIconUrl} tabId={t.id} className="size-3.5" />
                   <span className="truncate font-normal text-foreground">
                     {t.title || t.url}
                   </span>
