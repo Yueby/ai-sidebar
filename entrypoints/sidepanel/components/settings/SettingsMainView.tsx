@@ -339,11 +339,11 @@ export function SettingsMainView({
                       }}
                     >
                       <SelectTrigger className="h-7 text-xs w-full">
-                        <SelectValue placeholder="自动检测(跟随浏览器)" />
+                        <SelectValue placeholder="自动" />
                       </SelectTrigger>
                       <SelectContent align="end" className="max-w-[280px]">
                         <SelectItem value="auto" className="text-xs font-medium">
-                          自动检测(跟随浏览器)
+                          自动
                         </SelectItem>
                         {AI_LANGUAGES.map((lang) => (
                           <SelectItem key={lang.tag} value={lang.tag} className="text-xs">
