@@ -25,6 +25,7 @@ import { ApprovalSection } from './components/chat/ApprovalSection';
 import { SettingsMainView } from './components/settings/SettingsMainView';
 import { ProviderDialog } from './components/settings/ProviderDialog';
 import { Button } from '@/components/ui/button';
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 
 type ViewMode = 'chat' | 'settings';
 
@@ -291,10 +292,9 @@ export default function App() {
 
   return (
     <main className="flex h-dvh w-full flex-col bg-background text-foreground overflow-hidden select-text font-sans antialiased">
-      {/* VIEW: Chat */}
-      {currentView === 'chat' && (
-        <div className="flex flex-1 min-h-0 flex-col overflow-hidden animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-          {/* Header with History Dropdown */}
+      {/* VIEW: Chat — 常驻挂载,保持消息流与输入草稿不丢失 */}
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+        {/* Header with History Dropdown */}
           <ChatHeader
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -458,18 +458,31 @@ export default function App() {
             onCommand={handleCommand}
           />
         </div>
-      )}
 
-      {/* VIEW: Settings Main */}
-      {currentView === 'settings' && (
-        <SettingsMainView
-          settings={settings}
-          onUpdateSettings={updateSettings}
-          onBack={handleBackToChat}
-          onAddProvider={handleAddProvider}
-          onEditProvider={handleEditProvider}
-        />
-      )}
+      {/* VIEW: Settings Drawer (全高抽屉，顶部露出聊天头部条，支持下滑/遮罩/Escape/返回按钮关闭) */}
+      <Drawer
+        open={currentView === 'settings'}
+        onOpenChange={(open) => {
+          if (!open) handleBackToChat();
+        }}
+        shouldScaleBackground={false}
+      >
+        <DrawerContent className="mt-0 h-[93dvh] max-h-[93dvh] max-w-3xl mx-auto flex flex-col p-0 outline-none overflow-hidden">
+          <DrawerTitle className="sr-only">设置</DrawerTitle>
+          <DrawerDescription className="sr-only">
+            配置 AI 提供商、搜索、权限与偏好设置
+          </DrawerDescription>
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden mt-2">
+            <SettingsMainView
+              settings={settings}
+              onUpdateSettings={updateSettings}
+              onBack={handleBackToChat}
+              onAddProvider={handleAddProvider}
+              onEditProvider={handleEditProvider}
+            />
+          </div>
+        </DrawerContent>
+      </Drawer>
 
       {/* Dialog: Add/Edit Provider */}
       <ProviderDialog
