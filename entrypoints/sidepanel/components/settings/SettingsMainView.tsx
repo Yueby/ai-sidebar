@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { Settings, ProviderConfig } from '@/lib/types';
 import { apiTypeLabel } from '@/lib/providers';
+import { toast } from 'sonner';
 import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
 import { SettingsBackupView } from './SettingsBackupView';
@@ -40,9 +41,6 @@ export function SettingsMainView({
 }: SettingsMainViewProps) {
   const [currentTab, setCurrentTab] = useState<SettingsTab>('providers');
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<
-    Record<string, { success: boolean; message: string }>
-  >({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Read extension manifest info safely
@@ -78,25 +76,15 @@ export function SettingsMainView({
   // Test provider connection
   const handleTestProvider = async (p: ProviderConfig) => {
     setTestingId(p.id);
-    setTestResults((prev) => ({ ...prev, [p.id]: undefined as any }));
     try {
       const msg = await testConnection({
         api: p.api,
         baseUrl: p.baseUrl,
         apiKey: p.apiKey,
       });
-      setTestResults((prev) => ({
-        ...prev,
-        [p.id]: { success: true, message: msg },
-      }));
+      toast.success(`${p.name || '提供商'}: ${msg}`);
     } catch (err: unknown) {
-      setTestResults((prev) => ({
-        ...prev,
-        [p.id]: {
-          success: false,
-          message: getErrorMessage(err) || '连接失败，请检查配置',
-        },
-      }));
+      toast.error(`${p.name || '提供商'}: ${getErrorMessage(err) || '连接失败，请检查配置'}`);
     } finally {
       setTestingId(null);
     }
@@ -222,7 +210,6 @@ export function SettingsMainView({
                 {settings.providers.map((p) => {
                   const isActive = p.id === settings.activeProviderId;
                   const isTesting = testingId === p.id;
-                  const testResult = testResults[p.id];
                   const isConfirmingDelete = deletingId === p.id;
 
                   return (
@@ -270,17 +257,8 @@ export function SettingsMainView({
                       </div>
 
                       {/* Test result banner */}
-                      {testResult && (
-                        <div
-                          className={cn(
-                            'text-[11px] rounded p-1.5 font-medium',
-                            testResult.success
-                              ? 'bg-muted text-foreground'
-                              : 'bg-destructive/10 text-destructive'
-                          )}
-                        >
-                          {testResult.message}
-                        </div>
+                      {isTesting && (
+                        <span className="text-[11px] text-muted-foreground">测试中…</span>
                       )}
 
                       {/* Action Bar */}

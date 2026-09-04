@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
-import { Download, Upload, FileJson, TriangleAlert, Info } from 'lucide-react';
+import { useRef } from 'react';
+import { toast } from 'sonner';
+import { Download, Upload, FileJson, TriangleAlert } from 'lucide-react';
 import type { Settings } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { sanitizeSettings } from '@/lib/storage';
-import { cn } from '@/lib/utils';
 
 interface SettingsBackupViewProps {
   settings: Settings;
@@ -17,13 +17,9 @@ interface SettingsBackupViewProps {
 export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBackupViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
-    null,
-  );
 
   const handleExport = () => {
     setBusy('export');
-    setFeedback(null);
     try {
       const payload = {
         app: 'ai-sidebar',
@@ -39,12 +35,9 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
       a.download = `ai-sidebar-backup-${stamp}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      setFeedback({
-        type: 'success',
-        message: '备份文件已导出并下载。',
-      });
+      toast.success('备份文件已导出并下载。');
     } catch {
-      setFeedback({ type: 'error', message: '导出失败，请重试。' });
+      toast.error('导出失败，请重试。');
     } finally {
       setBusy(null);
     }
@@ -52,7 +45,6 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
 
   const handleImportFile = async (file: File) => {
     setBusy('import');
-    setFeedback(null);
     try {
       const text = await file.text();
       const parsed: unknown = JSON.parse(text);
@@ -62,19 +54,13 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
           : parsed;
       const next = sanitizeSettings(raw);
       if (next.providers.length === 0) {
-        setFeedback({
-          type: 'error',
-          message: '导入失败：文件中未包含有效提供商配置。',
-        });
+        toast.error('导入失败：文件中未包含有效提供商配置。');
         return;
       }
       onUpdateSettings(next);
-      setFeedback({
-        type: 'success',
-        message: `已成功导入 ${next.providers.length} 个提供商配置（已覆盖当前设置）。`,
-      });
+      toast.success(`已成功导入 ${next.providers.length} 个提供商配置（已覆盖当前设置）。`);
     } catch {
-      setFeedback({ type: 'error', message: '导入失败：文件不是合法的 JSON 备份。' });
+      toast.error('导入失败：文件不是合法的 JSON 备份。');
     } finally {
       setBusy(null);
     }
@@ -141,21 +127,6 @@ export function SettingsBackupView({ settings, onUpdateSettings }: SettingsBacku
           </div>
         </div>
       </div>
-
-      {/* 反馈条 */}
-      {feedback && (
-        <div
-          className={cn(
-            'rounded-md border px-2.5 py-2 text-[11px] leading-relaxed flex items-start gap-1.5 animate-in fade-in-0 duration-150',
-            feedback.type === 'success'
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-              : 'border-destructive/30 bg-destructive/10 text-destructive',
-          )}
-        >
-          <Info className="size-3.5 shrink-0 mt-0.5" />
-          <span>{feedback.message}</span>
-        </div>
-      )}
     </div>
   );
 }
