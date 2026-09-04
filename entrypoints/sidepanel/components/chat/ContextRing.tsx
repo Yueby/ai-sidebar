@@ -73,35 +73,35 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
         <TooltipContent
           side="top"
           align="center"
-          className="max-w-56 space-y-1.5"
+          className="tooltip-popover max-w-56 space-y-1.5 rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-md"
         >
-          <div className="flex items-baseline justify-between gap-2 border-b border-background/20 pb-1">
-            <span className="font-semibold text-xs font-mono">
+          <div className="flex items-baseline justify-between gap-2 border-b border-border/50 pb-1">
+            <span className="font-semibold text-foreground text-xs font-mono">
               {formatTokensShort(usage.tokens ?? 0)}{' '}
-              <span className="text-[10px] font-normal opacity-70 font-sans">
+              <span className="text-[10px] font-normal text-muted-foreground font-sans">
                 / {formatTokensShort(usage.window ?? 0)}
               </span>
             </span>
-            <span className="font-mono text-[10px] font-semibold">
+            <span className="font-mono text-[10px] font-semibold text-foreground">
               {(usage.pct ?? 0).toFixed(2)}%
             </span>
           </div>
           {usage.hasUsageAnchor ? (
-            <div className="space-y-0.5 text-[10px] opacity-80">
+            <div className="space-y-0.5 text-[10px] text-muted-foreground">
               <div className="flex justify-between items-center">
                 <span>精确锚点:</span>
-                <span className="font-mono">{formatTokensShort(usage.usageTokens ?? 0)}</span>
+                <span className="font-mono text-foreground/80">{formatTokensShort(usage.usageTokens ?? 0)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span>估算尾部:</span>
-                <span className="font-mono">{formatTokensShort(usage.trailingTokens ?? 0)}</span>
+                <span className="font-mono text-foreground/80">{formatTokensShort(usage.trailingTokens ?? 0)}</span>
               </div>
             </div>
           ) : (
-            <p className="text-[10px] italic opacity-70">纯估算值(暂无模型精确返回)</p>
+            <p className="text-[10px] text-muted-foreground italic">纯估算值(暂无模型精确返回)</p>
           )}
           {modelName && (
-            <p className="truncate text-[9px] opacity-60 pt-1 border-t border-background/20 font-mono" title={modelName}>
+            <p className="truncate text-[9px] text-muted-foreground/80 pt-1 border-t border-border/40 font-mono" title={modelName}>
               {modelName}
             </p>
           )}
