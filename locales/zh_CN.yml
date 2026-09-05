@@ -180,6 +180,7 @@ settings:
   navAria: 设置导航
   tabs:
     providers: 提供商
+    models: 模型
     search: 搜索
     permissions: 权限
     backup: 备份
@@ -387,6 +388,9 @@ sync:
   noRemote: 远端暂无备份
   uploadSuccess: 已上传（压缩后 {size}）
   restoreSuccess: 已恢复 {count} 个会话与全部设置
+  showPassword: "显示密码"
+  hidePassword: "隐藏密码"
+
   error:
     needUrl: 请先填写有效的 WebDAV 服务地址
     needCredentials: 请填写 WebDAV 账号与密码

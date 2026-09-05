@@ -62,7 +62,7 @@ interface SettingsMainViewProps {
   activeSessionId: string | null;
 }
 
-type SettingsTab = 'providers' | 'search' | 'permissions' | 'backup' | 'about';
+type SettingsTab = 'providers' | 'models' | 'search' | 'permissions' | 'backup' | 'about';
 
 const AUX_THINKING_OPTIONS: { value: AuxThinkingLevel; label: string }[] = [
   { value: 'off', label: REASONING_LEVEL_LABELS.off.full },
@@ -285,6 +285,7 @@ export function SettingsMainView({
         >
           {[
             { id: 'providers', label: i18n.t('settings.tabs.providers') },
+    { id: 'models', label: i18n.t('settings.tabs.models') },
             { id: 'search', label: i18n.t('settings.tabs.search') },
             { id: 'permissions', label: i18n.t('settings.tabs.permissions') },
             { id: 'backup', label: i18n.t('settings.tabs.backup') },
@@ -314,6 +315,167 @@ export function SettingsMainView({
       <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
         {/* VIEW 1: Providers List */}
         {currentTab === 'providers' && (
+          <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Bot className="size-3.5 text-muted-foreground" />
+                <span>{i18n.t('settings.providers.title', { count: settings.providers.length })}</span>
+              </h2>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onAddProvider}
+                className="gap-1 h-7 text-xs px-2.5 shrink-0 cursor-pointer"
+              >
+                <Plus className="size-3" />
+                <span>{i18n.t('settings.providers.addProvider')}</span>
+              </Button>
+            </div>
+
+            {settings.providers.length === 0 ? (
+              /* Empty state */
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center space-y-3">
+                <div className="flex size-10 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+                  <Bot className="size-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-xs font-semibold text-foreground">{i18n.t('settings.providers.emptyTitle')}</h3>
+                  <p className="text-[11px] text-muted-foreground max-w-[240px] leading-relaxed">
+                    {i18n.t('settings.providers.emptyDesc')}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onAddProvider}
+                  className="h-7 text-xs gap-1.5 cursor-pointer"
+                >
+                  <Plus className="size-3" />
+                  <span>{i18n.t('settings.providers.emptyAction')}</span>
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {settings.providers.map((p) => {
+                  const isActive = p.id === settings.activeProviderId;
+                  const isTesting = testingId === p.id;
+                  const isConfirmingDelete = deletingId === p.id;
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={cn(
+                        'rounded-lg border p-3 text-left space-y-2.5 transition-colors',
+                        isActive
+                          ? 'border-primary/40 bg-primary/5 dark:bg-primary/10 shadow-2xs'
+                          : 'border-border bg-card hover:border-border/80'
+                      )}
+                    >
+                      {/* Header: Name + Protocol + Active Badge */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="truncate text-xs font-semibold text-foreground">
+                            {p.name || i18n.t('settings.providers.unnamed')}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isActive && (
+                            <Badge variant="default" className="text-[10px] h-4.5 px-1.5 font-normal">
+                              {i18n.t('settings.providers.activeBadge')}
+                            </Badge>
+                          )}
+                          <Badge variant="secondary" className="text-[10px] h-4.5 px-1.5 font-normal">
+                            {apiTypeLabel(p.api)}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Base URL and Models info */}
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <div className="truncate font-mono text-[11px]">{p.baseUrl || i18n.t('settings.providers.noBaseUrl')}</div>
+                        <div className="text-[11px]">
+                          <span>{i18n.t('settings.providers.modelsCount', { count: p.models.length })}</span>
+                          {p.models.length > 0 && (
+                            <span className="ml-1">
+                              ({p.models.map((m) => m.displayName || m.id).slice(0, 3).join(', ')}
+                              {p.models.length > 3 ? '...' : ''})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Test result banner */}
+                      {isTesting && (
+                        <span className="text-[11px] text-muted-foreground">{i18n.t('settings.providers.testing')}</span>
+                      )}
+
+                      {/* Action Bar */}
+                      <div className="flex items-center justify-between pt-1 border-t">
+                        {/* Left: Test */}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={isTesting}
+                          onClick={() => handleTestProvider(p)}
+                          className="h-6 text-[11px] px-1.5 text-muted-foreground hover:text-foreground gap-1"
+                        >
+                          {isTesting ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <Zap className="size-3" />
+                          )}
+                          <span>{isTesting ? i18n.t('settings.providers.testing') : i18n.t('settings.providers.test')}</span>
+                        </Button>
+
+                        {/* Right: Set Active / Edit / Delete */}
+                        <div className="flex items-center gap-1">
+                          {!isActive && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSetActiveProvider(p.id)}
+                              className="h-6 text-[11px] px-2"
+                            >
+                              {i18n.t('settings.providers.setActive')}
+                            </Button>
+                          )}
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onEditProvider(p)}
+                            className="size-6 text-muted-foreground hover:text-foreground"
+                            title={i18n.t('settings.providers.editTitle')}
+                          >
+                            <Pencil className="size-3" />
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteProviderTarget(p)}
+                            className="size-6 text-muted-foreground hover:text-destructive"
+                            title={i18n.t('settings.providers.deleteTitle')}
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* VIEW 1b: 模型分工 + 偏好(与提供商 CRUD 分页) */}
+        {currentTab === 'models' && (
           <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* 偏好卡片 */}
             <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
@@ -582,161 +744,6 @@ export function SettingsMainView({
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Bot className="size-3.5 text-muted-foreground" />
-                <span>{i18n.t('settings.providers.title', { count: settings.providers.length })}</span>
-              </h2>
-              <Button
-                type="button"
-                size="sm"
-                onClick={onAddProvider}
-                className="gap-1 h-7 text-xs px-2.5 shrink-0 cursor-pointer"
-              >
-                <Plus className="size-3" />
-                <span>{i18n.t('settings.providers.addProvider')}</span>
-              </Button>
-            </div>
-
-            {settings.providers.length === 0 ? (
-              /* Empty state */
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center space-y-3">
-                <div className="flex size-10 items-center justify-center rounded-md border bg-muted text-muted-foreground">
-                  <Bot className="size-5" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-xs font-semibold text-foreground">{i18n.t('settings.providers.emptyTitle')}</h3>
-                  <p className="text-[11px] text-muted-foreground max-w-[240px] leading-relaxed">
-                    {i18n.t('settings.providers.emptyDesc')}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={onAddProvider}
-                  className="h-7 text-xs gap-1.5 cursor-pointer"
-                >
-                  <Plus className="size-3" />
-                  <span>{i18n.t('settings.providers.emptyAction')}</span>
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {settings.providers.map((p) => {
-                  const isActive = p.id === settings.activeProviderId;
-                  const isTesting = testingId === p.id;
-                  const isConfirmingDelete = deletingId === p.id;
-
-                  return (
-                    <div
-                      key={p.id}
-                      className={cn(
-                        'rounded-lg border p-3 text-left space-y-2.5 transition-colors',
-                        isActive
-                          ? 'border-primary/40 bg-primary/5 dark:bg-primary/10 shadow-2xs'
-                          : 'border-border bg-card hover:border-border/80'
-                      )}
-                    >
-                      {/* Header: Name + Protocol + Active Badge */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="truncate text-xs font-semibold text-foreground">
-                            {p.name || i18n.t('settings.providers.unnamed')}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1 shrink-0">
-                          {isActive && (
-                            <Badge variant="default" className="text-[10px] h-4.5 px-1.5 font-normal">
-                              {i18n.t('settings.providers.activeBadge')}
-                            </Badge>
-                          )}
-                          <Badge variant="secondary" className="text-[10px] h-4.5 px-1.5 font-normal">
-                            {apiTypeLabel(p.api)}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Base URL and Models info */}
-                      <div className="text-xs text-muted-foreground space-y-0.5">
-                        <div className="truncate font-mono text-[11px]">{p.baseUrl || i18n.t('settings.providers.noBaseUrl')}</div>
-                        <div className="text-[11px]">
-                          <span>{i18n.t('settings.providers.modelsCount', { count: p.models.length })}</span>
-                          {p.models.length > 0 && (
-                            <span className="ml-1">
-                              ({p.models.map((m) => m.displayName || m.id).slice(0, 3).join(', ')}
-                              {p.models.length > 3 ? '...' : ''})
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Test result banner */}
-                      {isTesting && (
-                        <span className="text-[11px] text-muted-foreground">{i18n.t('settings.providers.testing')}</span>
-                      )}
-
-                      {/* Action Bar */}
-                      <div className="flex items-center justify-between pt-1 border-t">
-                        {/* Left: Test */}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          disabled={isTesting}
-                          onClick={() => handleTestProvider(p)}
-                          className="h-6 text-[11px] px-1.5 text-muted-foreground hover:text-foreground gap-1"
-                        >
-                          {isTesting ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <Zap className="size-3" />
-                          )}
-                          <span>{isTesting ? i18n.t('settings.providers.testing') : i18n.t('settings.providers.test')}</span>
-                        </Button>
-
-                        {/* Right: Set Active / Edit / Delete */}
-                        <div className="flex items-center gap-1">
-                          {!isActive && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleSetActiveProvider(p.id)}
-                              className="h-6 text-[11px] px-2"
-                            >
-                              {i18n.t('settings.providers.setActive')}
-                            </Button>
-                          )}
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onEditProvider(p)}
-                            className="size-6 text-muted-foreground hover:text-foreground"
-                            title={i18n.t('settings.providers.editTitle')}
-                          >
-                            <Pencil className="size-3" />
-                          </Button>
-
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteProviderTarget(p)}
-                            className="size-6 text-muted-foreground hover:text-destructive"
-                            title={i18n.t('settings.providers.deleteTitle')}
-                          >
-                            <Trash2 className="size-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         )}
 

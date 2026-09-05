@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Download, Upload, FileJson, TriangleAlert, CloudUpload, CloudDownload, CloudCog, Loader2 } from 'lucide-react';
+import { Download, Upload, FileJson, TriangleAlert, CloudUpload, CloudDownload, CloudCog, Loader2, Eye, EyeOff } from 'lucide-react';
 import type { Settings, Session } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { sanitizeSettings } from '@/lib/storage';
@@ -39,6 +39,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
   const [remoteBundle, setRemoteBundle] = useState<SyncBundle | null>(null);
   const [remoteSize, setRemoteSize] = useState<number | null>(null);
   const [needPassword, setNeedPassword] = useState(false);
+  const [visiblePassword, setVisiblePassword] = useState<'webdav' | 'encrypt' | null>(null);
   // 远端备份是加密的而本地开关为关时,临时显示密码输入(恢复需要)
   const dav = settings.webdav;
 
@@ -173,6 +174,34 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
 
   const fmtTime = (ts: number | undefined) => (ts ? new Date(ts).toLocaleString() : '—');
 
+  /** 密码输入(带显示/隐藏切换):visibleKey 区分多个密码框 */
+  const renderPasswordInput = (
+    visibleKey: 'webdav' | 'encrypt',
+    value: string,
+    onChange: (v: string) => void,
+    placeholderClass = 'bg-background',
+  ) => {
+    const visible = visiblePassword === visibleKey;
+    return (
+      <div className="relative">
+        <Input
+          type={visible ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={'h-7 text-xs pr-8 ' + placeholderClass}
+        />
+        <button
+          type="button"
+          onClick={() => setVisiblePassword(visible ? null : visibleKey)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+          title={visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
+        >
+          {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
       <div className="space-y-1.5">
@@ -271,12 +300,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               </div>
               <div className="space-y-1">
                 <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.passwordLabel')}</Label>
-                <Input
-                  type="password"
-                  value={dav.password}
-                  onChange={(e) => updateDav({ password: e.target.value })}
-                  className="h-7 text-xs bg-background"
-                />
+                {renderPasswordInput('webdav', dav.password, (v) => updateDav({ ...dav, password: v }))}
               </div>
             </div>
             <div className="space-y-1">
@@ -315,12 +339,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
             {(dav.encrypt || needPassword) && (
               <div className="space-y-1">
                 <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.encryptPasswordLabel')}</Label>
-                <Input
-                  type="password"
-                  value={dav.encryptPassword}
-                  onChange={(e) => updateDav({ encryptPassword: e.target.value })}
-                  className="h-7 text-xs bg-background"
-                />
+                {renderPasswordInput('encrypt', dav.encryptPassword, (v) => updateDav({ ...dav, encryptPassword: v }))}
               </div>
             )}
             {!dav.encrypt && (

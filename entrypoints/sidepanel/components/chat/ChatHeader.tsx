@@ -90,25 +90,6 @@ export function ChatHeader({
       {/* Right: Action Buttons Group */}
       <div className="flex items-center gap-1 shrink-0">
         <TooltipProvider delayDuration={300}>
-          {/* New Chat Session */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onNewSession}
-                className="size-7"
-              >
-                <Plus className="size-3.5" />
-                <span className="sr-only">{i18n.t('header.newSession')}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              <p>{i18n.t('header.newSession')}</p>
-            </TooltipContent>
-          </Tooltip>
-
           {/* History Sessions Dropdown */}
           <DropdownMenu
             onOpenChange={(open) => {
@@ -244,19 +225,21 @@ export function ChatHeader({
                               </button>
                             )}
 
-                            {/* 导出会话按钮 */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                downloadSessionMarkdown(s);
-                              }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                              title={i18n.t('header.exportMd')}
-                              aria-label={i18n.t('header.exportMd')}
-                            >
-                              <Download className="size-3" />
-                            </button>
+                            {/* 导出会话按钮(空会话不导出:没有内容可导) */}
+                            {s.messages.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  downloadSessionMarkdown(s);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                title={i18n.t('header.exportMd')}
+                                aria-label={i18n.t('header.exportMd')}
+                              >
+                                <Download className="size-3" />
+                              </button>
+                            )}
 
                             {/* 手动重命名按钮 */}
                             {onRenameSession && (

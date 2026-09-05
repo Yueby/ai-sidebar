@@ -180,6 +180,7 @@ settings:
   navAria: Settings navigation
   tabs:
     providers: Providers
+    models: Models
     search: Search
     permissions: Permissions
     backup: Backup
@@ -387,6 +388,9 @@ sync:
   noRemote: No remote backup yet
   uploadSuccess: Uploaded ({size} compressed)
   restoreSuccess: Restored {count} chats and all settings
+  showPassword: "Show password"
+  hidePassword: "Hide password"
+
   error:
     needUrl: Enter a valid WebDAV server URL first
     needCredentials: Enter the WebDAV username and password
