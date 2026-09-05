@@ -12,13 +12,21 @@ export interface WebdavConfig {
   password: string;
 }
 
-/** 规范化:base 去尾斜杠 + 远端路径去头斜杠,拼接成完整 URL */
+/** 规范化:base 去尾斜杠 + 远端路径去头斜杠与 `..`/`.` 段(防路径穿越),拼接成完整 URL */
 export function joinDavUrl(base: string, remotePath: string): string {
-  return `${base.replace(/\/+$/, '')}/${remotePath.replace(/^\/+/, '')}`;
+  const segments = remotePath
+    .replace(/^\/+/, '')
+    .split('/')
+    .filter((s) => s.length > 0 && s !== '.' && s !== '..');
+  return `${base.replace(/\/+$/, '')}/${segments.join('/')}`;
 }
 
+/** UTF-8 安全的 Basic 认证头(btoa 对非 Latin1 字符直接抛异常,中文密码必触发) */
 function authHeader(cfg: WebdavConfig): string {
-  return `Basic ${btoa(`${cfg.username}:${cfg.password}`)}`;
+  const bytes = new TextEncoder().encode(`${cfg.username}:${cfg.password}`);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return `Basic ${btoa(binary)}`;
 }
 
 function isHttpError(status: number): string | null {
