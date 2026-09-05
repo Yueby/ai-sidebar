@@ -58,6 +58,8 @@ interface SettingsMainViewProps {
   onRestoreAll: (bundle: import('@/lib/syncPayload').SyncBundle) => void;
   /** 本地最新会话时间(恢复冲突对比展示) */
   latestLocalSessionAt: number | null;
+  /** 当前激活会话(上传快照元数据) */
+  activeSessionId: string | null;
 }
 
 type SettingsTab = 'providers' | 'search' | 'permissions' | 'backup' | 'about';
@@ -94,6 +96,7 @@ export function SettingsMainView({
   onEditProvider,
   onRestoreAll,
   latestLocalSessionAt,
+  activeSessionId,
 }: SettingsMainViewProps) {
   const [currentTab, setCurrentTab] = useState<SettingsTab>('providers');
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -749,6 +752,7 @@ export function SettingsMainView({
             onUpdateSettings={onUpdateSettings}
             onRestoreAll={onRestoreAll}
             latestLocalSessionAt={latestLocalSessionAt}
+            activeSessionId={activeSessionId}
           />
         )}
 

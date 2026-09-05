@@ -27,33 +27,21 @@ export async function buildSyncBundle(settings: Settings, activeSessionId: strin
   return { version: 1, exportedAt: Date.now(), settings, sessions, activeSessionId };
 }
 
-/** 压缩:zstd 可用则用(更省 ~20%),回退 gzip */
+/** 压缩:恒用 gzip(备份文件必须跨版本/跨设备可读;自描述魔数 0x1f8b) */
 async function compress(data: Uint8Array): Promise<Uint8Array> {
-  const format: CompressionFormat = (() => {
-    try {
-      // zstd 在 Chrome 135+ 可用;探测失败回退 gzip
-      new CompressionStream('zstd' as CompressionFormat);
-      return 'zstd' as CompressionFormat;
-    } catch {
-      return 'gzip';
-    }
-  })();
-  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new CompressionStream(format));
+  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new CompressionStream('gzip'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 async function decompress(data: Uint8Array): Promise<Uint8Array> {
-  const format: CompressionFormat = (() => {
-    try {
-      new DecompressionStream('zstd' as CompressionFormat);
-      return 'zstd' as CompressionFormat;
-    } catch {
-      return 'gzip';
-    }
-  })();
-  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream(format));
+  // 按内容判别:gzip 魔数 0x1f8b;否则文件损坏
+  if (data[0] !== 0x1f || data[1] !== 0x8b) {
+    throw new Error(i18n.t('sync.error.corruptFile'));
+  }
+  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
+
 
 async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -125,7 +113,12 @@ export async function decryptSyncBlob(blob: Uint8Array, password: string): Promi
   } catch {
     throw new Error(i18n.t('sync.error.decryptFailed'));
   }
-  const json = JSON.parse(new TextDecoder().decode(await decompress(compressed))) as SyncBundle;
+  let json: SyncBundle;
+  try {
+    json = JSON.parse(new TextDecoder().decode(await decompress(compressed))) as SyncBundle;
+  } catch {
+    throw new Error(i18n.t('sync.error.corruptFile'));
+  }
   if (json?.version !== 1 || !Array.isArray(json.sessions)) throw new Error(i18n.t('sync.error.corruptFile'));
   return json;
 }

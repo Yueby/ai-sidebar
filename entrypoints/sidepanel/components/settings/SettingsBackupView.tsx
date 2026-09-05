@@ -7,7 +7,6 @@ import { sanitizeSettings } from '@/lib/storage';
 import { i18n } from '#i18n';
 import { buildSyncBundle, serializeSyncBundle, parseSyncBlob, decryptSyncBlob, formatBytes, type SyncBundle } from '@/lib/syncPayload';
 import { webdavProbe, webdavPut, webdavGet, validateConfig, joinDavUrl, type WebdavConfig } from '@/lib/webdav';
-import { replaceAllSessions } from '@/lib/sessionStore';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -23,6 +22,8 @@ interface SettingsBackupViewProps {
   onRestoreAll: (bundle: SyncBundle) => void;
   /** 本地最新会话时间(冲突对比展示用) */
   latestLocalSessionAt: number | null;
+  /** 当前激活会话(上传快照元数据) */
+  activeSessionId: string | null;
 }
 
 type DavConfig = Settings['webdav'];
@@ -31,12 +32,14 @@ type DavConfig = Settings['webdav'];
  * 备份视图: 本地导出/导入 + WebDAV 同步(全量快照,手动推拉,冲突手动选边)。
  * 加密开关开 = 密码派生 AES-GCM 加密整个备份;关 = 明文上传(含 API Key,红字警示)。
  */
-export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, latestLocalSessionAt }: SettingsBackupViewProps) {
+export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, latestLocalSessionAt, activeSessionId }: SettingsBackupViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const [davBusy, setDavBusy] = useState<'test' | 'upload' | 'restore' | null>(null);
   const [remoteBundle, setRemoteBundle] = useState<SyncBundle | null>(null);
   const [remoteSize, setRemoteSize] = useState<number | null>(null);
+  const [needPassword, setNeedPassword] = useState(false);
+  // 远端备份是加密的而本地开关为关时,临时显示密码输入(恢复需要)
   const dav = settings.webdav;
 
   const updateDav = (patch: Partial<DavConfig>) => {
@@ -114,7 +117,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
     if (dav.encrypt && !dav.encryptPassword) { toast.error(i18n.t('sync.error.needEncryptPassword')); return; }
     setDavBusy('upload');
     try {
-      const bundle = await buildSyncBundle(settings, null);
+      const bundle = await buildSyncBundle(settings, activeSessionId);
       const blob = await serializeSyncBundle(bundle, dav.encrypt ? dav.encryptPassword : undefined);
       await webdavPut(davConfig, dav.remotePath, blob);
       toast.success(i18n.t('sync.uploadSuccess', { size: formatBytes(blob.length) }));
@@ -136,7 +139,11 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
       if (parsed.kind === 'invalid') { toast.error(parsed.error); return; }
       let bundle: SyncBundle;
       if (parsed.kind === 'encrypted') {
-        if (!dav.encryptPassword) { toast.error(i18n.t('sync.error.needEncryptPassword')); return; }
+        if (!dav.encryptPassword) {
+          setNeedPassword(true);
+          toast.error(i18n.t('sync.error.needEncryptPassword'));
+          return;
+        }
         bundle = await decryptSyncBlob(parsed.blob, dav.encryptPassword);
       } else {
         bundle = parsed.bundle;
@@ -150,13 +157,18 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
     }
   };
 
-  const handleRestoreConfirm = () => {
+  const handleRestoreConfirm = async () => {
     if (!remoteBundle) return;
     const sessions = remoteBundle.sessions;
-    void replaceAllSessions(sessions);
-    onRestoreAll({ ...remoteBundle, sessions });
-    setRemoteBundle(null);
-    toast.success(i18n.t('sync.restoreSuccess', { count: sessions.length }));
+    // 落盘唯一入口 = App 的 onRestoreAll(内含流式守卫 + IDB 原子替换),视图不直接写
+    try {
+      await onRestoreAll({ ...remoteBundle, sessions });
+      setRemoteBundle(null);
+      setNeedPassword(false);
+      toast.success(i18n.t('sync.restoreSuccess', { count: sessions.length }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : i18n.t('sync.error.network'));
+    }
   };
 
   const fmtTime = (ts: number | undefined) => (ts ? new Date(ts).toLocaleString() : '—');
@@ -300,7 +312,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
                 className="shrink-0 cursor-pointer"
               />
             </div>
-            {dav.encrypt && (
+            {(dav.encrypt || needPassword) && (
               <div className="space-y-1">
                 <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.encryptPasswordLabel')}</Label>
                 <Input

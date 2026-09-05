@@ -378,7 +378,6 @@ sync:
   upload: Upload to WebDAV
   restore: Restore from WebDAV
   remoteHint: Uploading overwrites the remote backup; restoring overwrites all local settings and chat history.
-  remoteTime: Remote backup time
   restoreConfirmTitle: Restore from WebDAV
   restoreConfirmDesc: This will overwrite all local settings and chat history with the remote backup ({time}). This action cannot be undone.
   restoreConfirmLocal: "Newest local chat: {time}"

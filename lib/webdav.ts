@@ -82,7 +82,10 @@ export async function webdavProbe(cfg: WebdavConfig): Promise<{ ok: boolean; err
 
 /** 逐级创建远端集合(已存在时 MKCOL 返回 405/301,忽略) */
 async function mkdirP(cfg: WebdavConfig, remotePath: string): Promise<void> {
-  const segments = remotePath.split('/').filter(Boolean).slice(0, -1);
+  const segments = remotePath
+    .split('/')
+    .filter((s) => s.length > 0 && s !== '.' && s !== '..')
+    .slice(0, -1);
   let prefix = '';
   for (const seg of segments) {
     prefix = `${prefix}/${seg}`;
@@ -101,11 +104,13 @@ export async function webdavPut(
   data: Uint8Array,
 ): Promise<void> {
   await mkdirP(cfg, remotePath);
-  await davFetch(cfg, remotePath, {
+  // PUT 响应必须校验:409/5xx/423 等失败若当成功,用户以为有备份、换机才发现没有(隐性数据丢失)
+  const res = await davFetch(cfg, remotePath, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: new Blob([data as BlobPart], { type: 'application/octet-stream' }),
   });
+  if (!res.ok) throw new Error(i18n.t('sync.error.http', { status: res.status }));
 }
 
 /** 下载二进制;远端不存在返回 null,其余错误抛出文本 */
@@ -115,14 +120,17 @@ export async function webdavGet(
 ): Promise<Uint8Array | null> {
   const res = await davFetch(cfg, remotePath, { method: 'GET' });
   if (res.status === 404) return null;
+  if (!res.ok) throw new Error(i18n.t('sync.error.http', { status: res.status }));
   const buf = await res.arrayBuffer();
   return new Uint8Array(buf);
 }
 
 function errorToText(err: unknown): string {
-  if (err instanceof DOMException && err.name === 'TimeoutError') {
+  if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
     return i18n.t('sync.error.timeout');
   }
+  // fetch 网络层失败(TypeError: Failed to fetch)给友好文案,不透传浏览器原文
+  if (err instanceof TypeError) return i18n.t('sync.error.network');
   if (err instanceof Error && err.message) return err.message;
   return i18n.t('sync.error.network');
 }

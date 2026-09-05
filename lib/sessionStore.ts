@@ -40,8 +40,9 @@ export async function deleteSession(id: string): Promise<void> {
 /** 全量替换(WebDAV 恢复用):清空后整体写入,旧会话一次性让位 */
 export async function replaceAllSessions(sessions: Session[]): Promise<void> {
   const db = await getDB();
-  await db.clear(SESSION_STORE);
+  // 单事务 clear+put:IDB 事务原子性保证不会出现"旧会话已清、新会话未落"的丢失窗口
   const tx = db.transaction(SESSION_STORE, 'readwrite');
+  await tx.store.clear();
   for (const s of sessions) void tx.store.put(s);
   await tx.done;
 }

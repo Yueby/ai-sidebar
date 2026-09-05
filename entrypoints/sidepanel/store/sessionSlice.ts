@@ -35,6 +35,15 @@ export function dropPendingDraftSave(id: string): void {
   pendingDraftSaves.delete(id);
 }
 
+/** 清空全部待落盘草稿(WebDAV 恢复前调用:防 400ms 窗口内的旧会话对象回滚已恢复数据) */
+export function clearPendingDraftSaves(): void {
+	pendingDraftSaves.clear();
+	if (draftSaveTimer != null) {
+		clearTimeout(draftSaveTimer);
+		draftSaveTimer = null;
+	}
+}
+
 export interface SessionSlice {
   sessions: Session[];
   activeSessionId: string | null;

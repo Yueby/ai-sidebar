@@ -378,7 +378,6 @@ sync:
   upload: 上传到 WebDAV
   restore: 从 WebDAV 恢复
   remoteHint: 上传会覆盖远端备份；恢复会覆盖本地全部设置与会话记录。
-  remoteTime: 远端备份时间
   restoreConfirmTitle: 从 WebDAV 恢复
   restoreConfirmDesc: 将用远端备份（{time}）覆盖本地的全部设置与会话记录，此操作不可撤销。
   restoreConfirmLocal: 本地最新会话时间：{time}

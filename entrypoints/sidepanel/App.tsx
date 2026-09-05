@@ -16,6 +16,7 @@ import { useChatTurn } from './hooks/useChatTurn';
 import { usePageContextRefs } from './hooks/usePageContextRefs';
 import { useCompact } from './hooks/useCompact';
 import { useQuickPrompts } from './hooks/useQuickPrompts';
+import { clearPendingDraftSaves } from './store/sessionSlice';
 import { replaceAllSessions } from '@/lib/sessionStore';
 import { activeSessionIdItem, sanitizeSettings } from '@/lib/storage';
 import type { SyncBundle } from '@/lib/syncPayload';
@@ -279,15 +280,16 @@ export default function App() {
   // WebDAV 恢复编排:IDB 全量替换 → store 刷新 → 设置持久化 → 激活会话校正。
   // 流式进行中拒绝恢复(在途写入会与全量替换互相覆盖)。
   const handleSyncRestore = useCallback(
-    (bundle: SyncBundle) => {
+    async (bundle: SyncBundle) => {
       if (isStreaming || (inFlight && inFlight.messages.length > 0)) {
-        toast.error(i18n.t('sync.error.streaming'));
-        return;
+        throw new Error(i18n.t('sync.error.streaming'));
       }
+      // 防 400ms 防抖窗口内的旧会话对象在恢复后落盘回滚(major-4)
+      clearPendingDraftSaves();
       const store = useAppStore.getState();
-      void replaceAllSessions(bundle.sessions);
+      await replaceAllSessions(bundle.sessions);
       store.setSessions(bundle.sessions);
-      void store.updateSettings(sanitizeSettings(bundle.settings));
+      await store.updateSettings(sanitizeSettings(bundle.settings));
       const restoredActive =
         bundle.activeSessionId && bundle.sessions.some((s) => s.id === bundle.activeSessionId)
           ? bundle.activeSessionId
@@ -518,6 +520,7 @@ export default function App() {
               onEditProvider={handleEditProvider}
               onRestoreAll={handleSyncRestore}
               latestLocalSessionAt={latestLocalSessionAt}
+              activeSessionId={activeSessionId}
             />
           </div>
         </DrawerContent>

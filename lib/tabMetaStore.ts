@@ -16,6 +16,7 @@ export interface TabMeta {
   favIconUrl?: string;
 }
 
+// 条目随 tab 生命周期:onRemoved 清理;极少量残留(open tab 期间卸载)无害,量级 ~百字节/条
 const store = new Map<number, TabMeta>();
 const listeners = new Set<() => void>();
 const hydrating = new Set<number>();
