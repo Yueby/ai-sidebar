@@ -359,3 +359,47 @@ gateCard:
     summaryOpen: 在浏览器中打开新标签页
   closePage:
     summary: 关闭本 agent 打开的标签页
+
+sync:
+  title: WebDAV 同步
+  desc: 通过 WebDAV 在多台设备间同步设置与对话记录（坚果云等任何 WebDAV 服务均可）。
+  urlLabel: 服务地址
+  urlPlaceholder: https://dav.jianguoyun.com/dav/
+  usernameLabel: 账号
+  passwordLabel: 密码 / 应用密码
+  pathLabel: 远端路径
+  testButton: 测试连接
+  testOk: WebDAV 连接成功
+  testFailed: 连接失败
+  encryptLabel: 加密备份
+  encryptDesc: 用密码加密备份文件（AES-GCM），密码仅保存在本机
+  encryptPasswordLabel: 加密密码
+  encryptWarning: 未加密时 API Key 与对话内容将明文存储在 WebDAV 服务商。
+  upload: 上传到 WebDAV
+  restore: 从 WebDAV 恢复
+  remoteHint: 上传会覆盖远端备份；恢复会覆盖本地全部设置与会话记录。
+  remoteTime: 远端备份时间
+  restoreConfirmTitle: 从 WebDAV 恢复
+  restoreConfirmDesc: 将用远端备份（{time}）覆盖本地的全部设置与会话记录，此操作不可撤销。
+  restoreConfirmLocal: 本地最新会话时间：{time}
+  restoreConfirmSize: 备份大小：{size}
+  restoreConfirm: 确认恢复
+  cancel: 取消
+  noRemote: 远端暂无备份
+  uploadSuccess: 已上传（压缩后 {size}）
+  restoreSuccess: 已恢复 {count} 个会话与全部设置
+  error:
+    needUrl: 请先填写有效的 WebDAV 服务地址
+    needCredentials: 请填写 WebDAV 账号与密码
+    auth: 认证失败：请检查账号与密码（坚果云需使用应用密码）
+    forbidden: 无访问权限：请检查账号权限
+    quota: 服务商存储空间不足
+    http: 服务返回错误（HTTP {status}）
+    timeout: 连接超时：请检查网络或服务地址
+    network: 网络错误：无法连接到 WebDAV 服务
+    needEncryptPassword: 请先填写加密密码
+    notEncrypted: 该备份未加密
+    decryptFailed: 解密失败：请检查加密密码
+    invalidFile: 不是有效的备份文件
+    corruptFile: 备份文件已损坏或不完整
+    streaming: 当前有回复正在进行，请完成或停止后再恢复

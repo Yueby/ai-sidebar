@@ -116,6 +116,15 @@ export interface Settings {
   reasoningLevel: ReasoningLevel;
   /** 网络搜索源配置(provider 非 none 且字段齐备时才注册 search_web 工具) */
   webSearch: WebSearchConfig;
+  /** WebDAV 同步配置(备份页签;v1 手动推拉) */
+  webdav: {
+    url: string;
+    username: string;
+    password: string;
+    remotePath: string;
+    encrypt: boolean;
+    encryptPassword: string;
+  };
 }
 
 /**

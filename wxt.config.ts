@@ -6,6 +6,9 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-react', '@wxt-dev/i18n/module', '@wxt-dev/auto-icons'],
   // 扩展图标:assets/icon.png(512²)自动生成全套尺寸并写入 manifest.icons
+  // developmentIndicator: false —— 模块默认在 dev 构建把图标灰度化当“开发版”标记,关掉以显示真实颜色
+  autoIcons: { developmentIndicator: false },
+  // 扩展图标:assets/icon.png(512²)自动生成全套尺寸并写入 manifest.icons
   // locales 目录(默认 <srcDir>/locales)自动发现语言;默认语言 = manifest.default_locale(zh_CN)
   // dev 文件监听在部分 Windows 会话下静默失效(chokidar 事件丢失):强制 1s 轮询保证 rebuild 可靠
   watchOptions: { usePolling: true, interval: 1000 },

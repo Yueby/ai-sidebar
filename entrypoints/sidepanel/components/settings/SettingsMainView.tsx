@@ -54,6 +54,10 @@ interface SettingsMainViewProps {
   onBack: () => void;
   onAddProvider: () => void;
   onEditProvider: (provider: ProviderConfig) => void;
+  /** WebDAV 恢复:全量落盘(IDB+设置)与 store 刷新由 App 编排 */
+  onRestoreAll: (bundle: import('@/lib/syncPayload').SyncBundle) => void;
+  /** 本地最新会话时间(恢复冲突对比展示) */
+  latestLocalSessionAt: number | null;
 }
 
 type SettingsTab = 'providers' | 'search' | 'permissions' | 'backup' | 'about';
@@ -88,6 +92,8 @@ export function SettingsMainView({
   onBack,
   onAddProvider,
   onEditProvider,
+  onRestoreAll,
+  latestLocalSessionAt,
 }: SettingsMainViewProps) {
   const [currentTab, setCurrentTab] = useState<SettingsTab>('providers');
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -738,7 +744,12 @@ export function SettingsMainView({
 
         {/* VIEW: Backup (导出/导入配置文件) */}
         {currentTab === 'backup' && (
-          <SettingsBackupView settings={settings} onUpdateSettings={onUpdateSettings} />
+          <SettingsBackupView
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            onRestoreAll={onRestoreAll}
+            latestLocalSessionAt={latestLocalSessionAt}
+          />
         )}
 
         {/* VIEW 3: Permissions Management */}

@@ -359,3 +359,47 @@ gateCard:
     summaryOpen: Open new browser tab
   closePage:
     summary: Close tab opened by agent
+
+sync:
+  title: WebDAV Sync
+  desc: Sync settings and chat history across devices via WebDAV (works with any WebDAV service, e.g. Jianguoyun).
+  urlLabel: Server URL
+  urlPlaceholder: https://dav.jianguoyun.com/dav/
+  usernameLabel: Username
+  passwordLabel: Password / app password
+  pathLabel: Remote path
+  testButton: Test connection
+  testOk: WebDAV connection successful
+  testFailed: Connection failed
+  encryptLabel: Encrypt backup
+  encryptDesc: Encrypt the backup file with a password (AES-GCM); the password stays on this device
+  encryptPasswordLabel: Encryption password
+  encryptWarning: Without encryption, API keys and chat history are stored in plain text on the WebDAV provider.
+  upload: Upload to WebDAV
+  restore: Restore from WebDAV
+  remoteHint: Uploading overwrites the remote backup; restoring overwrites all local settings and chat history.
+  remoteTime: Remote backup time
+  restoreConfirmTitle: Restore from WebDAV
+  restoreConfirmDesc: This will overwrite all local settings and chat history with the remote backup ({time}). This action cannot be undone.
+  restoreConfirmLocal: "Newest local chat: {time}"
+  restoreConfirmSize: "Backup size: {size}"
+  restoreConfirm: Restore
+  cancel: Cancel
+  noRemote: No remote backup yet
+  uploadSuccess: Uploaded ({size} compressed)
+  restoreSuccess: Restored {count} chats and all settings
+  error:
+    needUrl: Enter a valid WebDAV server URL first
+    needCredentials: Enter the WebDAV username and password
+    auth: Authentication failed — check the username and password (Jianguoyun requires an app password)
+    forbidden: Access forbidden — check the account permissions
+    quota: The provider is out of storage quota
+    http: Server returned an error (HTTP {status})
+    timeout: Connection timed out — check the network or server URL
+    network: Network error — cannot reach the WebDAV service
+    needEncryptPassword: Enter the encryption password first
+    notEncrypted: This backup is not encrypted
+    decryptFailed: Decryption failed — check the encryption password
+    invalidFile: Not a valid backup file
+    corruptFile: The backup file is corrupted or incomplete
+    streaming: A reply is in progress — finish or stop it before restoring

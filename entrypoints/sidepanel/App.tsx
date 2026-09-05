@@ -16,6 +16,9 @@ import { useChatTurn } from './hooks/useChatTurn';
 import { usePageContextRefs } from './hooks/usePageContextRefs';
 import { useCompact } from './hooks/useCompact';
 import { useQuickPrompts } from './hooks/useQuickPrompts';
+import { replaceAllSessions } from '@/lib/sessionStore';
+import { activeSessionIdItem, sanitizeSettings } from '@/lib/storage';
+import type { SyncBundle } from '@/lib/syncPayload';
 import { useAppStore, selectCurrentSession } from './store';
 import { EMPTY_DRAFT } from './store/sessionSlice';
 
@@ -29,6 +32,7 @@ import { ProviderDialog } from './components/settings/ProviderDialog';
 import { UserScriptsGateDialog } from './components/UserScriptsGateDialog';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
+import { toast } from 'sonner';
 
 type ViewMode = 'chat' | 'settings';
 
@@ -272,6 +276,29 @@ export default function App() {
     !compact.isCompacting &&
     shouldCompact(contextData.usage);
 
+  // WebDAV 恢复编排:IDB 全量替换 → store 刷新 → 设置持久化 → 激活会话校正。
+  // 流式进行中拒绝恢复(在途写入会与全量替换互相覆盖)。
+  const handleSyncRestore = useCallback(
+    (bundle: SyncBundle) => {
+      if (isStreaming || (inFlight && inFlight.messages.length > 0)) {
+        toast.error(i18n.t('sync.error.streaming'));
+        return;
+      }
+      const store = useAppStore.getState();
+      void replaceAllSessions(bundle.sessions);
+      store.setSessions(bundle.sessions);
+      void store.updateSettings(sanitizeSettings(bundle.settings));
+      const restoredActive =
+        bundle.activeSessionId && bundle.sessions.some((s) => s.id === bundle.activeSessionId)
+          ? bundle.activeSessionId
+          : (bundle.sessions[0]?.id ?? null);
+      store.setActiveSessionId(restoredActive);
+      void activeSessionIdItem.setValue(restoredActive);
+    },
+    [inFlight, isStreaming],
+  );
+  const latestLocalSessionAt = sessions.reduce((max, s) => Math.max(max, s.updatedAt), 0);
+
   // 渲染源 = 会话转录 + 本次运行的 in-flight assistant 消息(仅当归属当前会话;
   // 流式中途切到别的会话时不串显)。live 气泡仍由 MessageList 追加在最后。
   const displayedMessages =
@@ -489,6 +516,8 @@ export default function App() {
               onBack={handleBackToChat}
               onAddProvider={handleAddProvider}
               onEditProvider={handleEditProvider}
+              onRestoreAll={handleSyncRestore}
+              latestLocalSessionAt={latestLocalSessionAt}
             />
           </div>
         </DrawerContent>

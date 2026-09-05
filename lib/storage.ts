@@ -49,6 +49,22 @@ const KEY_BASED_WEB_SEARCH_PROVIDERS = [
   'metaso',
 ] as const;
 
+/** WebDAV 同步配置清洗(v1 手动推拉;凭证/加密密码存本地,与 API Key 同信任域) */
+function sanitizeWebdav(value: unknown): Settings['webdav'] {
+  const fallback = DEFAULT_SETTINGS.webdav;
+  if (!value || typeof value !== 'object') return fallback;
+  const v = value as Record<string, unknown>;
+  const str = (x: unknown, fb: string) => (typeof x === 'string' ? x : fb);
+  return {
+    url: str(v.url, ''),
+    username: str(v.username, ''),
+    password: str(v.password, ''),
+    remotePath: str(v.remotePath, fallback.remotePath) || fallback.remotePath,
+    encrypt: v.encrypt === true,
+    encryptPassword: str(v.encryptPassword, ''),
+  };
+}
+
 function sanitizeWebSearch(value: unknown): Settings['webSearch'] {
   const raw = (value ?? {}) as Partial<Settings['webSearch']>;
   const provider = WEB_SEARCH_PROVIDERS.includes(raw.provider as never)
@@ -103,6 +119,7 @@ export function sanitizeSettings(value: unknown): Settings {
       ? (v.reasoningLevel as Settings['reasoningLevel'])
       : 'off',
     webSearch: sanitizeWebSearch(v.webSearch),
+    webdav: sanitizeWebdav(v.webdav),
   };
 }
 

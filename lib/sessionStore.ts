@@ -37,6 +37,15 @@ export async function deleteSession(id: string): Promise<void> {
   await db.delete(SESSION_STORE, id);
 }
 
+/** 全量替换(WebDAV 恢复用):清空后整体写入,旧会话一次性让位 */
+export async function replaceAllSessions(sessions: Session[]): Promise<void> {
+  const db = await getDB();
+  await db.clear(SESSION_STORE);
+  const tx = db.transaction(SESSION_STORE, 'readwrite');
+  for (const s of sessions) void tx.store.put(s);
+  await tx.done;
+}
+
 /**
  * 一次性迁移旧版 local:sessions → IndexedDB:
  * 旧 key 非空则逐条清洗后写入,然后删除旧 key(删掉即不会重复迁移)。
