@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { i18n } from '#i18n';
 import {
   Bot,
@@ -9,12 +9,8 @@ import {
   Sparkles,
   RefreshCw,
   AlertCircle,
-  ArrowDown,
   X,
   Settings as SettingsIcon,
-  Globe,
-  ShieldCheck,
-  Loader2,
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
@@ -22,10 +18,18 @@ import type { QuickPromptsState } from '@/entrypoints/sidepanel/hooks/useQuickPr
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import {
+  MessageScrollerProvider,
+  MessageScroller,
+  MessageScrollerViewport,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerButton,
+  useMessageScroller,
+} from '@/components/ui/message-scroller';
 
 interface MessageListProps {
-  /** 所属会话标识:透传 MessageItem 作为入场动画抑制的重估边界 */
+  /** 所属会话标识:透传 MessageItem 作为入场动画抑制的重估边界;同时作为 scroller 重挂载键(切会话恢复默认滚动位) */
   sessionKey: string;
   messages: ChatMessage[];
   isStreaming?: boolean;
@@ -55,6 +59,18 @@ interface MessageListProps {
 
 const PROMPT_ICONS = [FileText, Lightbulb, HelpCircle, CheckSquare];
 
+/** 门控卡强制可见:审批卡是阻塞式交互(agent 循环挂起等待),出现即强制贴底,
+ *  即使用户上翻阅读也拉回,否则卡片落在视口外会造成「转圈圈无卡」死等。
+ *  语义对齐旧体系 gateRequest effect;自动跟底本身不覆盖「用户已上翻」场景。 */
+function GatePinner({ gateRequest }: { gateRequest: GateRequest | null }) {
+  const scroller = useMessageScroller();
+  useEffect(() => {
+    if (gateRequest) scroller.scrollToEnd();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gateRequest 出现即触发一次
+  }, [gateRequest]);
+  return null;
+}
+
 export function MessageList({
   messages,
   isStreaming,
@@ -76,188 +92,13 @@ export function MessageList({
   onOpenSettings,
   quickPrompts,
 }: MessageListProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [showScrollBottom, setShowScrollBottom] = useState(false);
-  // 「用户上翻」只由用户主动滚动行为置位(wheel 向上 / touch 下拖 / PageUp/ArrowUp/Home),
-  // 或非程序性 scroll 事件落在离底 > 阈值处(滚动条拖动/惯性滚动;程序性滚动一律直达底部);
-  // 视口/内容的程序性尺寸变化不改变跟底状态——挂起前若在跟底,尺寸变化后重新贴底
-  const userScrolledUpRef = useRef(false);
-  // 最近一次程序性钉底时间(RO 兑底/强制钉底):钉底后的滚动事件是布局抖动,不视为用户上翻
-  const lastProgrammaticPinRef = useRef(0);
-  // 程序性 smooth 滚动进行中:吞掉中途 scroll 事件(落底前距离必然 > 阈值),防止误判挂起
-  const programmaticScrollRef = useRef(false);
-  // 时间盒:smooth 途中用户拖滚动条时事件被吞、标记无法经"落底"清除 → 350ms 兜底复位
-  const programmaticScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const touchStartYRef = useRef<number | null>(null);
-  // 首条消息身份(会话切换检测用)
-  const firstMessageKeyRef = useRef<string | null>(null);
-
-  /** 用户滚动意图:立即挂起跟底(夺回程序性 smooth 滚动的控制权) */
-  const suspendFollow = useCallback(() => {
-    programmaticScrollRef.current = false;
-    userScrolledUpRef.current = true;
-    setShowScrollBottom(true);
-  }, []);
-
-  // scroll 事件:程序性滚动途中不改变跟底状态,只等落底;非程序性滚动按落点判定
-  // 挂起/恢复(此时 scroll 事件只可能来自用户:滚动条拖动、惯性滚动、键盘滚动)
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    // 钉底瞬间(卡片弹出/消失挤压视口)产生的滚动事件是布局抖动,不据此挂起跟底
-    if (performance.now() - lastProgrammaticPinRef.current < 150) return;
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (programmaticScrollRef.current) {
-      if (distance <= 80) programmaticScrollRef.current = false; // 已落底
-      return;
-    }
-    const isUp = distance > 80;
-    userScrolledUpRef.current = isUp;
-    setShowScrollBottom(isUp);
-  }, []);
-
-  const scrollToBottom = useCallback((smooth = false) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (smooth) {
-      programmaticScrollRef.current = true;
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-      // 每次滚动重启计时,350ms 内未落底也强制复位标记(避免吞掉用户后续 scroll 事件)
-      if (programmaticScrollTimerRef.current) clearTimeout(programmaticScrollTimerRef.current);
-      programmaticScrollTimerRef.current = setTimeout(() => {
-        programmaticScrollRef.current = false;
-        programmaticScrollTimerRef.current = null;
-      }, 350);
-    } else {
-      // 同步赋值直达底部,落点必在阈值内,无需标记程序性
-      el.scrollTop = el.scrollHeight;
-    }
-    userScrolledUpRef.current = false;
-    setShowScrollBottom(false);
-  }, []);
-
-  const handleManualScrollToBottom = useCallback(() => {
-    userScrolledUpRef.current = false;
-    setShowScrollBottom(false);
-    // 用户主动回底:smooth 只服务此场景;流式跟底由锚点钉底 + RO 瞬时贴底承接
-    scrollToBottom(true);
-  }, [scrollToBottom]);
-
-  // 用户主动滚动手势:wheel 向上 / touch 下拖(仅当确实可向上滚时)
-  const handleWheel = useCallback(
-    (e: React.WheelEvent<HTMLDivElement>) => {
-      if (e.deltaY < 0 && (scrollRef.current?.scrollTop ?? 0) > 0) {
-        suspendFollow();
-      }
-    },
-    [suspendFollow]
-  );
-
-  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    touchStartYRef.current = e.touches[0]?.clientY ?? null;
-  }, []);
-
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent<HTMLDivElement>) => {
-      const startY = touchStartYRef.current;
-      const curY = e.touches[0]?.clientY;
-      if (startY === null || curY === undefined) return;
-      // 手指向下拖(内容随之上移)= 用户向上滚动
-      if (curY - startY > 8 && (scrollRef.current?.scrollTop ?? 0) > 0) {
-        suspendFollow();
-      }
-    },
-    [suspendFollow]
-  );
-
-  const handleTouchEnd = useCallback(() => {
-    touchStartYRef.current = null;
-  }, []);
-
-  // 键盘滚动(PageUp/ArrowUp/Home;焦点须在列表内,Composer 按键不会落到这里)
-  const handleListKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (
-        (e.key === 'PageUp' || e.key === 'ArrowUp' || e.key === 'Home') &&
-        (scrollRef.current?.scrollTop ?? 0) > 0
-      ) {
-        suspendFollow();
-      }
-    },
-    [suspendFollow]
-  );
-
   const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
   // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(随消息身份重估)
   const quietFrom = Math.max(0, messages.length - (quietTailCount ?? 0));
   // 键 = 过滤后位置(msg-${i})。live 槽键 = 其「未来物化位置」——message_end 时
   // in-flight 消息顶替 live 槽实例(零重挂载,MarkdownView memo 复用),finalize 后索引不变、
   // 实例跨转录落盘持续复用,全程无 class/实例翻转 → 肉眼无闪烁
-  const filteredMessages = messages.filter((m) => m.role !== 'toolResult');
-
-  // 1. ResizeObserver(兜底钉底): 同时观察内容容器与视口容器。跟底状态下任何尺寸变化(内容跳变、
-  //    审批槽位弹出/消失挤压视口)都瞬时贴底(无动画);挂起状态不动作,保持用户阅读位置。
-  //    流式增长的常规钉底由列表末尾锚点(overflow-anchor)承接,本观察器是锚点失效时的 JS 兜底。
-  useEffect(() => {
-    const contentEl = contentRef.current;
-    const scrollEl = scrollRef.current;
-    if (!contentEl) return;
-
-    const observer = new ResizeObserver(() => {
-      if (!userScrolledUpRef.current) {
-        const el = scrollRef.current;
-        if (el) {
-          el.scrollTop = el.scrollHeight;
-          lastProgrammaticPinRef.current = performance.now();
-        }
-      }
-    });
-
-    observer.observe(contentEl);
-    if (scrollEl) observer.observe(scrollEl);
-    return () => observer.disconnect();
-    // isEmpty 翻转时空态/消息态子树切换,contentRef 挂载/卸载需要重新挂观察器
-  }, [isEmpty]);
-
-  // 1.6 审批卡挂载/卸载会挤压/还原视口,锚点与 RO 在布局抖动瞬间可能失效:提交后强制钉底一次。
-  // 门控卡是阻塞式交互(agent 循环挂起等待),必须可见:即使用户上翻阅读也强制贴底并恢复跟底,
-  // 否则卡片落在视口外会造成“转圈圈无卡”的死等。卸载(应答后)仅在跟底状态下钉底。
-  useEffect(() => {
-    if (!gateRequest) return;
-    userScrolledUpRef.current = false;
-    programmaticScrollRef.current = false;
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-      lastProgrammaticPinRef.current = performance.now();
-    }
-  }, [gateRequest]);
-  useEffect(() => {
-    if (gateRequest || userScrolledUpRef.current) return;
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-      lastProgrammaticPinRef.current = performance.now();
-    }
-  }, [gateRequest, messages.length]);
-
-  // 1.5 会话切换检测:首条消息身份变化 → 重置跟底状态并立即贴底(切会话/新会话置底)。
-  // 流式期间首条消息恒定,不误触发
-  useEffect(() => {
-    const first = messages[0];
-    const firstKey = first ? `${first.timestamp}-${first.role}` : 'empty';
-    if (firstMessageKeyRef.current !== null && firstMessageKeyRef.current !== firstKey) {
-      firstMessageKeyRef.current = firstKey;
-      userScrolledUpRef.current = false;
-      programmaticScrollRef.current = false;
-      setShowScrollBottom(false);
-      const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    } else {
-      firstMessageKeyRef.current = firstKey;
-    }
-  }, [messages]);
+  const filteredMessages = useMemo(() => messages.filter((m) => m.role !== 'toolResult'), [messages]);
 
   const toolResultsByCallId = useMemo(() => {
     const map = new Map<string, ToolResultMessage>();
@@ -308,18 +149,9 @@ export function MessageList({
         </div>
       )}
 
-      {/* Main Messages Viewport */}
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        onWheel={handleWheel}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onKeyDown={handleListKeyDown}
-        className="messages-viewport flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 pt-2.5 pb-2.5"
-      >
-        {isEmpty ? (
+      {isEmpty ? (
+        /* 空态:无滚动语义,独立容器居中 */
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="flex min-h-full flex-col justify-center px-3 py-6 text-center animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* Header & Logo */}
             <div className="mb-6 flex flex-col items-center">
@@ -372,7 +204,7 @@ export function MessageList({
                     title={i18n.t('messages.refreshPrompts')}
                     aria-label={i18n.t('messages.refreshPrompts')}
                   >
-                    <RefreshCw className={cn('size-3', quickPrompts.loading && 'animate-spin')} />
+                    <RefreshCw className={quickPrompts.loading ? 'size-3 animate-spin' : 'size-3'} />
                   </button>
                 </div>
 
@@ -419,78 +251,90 @@ export function MessageList({
               </div>
             )}
           </div>
-        ) : (
-          <div ref={contentRef} className="flex flex-col gap-1 pb-4">
-            {/* 位置键隐式契约:键依赖 pi agent-loop 的 message_end 与 newMessages 推送
-                同一消息对象引用(pi agent-loop.ts:355/368),React 才能跨 live→in-flight→落盘
-                复用同一 MessageItem 实例(live 槽键 = 未来物化位置);若 pi 升级改变此行为
-                (消息对象在转写间重建),流式交接会重现闪烁。 */}
-            {filteredMessages.map((msg, i) => (
-              <MessageItem
-                key={`msg-${i}`}
-                message={msg}
-                toolResults={toolResultsByCallId}
-                activeToolNames={activeToolLabels}
-                activeGateRequest={gateRequest}
-                pendingGateTotal={pendingGateTotal}
-                suppressEntryAnimation={i >= quietFrom}
-                sessionKey={sessionKey}
-                compactionInfo={
-                  compaction && msg.timestamp === compaction.summaryTimestamp
-                    ? { tokensBefore: compaction.tokensBefore }
-                    : null
-                }
-              />
-            ))}
-            {isStreaming && (
-              <MessageItem
-                key={`msg-${filteredMessages.length}`}
-                message={{
-                  role: 'assistant',
-                  content: [{ type: 'text', text: streamingContent ?? '' }],
-                  api: 'openai-completions',
-                  provider: '',
-                  model: '',
-                  stopReason: 'stop',
-                  usage: EMPTY_USAGE,
-                  timestamp: Date.now(),
-                } satisfies AssistantMessage}
-                isStreaming
-                isCancelled={isCancelled}
-                liveThinking={streamingThinking}
-                liveToolLabels={liveToolLabels}
-                toolResults={toolResultsByCallId}
-                activeGateRequest={gateRequest}
-                pendingGateTotal={pendingGateTotal}
-                sessionKey={sessionKey}
-              />
-            )}
-            {/* 钉底锚点:overflow-anchor 让浏览器在内容增长时保持本元素视口位置不变
-                (跟底零位移);用户上翻挂起时锚点离开视口,浏览器自动停止锚定 */}
-            <div aria-hidden className="messages-anchor h-px shrink-0" />
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        /* 官方 MessageScroller:autoScroll 仅在读者位于底部时跟随(上翻自动退避、回底恢复),
+         * scrollAnchor 把每轮首条用户消息锚在视口近顶(AI 回复原地长进屏幕),
+         * preserveScrollOnPrepend 保住历史加载位置;key=sessionKey 切会话重挂载走 defaultScrollPosition */
+        <MessageScrollerProvider
+          key={sessionKey}
+          autoScroll
+          defaultScrollPosition="end"
+          scrollPreviousItemPeek={64}
+        >
+          <GatePinner gateRequest={gateRequest ?? null} />
+          <MessageScroller className="flex-1 min-h-0">
+            <MessageScrollerViewport aria-label="Messages" preserveScrollOnPrepend className="px-2 pt-2.5 pb-2.5">
+              {/* 位置键隐式契约:键依赖 pi agent-loop 的 message_end 与 newMessages 推送
+                  同一消息对象引用(pi agent-loop.ts:355/368),React 才能跨 live→in-flight→落盘
+                  复用同一 MessageItem 实例(live 槽键 = 未来物化位置);若 pi 升级改变此行为
+                  (消息对象在转写间重建),流式交接会重现闪烁。 */}
+              <MessageScrollerContent className="gap-1 pb-4">
+                {filteredMessages.map((msg, i) => (
+                  <MessageScrollerItem
+                    key={`msg-${i}`}
+                    messageId={`msg-${i}`}
+                    scrollAnchor={msg.role === 'user'}
+                  >
+                    <MessageItem
+                      message={msg}
+                      toolResults={toolResultsByCallId}
+                      activeToolNames={activeToolLabels}
+                      activeGateRequest={gateRequest}
+                      pendingGateTotal={pendingGateTotal}
+                      suppressEntryAnimation={i >= quietFrom}
+                      sessionKey={sessionKey}
+                      compactionInfo={
+                        compaction && msg.timestamp === compaction.summaryTimestamp
+                          ? { tokensBefore: compaction.tokensBefore }
+                          : null
+                      }
+                    />
+                  </MessageScrollerItem>
+                ))}
+                {isStreaming && (
+                  <MessageScrollerItem messageId={`msg-${filteredMessages.length}`}>
+                    <MessageItem
+                      key={`msg-${filteredMessages.length}`}
+                      message={{
+                        role: 'assistant',
+                        content: [{ type: 'text', text: streamingContent ?? '' }],
+                        api: 'openai-completions',
+                        provider: '',
+                        model: '',
+                        stopReason: 'stop',
+                        usage: EMPTY_USAGE,
+                        timestamp: Date.now(),
+                      } satisfies AssistantMessage}
+                      isStreaming
+                      isCancelled={isCancelled}
+                      liveThinking={streamingThinking}
+                      liveToolLabels={liveToolLabels}
+                      toolResults={toolResultsByCallId}
+                      activeGateRequest={gateRequest}
+                      pendingGateTotal={pendingGateTotal}
+                      sessionKey={sessionKey}
+                    />
+                  </MessageScrollerItem>
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            {/* 回到底按钮:官方件自带 active 态(离底出现/贴底隐藏) */}
+            <MessageScrollerButton
+              direction="end"
+              size="icon"
+              className="bottom-3 z-20 size-7 rounded-full border border-border shadow-md"
+              title={i18n.t('messages.backToBottom')}
+            />
+          </MessageScroller>
+        </MessageScrollerProvider>
+      )}
 
       {/* Bottom Gradient Fade Mask */}
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-background to-transparent z-10"
         aria-hidden="true"
       />
-
-      {/* Scroll to bottom button */}
-      {showScrollBottom && (
-        <Button
-          type="button"
-          size="icon"
-          variant="secondary"
-          onClick={handleManualScrollToBottom}
-          className="absolute bottom-3 right-5 z-20 size-7 rounded-full border border-border shadow-md hover:bg-secondary/90 animate-in fade-in-0 duration-150 motion-reduce:animate-none cursor-pointer"
-          title={i18n.t('messages.backToBottom')}
-        >
-          <ArrowDown className="size-3.5" />
-        </Button>
-      )}
     </div>
   );
 }

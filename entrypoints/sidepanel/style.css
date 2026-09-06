@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 @import 'highlight.js/styles/github-dark.css';
 
 @custom-variant dark (&:is(.dark *));
@@ -345,14 +346,4 @@
 .composer-editor .badge-in-selection {
   outline: 1px solid color-mix(in oklch, var(--ring) 45%, transparent);
   border-radius: 4px;
-}
-
-/* ---- 消息列表原生钉底(overflow-anchor):流式内容增长时浏览器自动保持锚点视口位置,
-     跟底零位移零跳动;滚动容器禁用默认锚定,仅列表末尾哨兵作为锚点,
-     用户上翻挂起后锚点离开视口、浏览器自动停止锚定 ---- */
-.messages-viewport {
-  overflow-anchor: none;
-}
-.messages-anchor {
-  overflow-anchor: auto;
 }
