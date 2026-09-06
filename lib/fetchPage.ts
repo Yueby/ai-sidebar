@@ -42,15 +42,57 @@ function htmlToReadableText(html: string): string {
   return lines.join('\n');
 }
 
-/** 私有/内网地址判定(localhost/环回/链路本地/内网段/.local) */
+/** IPv4 私有/保留段判定 */
+function isPrivateIPv4(host: string): boolean {
+  return /^(10\.|127\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+}
+
+/** IPv6 全展开为 8 组 4 位十六进制串(拼接后 32 字符);含非法组或多次 '::' 返回 null(由调用方 fail-closed) */
+function expandIPv6(host: string): string | null {
+  if ((host.match(/::/g) ?? []).length > 1) return null;
+  const halves = host.split('::');
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length > 1 && halves[1] ? halves[1].split(':') : [];
+  const fill = 8 - head.length - tail.length;
+  if (fill < 0 || (halves.length === 1 && fill !== 0)) return null;
+  const groups = [...head, ...Array<string>(fill).fill('0'), ...tail];
+  if (groups.length !== 8) return null;
+  const expanded = groups.map((g) => (g.length >= 1 && g.length <= 4 ? g.padStart(4, '0') : ''));
+  if (expanded.some((g) => !/^[0-9a-f]{4}$/.test(g))) return null;
+  return expanded.join('');
+}
+
+/** 私有/内网地址判定(localhost/环回/未指定/链路本地/ULA/组播/.local/内网 IPv4)。
+ *  WHATWG URL 的 IPv6 hostname 带方括号,需剥壳后统一判定 */
 function isPrivateHost(hostname: string): boolean {
+  const host = hostname.startsWith('[') ? hostname.slice(1, -1).toLowerCase() : hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.local')) return true;
+  if (!host.includes(':')) {
+    return host === '0.0.0.0' || isPrivateIPv4(host);
+  }
+  // IPv6 字面量:展开失败一律拒绝;可展开则按段分类(expanded 恒为 32 字符,用切片避免下标 undefined)
+  const expanded = expandIPv6(host);
+  if (!expanded) return true;
+  if (expanded.slice(0, 20) === '0'.repeat(20)) {
+    // ::/96 前缀全零:环回(::1)、未指定(::)、v4 映射(::ffff:16 位十六进制)
+    if (expanded.slice(20, 24) === 'ffff') {
+      return isPrivateIPv4(v4FromHexGroups(expanded.slice(24, 28), expanded.slice(28, 32)));
+    }
+    return true;
+  }
+  const first16 = parseInt(expanded.slice(0, 4), 16);
   return (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname.endsWith('.local') ||
-    /^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname)
+    (first16 >= 0xfc00 && first16 <= 0xfdff) || // ULA fc00::/7
+    (first16 >= 0xfe80 && first16 <= 0xfebf) || // 链路本地 fe80::/10
+    first16 >= 0xff00 // 组播 ff00::/8
   );
+}
+
+/** 两个 16 位十六进制组解码为点分 IPv4(如 0a00,0001 → 10.0.0.1) */
+function v4FromHexGroups(a: string, b: string): string {
+  return [a.slice(0, 2), a.slice(2, 4), b.slice(0, 2), b.slice(2, 4)]
+    .map((h) => parseInt(h, 16))
+    .join('.');
 }
 
 export interface FetchedPage {

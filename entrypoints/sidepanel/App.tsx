@@ -18,7 +18,7 @@ import { useCompact } from './hooks/useCompact';
 import { useQuickPrompts } from './hooks/useQuickPrompts';
 import { clearPendingDraftSaves } from './store/sessionSlice';
 import { replaceAllSessions } from '@/lib/sessionStore';
-import { activeSessionIdItem, sanitizeSettings } from '@/lib/storage';
+import { activeSessionIdItem, sanitizeSessions, sanitizeSettings } from '@/lib/storage';
 import type { SyncBundle } from '@/lib/syncPayload';
 import { useAppStore, selectCurrentSession } from './store';
 import { EMPTY_DRAFT } from './store/sessionSlice';
@@ -287,13 +287,15 @@ export default function App() {
       // 防 400ms 防抖窗口内的旧会话对象在恢复后落盘回滚(major-4)
       clearPendingDraftSaves();
       const store = useAppStore.getState();
-      await replaceAllSessions(bundle.sessions);
-      store.setSessions(bundle.sessions);
+      // 远端文件可能被手改/损坏:入库前与本地入口同标准清洗
+      const sessions = sanitizeSessions(bundle.sessions);
+      await replaceAllSessions(sessions);
+      store.setSessions(sessions);
       await store.updateSettings(sanitizeSettings(bundle.settings));
       const restoredActive =
-        bundle.activeSessionId && bundle.sessions.some((s) => s.id === bundle.activeSessionId)
+        bundle.activeSessionId && sessions.some((s) => s.id === bundle.activeSessionId)
           ? bundle.activeSessionId
-          : (bundle.sessions[0]?.id ?? null);
+          : (sessions[0]?.id ?? null);
       store.setActiveSessionId(restoredActive);
       void activeSessionIdItem.setValue(restoredActive);
     },
