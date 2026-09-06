@@ -210,7 +210,6 @@ settings:
     delete: 删除
     enableHint: 启用此规则
     disableHint: 停用此规则
-    disabledBadge: 已停用
     validationNameRequired: 请输入规则名称
     validationContentRequired: 请输入规则内容
     deleteConfirmTitle: 删除规则
@@ -250,12 +249,11 @@ settings:
     emptyAction: 立即添加提供商
     unnamed: 未命名提供商
     defaultProviderName: 提供商
-    activeBadge: 已激活
     noBaseUrl: 无 Base URL
     modelsCount: "{count} 个模型"
     testing: 测试中…
     test: 测试
-    setActive: 设为当前
+    clickToActivate: 点击设为当前
     editTitle: 编辑提供商
     deleteTitle: 删除提供商
     testSuccess: "{name}: {msg}"

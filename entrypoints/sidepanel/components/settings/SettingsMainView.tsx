@@ -12,7 +12,6 @@ import {
   Layers,
   Sparkles,
   Languages,
-  Check,
 } from 'lucide-react';
 import type { Settings, ProviderConfig, AuxThinkingLevel, ReasoningLevel } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
@@ -373,44 +372,24 @@ export function SettingsMainView({
                         'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
                         isActive ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-muted/40',
                       )}
-                      onClick={() => onEditProvider(p)}
+                      onClick={() => handleSetActiveProvider(p.id)}
+                      title={isActive ? undefined : i18n.t('settings.providers.clickToActivate')}
                     >
                       {/* Left: Indicator + Name + Info */}
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div
-                          className="flex items-center shrink-0"
-                          onClick={(e) => {
-                            if (!isActive) {
-                              e.stopPropagation();
-                              handleSetActiveProvider(p.id);
-                            }
-                          }}
-                          title={isActive ? i18n.t('settings.providers.activeBadge') : i18n.t('settings.providers.setActive')}
-                        >
-                          <span
-                            className={cn(
-                              'size-2 rounded-full transition-colors',
-                              isActive ? 'bg-primary ring-2 ring-primary/20' : 'bg-muted-foreground/30 group-hover:bg-muted-foreground/60',
-                            )}
-                          />
-                        </div>
+                        <span
+                          className={cn(
+                            'size-2 rounded-full transition-colors shrink-0',
+                            isActive ? 'bg-primary ring-2 ring-primary/20' : 'bg-muted-foreground/30 group-hover:bg-muted-foreground/60',
+                          )}
+                        />
 
                         <div className="min-w-0 flex-1 space-y-0.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className={cn('font-medium text-[11px] truncate', isActive ? 'text-foreground font-semibold' : 'text-foreground')}>
-                              {p.name || i18n.t('settings.providers.unnamed')}
-                            </span>
-                            {isActive && (
-                              <span className="text-[9px] px-1 py-0.2 rounded bg-primary/15 text-primary font-normal shrink-0 leading-none">
-                                {i18n.t('settings.providers.activeBadge')}
-                              </span>
-                            )}
-                            <span className="text-[9px] px-1 py-0.2 rounded bg-muted text-muted-foreground font-normal shrink-0 leading-none font-mono">
-                              {apiTypeLabel(p.api)}
-                            </span>
-                          </div>
+                          <span className={cn('font-medium text-[11px] truncate block', isActive ? 'text-foreground font-semibold' : 'text-foreground')}>
+                            {p.name || i18n.t('settings.providers.unnamed')}
+                          </span>
                           <p className="text-[10px] text-muted-foreground truncate leading-tight font-mono">
-                            {p.baseUrl || i18n.t('settings.providers.noBaseUrl')} · {i18n.t('settings.providers.modelsCount', { count: p.models.length })}
+                            {apiTypeLabel(p.api)} · {p.baseUrl || i18n.t('settings.providers.noBaseUrl')} · {i18n.t('settings.providers.modelsCount', { count: p.models.length })}
                           </p>
                         </div>
                       </div>
@@ -432,20 +411,6 @@ export function SettingsMainView({
                           {isTesting ? <Loader2 className="size-3 animate-spin" /> : <Zap className="size-3" />}
                           <span className="sr-only">{i18n.t('settings.providers.test')}</span>
                         </Button>
-
-                        {!isActive && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleSetActiveProvider(p.id)}
-                            className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
-                            title={i18n.t('settings.providers.setActive')}
-                          >
-                            <Check className="size-3" />
-                            <span className="sr-only">{i18n.t('settings.providers.setActive')}</span>
-                          </Button>
-                        )}
 
                         <Button
                           type="button"

@@ -210,7 +210,6 @@ settings:
     delete: Delete
     enableHint: Enable rule
     disableHint: Disable rule
-    disabledBadge: Disabled
     validationNameRequired: Please enter a rule name
     validationContentRequired: Please enter rule content
     deleteConfirmTitle: Delete Rule
@@ -250,12 +249,11 @@ settings:
     emptyAction: Add a provider now
     unnamed: Unnamed provider
     defaultProviderName: Provider
-    activeBadge: Active
     noBaseUrl: No Base URL
     modelsCount: "{count} models"
     testing: Testing…
     test: Test
-    setActive: Set as active
+    clickToActivate: Click to set as active
     editTitle: Edit provider
     deleteTitle: Delete provider
     testSuccess: "{name}: {msg}"

@@ -225,11 +225,6 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
                         >
                           {rule.name}
                         </span>
-                        {!rule.enabled && (
-                          <span className="text-[9px] px-1 py-0.5 rounded bg-muted/80 text-muted-foreground font-normal shrink-0 leading-none">
-                            {i18n.t('settings.rules.disabledBadge')}
-                          </span>
-                        )}
                       </div>
                       <p className="text-[10px] text-muted-foreground truncate leading-tight">
                         {rule.content}
