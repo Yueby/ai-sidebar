@@ -18,6 +18,7 @@ import type { QuickPromptsState } from '@/entrypoints/sidepanel/hooks/useQuickPr
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   MessageScrollerProvider,
   MessageScroller,
@@ -213,12 +214,12 @@ export function MessageList({
                     {[0, 1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className="flex items-start gap-2.5 rounded-lg border bg-card/60 p-2.5 animate-pulse"
+                        className="flex items-start gap-2.5 rounded-lg border bg-card/60 p-2.5"
                       >
-                        <div className="size-4 rounded bg-muted shrink-0 mt-0.5" />
+                        <Skeleton className="size-4 shrink-0 mt-0.5" />
                         <div className="flex-1 space-y-1.5 py-0.5">
-                          <div className="h-3 w-1/3 rounded bg-muted" />
-                          <div className="h-2.5 w-2/3 rounded bg-muted/70" />
+                          <Skeleton className="h-3 w-1/3" />
+                          <Skeleton className="h-2.5 w-2/3" />
                         </div>
                       </div>
                     ))}

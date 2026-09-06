@@ -533,7 +533,7 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
    - **实施序列**:①规则+注入架构骨架 → ②技能存储/工具/设置 UI → ③三内置技能+记忆+自动反思+同步
    - **安全**:技能/规则 = 提示注入面;安装必经预览确认;save_skill/save_memory 全程 confirm(永不进 grant);存储内容设置页全程可查可改
    - **验收标尺**:①规则开关下轮对话即时生效 ②经 skill-installer 从 GitHub 装真实技能并生效 ③/improve 从含纠错会话沉淀记忆且下轮生效
-6. **UI 官方化专项:聊天渲染全量迁移 shadcn 官方件**(用户拍板「全部换官方」;scout 调研报告见 subagent-artifacts/outputs/790c6362…/context.md):
+6. **UI 官方化专项:聊天渲染全量迁移 shadcn 官方件**(✅ 已完成 2026-09:小件批一 1a8628a(Tabs/Bubble/Message/Collapsible/Marker/Spinner)、小件批二 481f6a6(Item/ButtonGroup 审批卡 + Questionnaire ask_user)、大件批 b945ef6(MessageScroller 替换 overflow-anchor 钉底体系 + shadcn/tailwind.css utilities import + Skeleton);评估保留:ToolCallCard 内容体/ApprovalSection 交互体/ContextRing/元素 chip/md-body(无官方对应)、Attachment(无上传流)、Empty/Field(与现有范式等价))(用户拍板「全部换官方」;scout 调研报告见 subagent-artifacts/outputs/790c6362…/context.md):
    - **底座结论**:bubble/message/attachment/marker 基于 radix-ui(Slot)+ 标准 new-york-v4 token,零主题改动;message-scroller 依赖新包 @shadcn/react(v0.3.1,peer react 19);prompt-input/response/reasoning/tool 官方不存在(404)—— TipTap Composer(元素 chip + 斜杠 cmdk)与 MarkdownView(react-markdown)保留自造
    - **小件批(designer)**:`add bubble message spinner marker collapsible tabs` → 设置页签换 Tabs;消息行布局换 Message/Bubble(用户=default end、AI=ghost/tinted、错误=destructive);token 脚注进 MessageFooter;CompactionRow 换 Marker separator;思考折叠/工具卡展开换 Collapsible;流式 50ms 节流与状态流不动
    - **小件批二(designer,等批一落地)**:`add questionnaire item button-group` → ApprovalSection 审批卡换 Item+ButtonGroup(工具信息 ItemContent、允许/拒绝 ItemActions、会话级 grant Switch 保留);ask_user 提问卡换 Questionnaire(单问题子集:choices/freeform/skip/submit);gate 状态流与 grant 语义零改动
