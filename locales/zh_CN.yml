@@ -191,6 +191,8 @@ settings:
     langLabel: 语言
     langDesc: "AI 生成内容(回复、标题、快捷指令)的语言;对话中明确要求其他语言时以用户要求为准"
     langAuto: 自动
+    langCustom: 自定义
+    langCustomPlaceholder: "如：简体中文、Deutsch…"
   assignment:
     title: 模型分工
     desc: 思考等级按行独立配置；对话模型的思考深度与输入框选择器同步

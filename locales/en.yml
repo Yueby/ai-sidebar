@@ -191,6 +191,8 @@ settings:
     langLabel: Language
     langDesc: "Language for AI-generated content (replies, titles, starter prompts); explicit user language in messages takes precedence"
     langAuto: Auto
+    langCustom: Custom
+    langCustomPlaceholder: "e.g. Deutsch, 简体中文…"
   assignment:
     title: Model Assignment
     desc: Thinking levels are configured per role; the chat model thinking depth syncs with the composer selector

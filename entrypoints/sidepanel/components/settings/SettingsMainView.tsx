@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import type { Settings, ProviderConfig, AuxThinkingLevel, ReasoningLevel } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
-import { AI_LANGUAGES } from '@/lib/language';
 import { apiTypeLabel, getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { toast } from 'sonner';
 import { testConnection } from '@/lib/models';
@@ -32,6 +31,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -102,6 +102,8 @@ export function SettingsMainView({
   const [testingId, setTestingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteProviderTarget, setDeleteProviderTarget] = useState<ProviderConfig | null>(null);
+  /** 自定义语言草稿(选「自定义」但尚未输入时不落库;null = 不在编辑态) */
+  const [langDraft, setLangDraft] = useState<string | null>(null);
 
   // 所有提供商已导入的模型列表（用于模型分工下拉选择）
   const allModelOptions = useMemo(() => {
@@ -500,30 +502,43 @@ export function SettingsMainView({
                       {i18n.t('settings.pref.langDesc')}
                     </div>
                   </div>
-                  <div className="w-36 shrink-0">
+                  <div className="w-36 shrink-0 space-y-1.5">
                     <Select
-                      value={settings.language ?? 'auto'}
+                      value={settings.language || langDraft !== null ? 'custom' : 'auto'}
                       onValueChange={(val) => {
-                        onUpdateSettings({
-                          ...settings,
-                          language: val === 'auto' ? null : val,
-                        });
+                        if (val === 'custom') {
+                          // 进入编辑态:预填已有值,输入非空才落库
+                          setLangDraft(settings.language ?? '');
+                        } else {
+                          setLangDraft(null);
+                          onUpdateSettings({ ...settings, language: null });
+                        }
                       }}
                     >
                       <SelectTrigger className="h-7 text-xs w-full">
                         <SelectValue placeholder={i18n.t('settings.pref.langAuto')} />
                       </SelectTrigger>
-                      <SelectContent align="end" className="max-w-[280px]">
+                      <SelectContent align="end">
                         <SelectItem value="auto" className="text-xs font-medium">
                           {i18n.t('settings.pref.langAuto')}
                         </SelectItem>
-                        {AI_LANGUAGES.map((lang) => (
-                          <SelectItem key={lang.tag} value={lang.tag} className="text-xs">
-                            {lang.label}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="custom" className="text-xs">
+                          {i18n.t('settings.pref.langCustom')}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
+                    {(langDraft !== null || settings.language) && (
+                      <Input
+                        value={langDraft ?? settings.language ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setLangDraft(v);
+                          onUpdateSettings({ ...settings, language: v.trim() || null });
+                        }}
+                        placeholder={i18n.t('settings.pref.langCustomPlaceholder')}
+                        className="h-7 text-xs"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
