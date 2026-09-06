@@ -763,7 +763,7 @@ export function SettingsMainView({
                 </span>
               </div>
 
-              <Card className="p-3 p-3 space-y-1">
+              <Card className="gap-1 p-3">
                 <div className="text-xs font-semibold text-foreground">{appName}</div>
                 <div className="text-[11px] text-muted-foreground">{i18n.t('settings.about.extDesc')}</div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
