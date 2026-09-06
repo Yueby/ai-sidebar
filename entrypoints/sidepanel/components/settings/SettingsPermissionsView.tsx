@@ -7,6 +7,7 @@ import {
 } from '@/lib/permissions';
 import { isUserScriptsAvailable } from '@/lib/pageScripting';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { i18n } from '#i18n';
 
@@ -43,7 +44,7 @@ export function SettingsPermissionsView() {
           <span className="text-[10px] text-muted-foreground font-mono">MANIFEST</span>
         </div>
 
-        <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+        <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
           {/* 网页访问 (host <all_urls>) */}
           <div className="flex items-center justify-between gap-2.5 p-2.5">
             <div className="w-6 flex items-center justify-center shrink-0">
@@ -103,7 +104,7 @@ export function SettingsPermissionsView() {
               </div>
             );
           })}
-        </div>
+        </Card>
       </div>
 
       {/* 2. userScripts 引导节 */}
@@ -123,7 +124,7 @@ export function SettingsPermissionsView() {
           </span>
         </div>
 
-        <div className="rounded-xl border bg-background/50 p-3 space-y-2 text-[11px] text-muted-foreground leading-relaxed">
+        <Card className="gap-2 p-3 text-[11px] text-muted-foreground leading-relaxed">
           <p>
             {INSTALL_PERMISSIONS.find((p) => p.id === 'userScripts')?.description}
           </p>
@@ -144,7 +145,7 @@ export function SettingsPermissionsView() {
               </span>
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       {/* 3. 权限最小化声明 */}

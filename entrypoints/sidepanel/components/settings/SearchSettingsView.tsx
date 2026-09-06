@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Eye, EyeOff, Globe } from 'lucide-react';
 import type { Settings, WebSearchProvider } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { i18n } from '#i18n';
@@ -122,7 +123,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
           </span>
         </div>
 
-        <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+        <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
           <div className="flex items-center justify-between gap-2 p-2.5">
             <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('search.providerLabel')}</Label>
             <div className="w-36 shrink-0">
@@ -200,7 +201,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
               )}
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

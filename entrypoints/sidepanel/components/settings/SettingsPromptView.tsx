@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { i18n } from '#i18n';
 import type { Settings, UserRule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -116,7 +117,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
           </span>
         </div>
 
-        <div className="rounded-xl border bg-background/50 p-3 space-y-1.5">
+        <Card className="gap-1.5 p-3">
           <Textarea
             value={promptDraft}
             onChange={(e) => handlePromptChange(e.target.value)}
@@ -135,7 +136,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
               {promptDraft.length}/{MAX_SYSTEM_PROMPT_LENGTH}
             </span>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* 2. 规则节 */}
@@ -180,7 +181,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
             </Button>
           </div>
         ) : (
-          <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+          <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
             {rules.map((rule) => (
               <div
                 key={rule.id}
@@ -250,7 +251,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
                 </div>
               </div>
             ))}
-          </div>
+          </Card>
         )}
       </div>
 

@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -358,7 +359,7 @@ export function SettingsMainView({
                 </Button>
               </div>
             ) : (
-              <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+              <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
                 {settings.providers.map((p) => {
                   const isActive = p.id === settings.activeProviderId;
                   const isTesting = testingId === p.id;
@@ -438,7 +439,7 @@ export function SettingsMainView({
                     </div>
                   );
                 })}
-              </div>
+              </Card>
             )}
           </div>
         )}
@@ -456,7 +457,7 @@ export function SettingsMainView({
                 </h2>
               </div>
 
-              <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+              <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
                 <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className="font-medium text-foreground text-[11px]">{i18n.t('settings.pref.langLabel')}</span>
@@ -503,7 +504,7 @@ export function SettingsMainView({
                     )}
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
 
             {/* 2. 模型分工节 */}
@@ -516,7 +517,7 @@ export function SettingsMainView({
                 </h2>
               </div>
 
-              <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+              <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
                 {/* 1. 对话模型 */}
                 <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="flex items-center gap-1.5 shrink-0 min-w-0">
@@ -716,7 +717,7 @@ export function SettingsMainView({
                     </div>
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
           </div>
         )}
@@ -762,13 +763,13 @@ export function SettingsMainView({
                 </span>
               </div>
 
-              <div className="rounded-xl border bg-background/50 p-3 space-y-1">
+              <Card className="p-3 p-3 space-y-1">
                 <div className="text-xs font-semibold text-foreground">{appName}</div>
                 <div className="text-[11px] text-muted-foreground">{i18n.t('settings.about.extDesc')}</div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
                   {i18n.t('settings.about.extIntro')}
                 </p>
-              </div>
+              </Card>
             </div>
 
             {/* Section 2: Supported Protocols */}
@@ -781,7 +782,7 @@ export function SettingsMainView({
                 <span className="text-[10px] text-muted-foreground font-mono">{i18n.t('settings.about.protocolsCount')}</span>
               </div>
 
-              <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+              <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
                 <div className="p-2.5 space-y-0.5">
                   <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.about.chatCompletionsTitle')}</div>
                   <div className="text-[10px] text-muted-foreground leading-relaxed">
@@ -802,17 +803,17 @@ export function SettingsMainView({
                     <code className="font-mono bg-muted px-1 py-0.2 rounded text-[10px]">/v1/messages</code> {i18n.t('settings.about.messagesDesc')}
                   </div>
                 </div>
-              </div>
+              </Card>
             </div>
 
             {/* Section 3: Security & Privacy */}
-            <div className="rounded-xl border bg-background/50 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
+            <Card className="p-3 flex-row items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
               <ShieldCheck className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
               <div>
                 <span className="font-medium text-foreground">{i18n.t('settings.about.dataSecurityTitle')}</span>
                 {i18n.t('settings.about.dataSecurityDesc')}
               </div>
-            </div>
+            </Card>
           </div>
         )}
         {/* 删除提供商二次确认(dialog 统一删除语义) */}

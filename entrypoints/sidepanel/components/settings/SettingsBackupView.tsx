@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Download, Upload, TriangleAlert, CloudUpload, CloudDownload, Loader2, Eye, EyeOff, FileJson, CloudCog } from 'lucide-react';
 import type { Settings, Session } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { sanitizeSettings } from '@/lib/storage';
 import { i18n } from '#i18n';
 import { buildSyncBundle, serializeSyncBundle, parseSyncBlob, decryptSyncBlob, formatBytes, type SyncBundle } from '@/lib/syncPayload';
@@ -216,7 +217,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
           <span className="text-[10px] text-muted-foreground font-mono">JSON</span>
         </div>
 
-        <div className="rounded-xl border bg-background/50 p-3 space-y-2.5">
+        <Card className="gap-2.5 p-3">
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -260,7 +261,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               {i18n.t('backup.warning')}
             </span>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* 2. WebDAV 同步节 */}
@@ -297,7 +298,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
           </div>
         </div>
 
-        <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden text-xs">
+        <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden text-xs">
           <div className="flex items-center justify-between gap-2 p-2.5">
             <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('sync.urlLabel')}</Label>
             <Input
@@ -370,7 +371,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               </div>
             </div>
           )}
-        </div>
+        </Card>
 
         <p className="text-[10px] text-muted-foreground leading-snug px-0.5">
           {i18n.t('sync.remoteHint')}
