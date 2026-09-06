@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, ShieldCheck, Globe, Lock, ExternalLink } from 'lucide-react';
+import { Shield, ExternalLink } from 'lucide-react';
 import {
   INSTALL_PERMISSIONS,
   WEB_ACCESS_PERMISSION,
@@ -7,7 +7,6 @@ import {
 } from '@/lib/permissions';
 import { isUserScriptsAvailable } from '@/lib/pageScripting';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { i18n } from '#i18n';
 
@@ -33,118 +32,125 @@ export function SettingsPermissionsView() {
   }, []);
 
   return (
-    <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-      {/* 1. 网页访问(host <all_urls>:随安装授予) */}
+    <div className="space-y-4 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+      {/* 1. 权限清单节 */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            <Globe className="size-3.5 text-muted-foreground" />
-            <span>{i18n.t('permissions.webAccessTitle')}</span>
-          </h2>
-          <Badge
-            variant="outline"
-            className="text-[10px] h-4.5 px-1.5 font-normal flex items-center gap-1 bg-emerald-600 dark:bg-emerald-500 text-white dark:text-neutral-950 border-transparent"
-          >
-            <ShieldCheck className="size-2.5" />
-            <span>{i18n.t('permissions.grantedWithInstall')}</span>
-          </Badge>
-        </div>
-
-        <div className="rounded-lg border bg-card p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-foreground">
-              {WEB_ACCESS_PERMISSION.name}
-            </span>
-            <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-muted text-muted-foreground border border-border/50">
-              {WEB_ACCESS_PERMISSION.raw}
-            </code>
-          </div>
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            {WEB_ACCESS_PERMISSION.description}
-          </p>
-        </div>
-      </div>
-
-      {/* 2. 安装时静态权限列表 */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            <Lock className="size-3.5 text-muted-foreground" />
-            <span>{i18n.t('permissions.installedListTitle', { count: INSTALL_PERMISSIONS.length })}</span>
-          </h2>
+          <span className="text-[11px] font-medium text-foreground">
+            {i18n.t('permissions.installedListTitle', { count: INSTALL_PERMISSIONS.length + 1 })}
+          </span>
           <span className="text-[10px] text-muted-foreground font-mono">MANIFEST</span>
         </div>
 
-        <div className="rounded-lg border bg-card divide-y divide-border/60 overflow-hidden">
-          {INSTALL_PERMISSIONS.map((p) =>
-            p.id === 'userScripts' ? (
-              // 用户脚本开关特殊行:Chrome 138+ 需在详情页手动开启,无 API 可代开;状态感知 + 直达引导
-              <div key={p.id} className="p-2.5 flex items-start gap-2.5 text-xs">
-                <div
-                  className={cn(
-                    'size-1.5 rounded-full shrink-0 mt-1.5',
-                    userScriptsReady ? 'bg-emerald-500' : 'bg-amber-500',
-                  )}
-                />
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground text-[11px]">{p.name}</span>
-                    <code className="text-[9px] font-mono px-1 py-0.5 rounded bg-muted text-muted-foreground">
-                      {p.raw}
-                    </code>
-                    <span
-                      className={cn(
-                        'text-[9px] px-1 py-0.2 rounded font-medium',
-                        userScriptsReady
-                          ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/15'
-                          : 'text-amber-700 dark:text-amber-300 bg-amber-500/15',
-                      )}
-                    >
-                      {userScriptsReady ? i18n.t('permissions.enabled') : i18n.t('permissions.disabled')}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground leading-normal">{p.description}</p>
-                  {!userScriptsReady && (
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 pt-0.5">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={openExtensionDetails}
-                        className="h-6 text-[11px] px-2 gap-1 cursor-pointer w-fit"
-                      >
-                        <ExternalLink className="size-3 shrink-0" />
-                        <span>{i18n.t('permissions.openDetails')}</span>
-                      </Button>
-                      <span className="text-[10px] text-muted-foreground">
-                        {i18n.t('permissions.userScriptsHint')}
-                      </span>
-                    </div>
-                  )}
-                </div>
+        <div className="divide-y divide-border/60">
+          {/* 网页访问 (host <all_urls>) */}
+          <div className="flex items-center justify-between gap-2.5 py-2 px-1">
+            <div className="w-6 flex items-center justify-center shrink-0">
+              <span className="size-2 rounded-full bg-emerald-500" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium text-[11px] text-foreground">{WEB_ACCESS_PERMISSION.name}</span>
+                <code className="text-[9px] font-mono px-1 py-0.2 rounded bg-muted text-muted-foreground">
+                  {WEB_ACCESS_PERMISSION.raw}
+                </code>
               </div>
-            ) : (
-              <div key={p.id} className="p-2.5 flex items-start gap-2.5 text-xs">
-                <div className="size-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+              <div className="text-[10px] text-muted-foreground truncate leading-tight">
+                {WEB_ACCESS_PERMISSION.description}
+              </div>
+            </div>
+          </div>
+
+          {/* 安装时静态权限列表 */}
+          {INSTALL_PERMISSIONS.map((p) => {
+            const isUserScripts = p.id === 'userScripts';
+            return (
+              <div key={p.id} className="flex items-center justify-between gap-2.5 py-2 px-1">
+                <div className="w-6 flex items-center justify-center shrink-0">
+                  <span
+                    className={cn(
+                      'size-2 rounded-full',
+                      isUserScripts
+                        ? (userScriptsReady ? 'bg-emerald-500' : 'bg-amber-500')
+                        : 'bg-emerald-500',
+                    )}
+                  />
+                </div>
                 <div className="flex-1 min-w-0 space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground text-[11px]">{p.name}</span>
-                    <code className="text-[9px] font-mono px-1 py-0.5 rounded bg-muted text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-[11px] text-foreground">{p.name}</span>
+                    <code className="text-[9px] font-mono px-1 py-0.2 rounded bg-muted text-muted-foreground">
                       {p.raw}
                     </code>
+                    {isUserScripts && (
+                      <span
+                        className={cn(
+                          'text-[9px] px-1 py-0.2 rounded font-normal leading-none',
+                          userScriptsReady
+                            ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/15'
+                            : 'text-amber-700 dark:text-amber-300 bg-amber-500/15',
+                        )}
+                      >
+                        {userScriptsReady ? i18n.t('permissions.enabled') : i18n.t('permissions.disabled')}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-normal">
+                  <div className="text-[10px] text-muted-foreground truncate leading-tight">
                     {p.description}
-                  </p>
+                  </div>
                 </div>
               </div>
-            ),
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border-b border-border/60" />
+
+      {/* 2. userScripts 引导节 */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium text-foreground">
+            {i18n.t('permissions.userScriptsTitle')}
+          </span>
+          <span
+            className={cn(
+              'text-[10px] font-mono',
+              userScriptsReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+            )}
+          >
+            {userScriptsReady ? i18n.t('permissions.enabled') : i18n.t('permissions.disabled')}
+          </span>
+        </div>
+
+        <div className="space-y-2 text-[11px] text-muted-foreground leading-relaxed">
+          <p>
+            {INSTALL_PERMISSIONS.find((p) => p.id === 'userScripts')?.description}
+          </p>
+          {!userScriptsReady && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-0.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={openExtensionDetails}
+                className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer w-fit"
+              >
+                <ExternalLink className="size-3 shrink-0" />
+                <span>{i18n.t('permissions.openDetails')}</span>
+              </Button>
+              <span className="text-[10px] text-muted-foreground">
+                {i18n.t('permissions.userScriptsHint')}
+              </span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* 3. 底部说明与可扩展性提示 */}
-      <div className="rounded-lg border bg-muted/20 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
+      <div className="border-b border-border/60" />
+
+      {/* 3. 权限最小化声明 */}
+      <div className="flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
         <Shield className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
         <div>
           <span className="font-medium text-foreground">{i18n.t('permissions.declarationTitle')}</span>

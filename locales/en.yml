@@ -355,6 +355,7 @@ search:
   keyStorageNote: Keys are stored only in local browser extension storage.
 
 permissions:
+  userScriptsTitle: "User Scripts (userScripts)"
   webAccessTitle: Web Page Access
   grantedWithInstall: Granted at install
   installedListTitle: "Permissions Granted at Install ({count})"

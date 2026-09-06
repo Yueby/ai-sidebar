@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Globe } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import type { Settings, WebSearchProvider } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -111,18 +111,15 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
 
   return (
     <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            <Globe className="size-3.5 text-muted-foreground" />
-            <span>{i18n.t('search.title')}</span>
-          </h2>
+          <span className="text-[11px] font-medium text-foreground">{i18n.t('search.title')}</span>
           <span className="text-[10px] text-muted-foreground font-mono">
             {currentProvider === 'none' ? i18n.t('search.providerNone') : providerOptions.find((p) => p.value === currentProvider)?.label}
           </span>
         </div>
 
-        <div className="rounded-lg border bg-card p-3 space-y-3">
+        <div className="space-y-2.5">
           <div className="space-y-1.5">
             <Label className="text-[11px] text-muted-foreground">{i18n.t('search.providerLabel')}</Label>
             <Select

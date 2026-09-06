@@ -3,15 +3,11 @@ import { i18n } from '#i18n';
 import {
   ArrowLeft,
   Plus,
-  Bot,
   Zap,
   Pencil,
   Trash2,
   Loader2,
   ShieldCheck,
-  Layers,
-  Sparkles,
-  Languages,
 } from 'lucide-react';
 import type { Settings, ProviderConfig, AuxThinkingLevel, ReasoningLevel } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
@@ -46,8 +42,6 @@ import {
 } from '@/components/ui/select';
 import { SettingsPermissionsView } from './SettingsPermissionsView';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { cn, getErrorMessage } from '@/lib/utils';
 
 interface SettingsMainViewProps {
@@ -321,11 +315,14 @@ export function SettingsMainView({
         {/* VIEW 1: Providers List */}
         {currentTab === 'providers' && (
           <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+            {/* 节标题行 */}
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Bot className="size-3.5 text-muted-foreground" />
-                <span>{i18n.t('settings.providers.title', { count: settings.providers.length })}</span>
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-foreground">
+                  {i18n.t('settings.providers.title', { count: settings.providers.length })}
+                </span>
+                <InfoTip content={i18n.t('settings.providers.emptyDesc')} />
+              </div>
               <Button
                 type="button"
                 size="sm"
@@ -339,18 +336,16 @@ export function SettingsMainView({
 
             {settings.providers.length === 0 ? (
               /* Empty state */
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center space-y-3">
-                <div className="flex size-10 items-center justify-center rounded-md border bg-muted text-muted-foreground">
-                  <Bot className="size-5" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-xs font-semibold text-foreground">{i18n.t('settings.providers.emptyTitle')}</h3>
+              <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-5 text-center space-y-2">
+                <div className="space-y-0.5">
+                  <div className="text-xs font-medium text-foreground">{i18n.t('settings.providers.emptyTitle')}</div>
                   <p className="text-[11px] text-muted-foreground max-w-[240px] leading-relaxed">
                     {i18n.t('settings.providers.emptyDesc')}
                   </p>
                 </div>
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
                   onClick={onAddProvider}
                   className="h-7 text-xs gap-1.5 cursor-pointer"
@@ -360,7 +355,7 @@ export function SettingsMainView({
                 </Button>
               </div>
             ) : (
-              <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
+              <div className="divide-y divide-border/60">
                 {settings.providers.map((p) => {
                   const isActive = p.id === settings.activeProviderId;
                   const isTesting = testingId === p.id;
@@ -369,32 +364,33 @@ export function SettingsMainView({
                     <div
                       key={p.id}
                       className={cn(
-                        'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
+                        'flex items-center justify-between gap-2.5 py-2 px-1 transition-colors cursor-pointer group',
                         isActive ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-muted/40',
                       )}
                       onClick={() => handleSetActiveProvider(p.id)}
                       title={isActive ? undefined : i18n.t('settings.providers.clickToActivate')}
                     >
-                      {/* Left: Indicator + Name + Info */}
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {/* ① 前置控件槽: w-6 flex items-center justify-center shrink-0 */}
+                      <div className="w-6 flex items-center justify-center shrink-0">
                         <span
                           className={cn(
-                            'size-2 rounded-full transition-colors shrink-0',
+                            'size-2 rounded-full transition-colors',
                             isActive ? 'bg-primary ring-2 ring-primary/20' : 'bg-muted-foreground/30 group-hover:bg-muted-foreground/60',
                           )}
                         />
+                      </div>
 
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <span className={cn('font-medium text-[11px] truncate block', isActive ? 'text-foreground font-semibold' : 'text-foreground')}>
-                            {p.name || i18n.t('settings.providers.unnamed')}
-                          </span>
-                          <p className="text-[10px] text-muted-foreground truncate leading-tight font-mono">
-                            {apiTypeLabel(p.api)} · {p.baseUrl || i18n.t('settings.providers.noBaseUrl')} · {i18n.t('settings.providers.modelsCount', { count: p.models.length })}
-                          </p>
+                      {/* ② 文本块: flex-1 min-w-0 */}
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className={cn('font-medium text-[11px] truncate', isActive ? 'text-foreground font-semibold' : 'text-foreground')}>
+                          {p.name || i18n.t('settings.providers.unnamed')}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate leading-tight font-mono">
+                          {apiTypeLabel(p.api)} · {p.baseUrl || i18n.t('settings.providers.noBaseUrl')} · {i18n.t('settings.providers.modelsCount', { count: p.models.length })}
                         </div>
                       </div>
 
-                      {/* Right: Actions */}
+                      {/* ③ 右侧操作钮: flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity */}
                       <div
                         className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
@@ -446,17 +442,16 @@ export function SettingsMainView({
 
         {/* VIEW 1b: 模型分工 + 偏好(与提供商 CRUD 分页) */}
         {currentTab === 'models' && (
-          <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-            {/* 偏好卡片 */}
-            <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
-              <div className="flex items-center gap-1.5 font-medium text-foreground">
-                <Languages className="size-3.5 text-muted-foreground" />
-                <span>{i18n.t('settings.pref.title')}</span>
+          <div className="space-y-4 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+            {/* 1. 偏好节 */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.pref.title')}</span>
                 <InfoTip content={i18n.t('settings.pref.desc')} />
               </div>
 
-              <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
-                <div className="flex items-center justify-between gap-2 p-2.5">
+              <div className="divide-y divide-border/60">
+                <div className="flex items-center justify-between gap-2 py-2 px-1">
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className="font-medium text-foreground text-[11px]">{i18n.t('settings.pref.langLabel')}</span>
                     <InfoTip content={i18n.t('settings.pref.langDesc')} />
@@ -505,17 +500,18 @@ export function SettingsMainView({
               </div>
             </div>
 
-            {/* 模型分工卡片（参考 CherryStudio 辅助模型配置模式） */}
-            <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
-              <div className="flex items-center gap-1.5 font-medium text-foreground">
-                <Sparkles className="size-3.5 text-muted-foreground" />
-                <span>{i18n.t('settings.assignment.title')}</span>
+            <div className="border-b border-border/60" />
+
+            {/* 2. 模型分工节 */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.assignment.title')}</span>
                 <InfoTip content={i18n.t('settings.assignment.desc')} />
               </div>
 
-              <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
+              <div className="divide-y divide-border/60">
                 {/* 1. 对话模型 */}
-                <div className="flex items-center justify-between gap-2 p-2.5">
+                <div className="flex items-center justify-between gap-2 py-2 px-1">
                   <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                     <span className="font-medium text-foreground text-[11px] truncate">
                       {i18n.t('settings.assignment.chatModel')}
@@ -583,7 +579,7 @@ export function SettingsMainView({
                 </div>
 
                 {/* 2. 标题生成模型 */}
-                <div className="flex items-center justify-between gap-2 p-2.5">
+                <div className="flex items-center justify-between gap-2 py-2 px-1">
                   <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                     <span className="font-medium text-foreground text-[11px] truncate">
                       {i18n.t('settings.assignment.titleModel')}
@@ -649,7 +645,7 @@ export function SettingsMainView({
                 </div>
 
                 {/* 3. 快捷指令生成模型 */}
-                <div className="flex items-center justify-between gap-2 p-2.5">
+                <div className="flex items-center justify-between gap-2 py-2 px-1">
                   <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                     <span className="font-medium text-foreground text-[11px] truncate">
                       {i18n.t('settings.assignment.promptModel')}
@@ -715,7 +711,6 @@ export function SettingsMainView({
                 </div>
               </div>
             </div>
-
           </div>
         )}
 
@@ -747,72 +742,62 @@ export function SettingsMainView({
 
         {/* VIEW 5: About Page */}
         {currentTab === 'about' && (
-          <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <div className="space-y-4 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* Section 1: Basic Info */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                  <Bot className="size-3.5 text-muted-foreground" />
-                  <span>{i18n.t('settings.about.extInfo')}</span>
-                </h2>
-                <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 font-mono">
+                <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.about.extInfo')}</span>
+                <span className="text-[10px] text-muted-foreground font-mono">
                   v{appVersion}
-                </Badge>
+                </span>
               </div>
 
-              <div className="rounded-lg border bg-card p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex size-7 items-center justify-center rounded-md border bg-muted text-muted-foreground">
-                    <Bot className="size-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-semibold text-foreground">{appName}</h3>
-                    <p className="text-[11px] text-muted-foreground">{i18n.t('settings.about.extDesc')}</p>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-muted-foreground leading-relaxed pt-1.5 border-t border-border/50">
+              <div className="space-y-1">
+                <div className="text-xs font-semibold text-foreground">{appName}</div>
+                <div className="text-[11px] text-muted-foreground">{i18n.t('settings.about.extDesc')}</div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
                   {i18n.t('settings.about.extIntro')}
                 </p>
               </div>
             </div>
 
+            <div className="border-b border-border/60" />
+
             {/* Section 2: Supported Protocols */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                  <Layers className="size-3.5 text-muted-foreground" />
-                  <span>{i18n.t('settings.about.protocolsTitle')}</span>
-                </h2>
+                <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.about.protocolsTitle')}</span>
                 <span className="text-[10px] text-muted-foreground font-mono">{i18n.t('settings.about.protocolsCount')}</span>
               </div>
 
-              <div className="rounded-lg border bg-card p-3 space-y-2">
-                <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
-                  <div className="font-medium text-foreground text-xs">{i18n.t('settings.about.chatCompletionsTitle')}</div>
-                  <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/chat/completions</code> {i18n.t('settings.about.chatCompletionsDesc')}
+              <div className="divide-y divide-border/60">
+                <div className="py-2 px-1 space-y-0.5">
+                  <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.about.chatCompletionsTitle')}</div>
+                  <div className="text-[10px] text-muted-foreground leading-relaxed">
+                    <code className="font-mono bg-muted px-1 py-0.2 rounded text-[10px]">/v1/chat/completions</code> {i18n.t('settings.about.chatCompletionsDesc')}
                   </div>
                 </div>
 
-                <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
-                  <div className="font-medium text-foreground text-xs">{i18n.t('settings.about.responsesTitle')}</div>
-                  <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/responses</code> {i18n.t('settings.about.responsesDesc')}
+                <div className="py-2 px-1 space-y-0.5">
+                  <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.about.responsesTitle')}</div>
+                  <div className="text-[10px] text-muted-foreground leading-relaxed">
+                    <code className="font-mono bg-muted px-1 py-0.2 rounded text-[10px]">/v1/responses</code> {i18n.t('settings.about.responsesDesc')}
                   </div>
                 </div>
 
-                <div className="rounded-md border bg-muted/20 p-2 space-y-0.5">
-                  <div className="font-medium text-foreground text-xs">Anthropic Messages</div>
-                  <div className="text-[11px] text-muted-foreground leading-relaxed">
-                    <code className="font-mono bg-muted px-1 py-0.5 rounded text-[10px] border border-border/40">/v1/messages</code> {i18n.t('settings.about.messagesDesc')}
+                <div className="py-2 px-1 space-y-0.5">
+                  <div className="font-medium text-foreground text-[11px]">Anthropic Messages</div>
+                  <div className="text-[10px] text-muted-foreground leading-relaxed">
+                    <code className="font-mono bg-muted px-1 py-0.2 rounded text-[10px]">/v1/messages</code> {i18n.t('settings.about.messagesDesc')}
                   </div>
                 </div>
               </div>
             </div>
 
+            <div className="border-b border-border/60" />
+
             {/* Section 3: Security & Privacy */}
-            <div className="rounded-lg border bg-muted/20 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
+            <div className="flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
               <ShieldCheck className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
               <div>
                 <span className="font-medium text-foreground">{i18n.t('settings.about.dataSecurityTitle')}</span>

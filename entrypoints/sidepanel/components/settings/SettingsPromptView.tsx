@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
-import { ScrollText, Plus, Pencil, Trash2, PenLine } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InfoTip } from './InfoTip';
 import { RuleDialog } from './RuleDialog';
@@ -99,13 +99,12 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
   };
 
   return (
-    <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-      {/* 1. 自定义系统提示词卡 (常驻注入, 独立于规则) */}
-      <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
+    <div className="space-y-4 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+      {/* 1. 系统提示词节 */}
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-medium text-foreground">
-            <PenLine className="size-3.5 text-muted-foreground" />
-            <span>{i18n.t('settings.systemPrompt.title')}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.systemPrompt.title')}</span>
             <InfoTip content={i18n.t('settings.systemPrompt.desc')} />
           </div>
           <span
@@ -138,35 +137,31 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
         </div>
       </div>
 
-      {/* 2. 规则卡片 */}
-      <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
+      <div className="border-b border-border/60" />
+
+      {/* 2. 规则节 */}
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-medium text-foreground">
-            <ScrollText className="size-3.5 text-muted-foreground" />
-            <span>{i18n.t('settings.rules.title', { count: rules.length })}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.rules.title', { count: rules.length })}</span>
             <InfoTip content={i18n.t('settings.rules.desc')} />
           </div>
 
-          {rules.length > 0 && rules.length < MAX_RULES_COUNT && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={startCreating}
-              className="gap-1 h-6 text-xs px-2 cursor-pointer text-muted-foreground hover:text-foreground"
-            >
-              <Plus className="size-3" />
-              <span>{i18n.t('settings.rules.addRule')}</span>
-            </Button>
-          )}
+          <Button
+            type="button"
+            size="sm"
+            onClick={startCreating}
+            disabled={rules.length >= MAX_RULES_COUNT}
+            className="gap-1 h-7 text-xs px-2.5 shrink-0 cursor-pointer"
+          >
+            <Plus className="size-3" />
+            <span>{i18n.t('settings.rules.addRule')}</span>
+          </Button>
         </div>
 
         {/* 规则列表 / 空态 */}
         {rules.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-5 text-center space-y-2.5 bg-background/30">
-            <div className="flex size-8 items-center justify-center rounded-md border bg-muted/60 text-muted-foreground">
-              <ScrollText className="size-4" />
-            </div>
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-5 text-center space-y-2">
             <div className="space-y-0.5">
               <div className="text-xs font-medium text-foreground">{i18n.t('settings.rules.emptyTitle')}</div>
               <p className="text-[11px] text-muted-foreground max-w-[260px] leading-normal">
@@ -178,107 +173,83 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
               variant="outline"
               size="sm"
               onClick={startCreating}
-              className="h-7 text-xs gap-1.5 cursor-pointer hover:bg-background"
+              className="h-7 text-xs gap-1.5 cursor-pointer"
             >
               <Plus className="size-3" />
               <span>{i18n.t('settings.rules.emptyAction')}</span>
             </Button>
           </div>
         ) : (
-          <div className="space-y-2">
-            <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
-              {rules.map((rule) => (
+          <div className="divide-y divide-border/60">
+            {rules.map((rule) => (
+              <div
+                key={rule.id}
+                className={cn(
+                  'flex items-center justify-between gap-2.5 py-2 px-1 transition-colors cursor-pointer group',
+                  rule.enabled
+                    ? 'hover:bg-muted/40'
+                    : 'opacity-60 hover:opacity-100',
+                )}
+                onClick={() => startEditing(rule)}
+              >
+                {/* ① 前置控件槽: w-6 flex items-center justify-center shrink-0 */}
                 <div
-                  key={rule.id}
-                  className={cn(
-                    'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
-                    rule.enabled
-                      ? 'hover:bg-muted/40'
-                      : 'bg-muted/15 hover:bg-muted/30 opacity-75 hover:opacity-100',
-                  )}
-                  onClick={() => startEditing(rule)}
+                  className="w-6 flex items-center justify-center shrink-0"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  {/* Left: Switch + Name + Content */}
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center shrink-0"
-                    >
-                      <Switch
-                        checked={rule.enabled}
-                        onCheckedChange={(checked) => handleToggleRule(rule.id, checked)}
-                        aria-label={
-                          rule.enabled
-                            ? i18n.t('settings.rules.disableHint')
-                            : i18n.t('settings.rules.enableHint')
-                        }
-                        className="cursor-pointer"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span
-                          className={cn(
-                            'font-medium text-[11px] truncate',
-                            rule.enabled ? 'text-foreground' : 'text-muted-foreground',
-                          )}
-                        >
-                          {rule.name}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground truncate leading-tight">
-                        {rule.content}
-                      </p>
-                    </div>
-                  </div>
+                  <Switch
+                    size="sm"
+                    checked={rule.enabled}
+                    onCheckedChange={(checked) => handleToggleRule(rule.id, checked)}
+                    aria-label={
+                      rule.enabled
+                        ? i18n.t('settings.rules.disableHint')
+                        : i18n.t('settings.rules.enableHint')
+                    }
+                    className="cursor-pointer"
+                  />
+                </div>
 
-                  {/* Right: Actions */}
-                  <div
-                    className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => startEditing(rule)}
-                      title={i18n.t('settings.rules.edit')}
-                      className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
-                    >
-                      <Pencil className="size-3" />
-                      <span className="sr-only">{i18n.t('settings.rules.edit')}</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDeleteRuleTarget(rule)}
-                      title={i18n.t('settings.rules.delete')}
-                      className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
-                    >
-                      <Trash2 className="size-3" />
-                      <span className="sr-only">{i18n.t('settings.rules.delete')}</span>
-                    </Button>
+                {/* ② 文本块: flex-1 min-w-0 */}
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className={cn('font-medium text-[11px] truncate', rule.enabled ? 'text-foreground' : 'text-muted-foreground')}>
+                    {rule.name}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground truncate leading-tight">
+                    {rule.content}
                   </div>
                 </div>
-              ))}
-            </div>
 
-            {/* 20条上限提示 */}
-            {rules.length >= MAX_RULES_COUNT && (
-              <div title={i18n.t('settings.rules.maxLimitHint')} className="w-full">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled
-                  className="w-full h-8 text-xs gap-1.5 border border-dashed border-border/40 text-muted-foreground/50 cursor-not-allowed"
+                {/* ③ 右侧操作钮: flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity */}
+                <div
+                  className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <Plus className="size-3.5" />
-                  <span>{i18n.t('settings.rules.maxLimitReached', { max: MAX_RULES_COUNT })}</span>
-                </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => startEditing(rule)}
+                    title={i18n.t('settings.rules.edit')}
+                    className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <Pencil className="size-3" />
+                    <span className="sr-only">{i18n.t('settings.rules.edit')}</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteRuleTarget(rule)}
+                    title={i18n.t('settings.rules.delete')}
+                    className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
+                  >
+                    <Trash2 className="size-3" />
+                    <span className="sr-only">{i18n.t('settings.rules.delete')}</span>
+                  </Button>
+                </div>
               </div>
-            )}
+            ))}
           </div>
         )}
       </div>

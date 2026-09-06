@@ -355,6 +355,7 @@ search:
   keyStorageNote: Key 仅保存在本地浏览器扩展存储中。
 
 permissions:
+  userScriptsTitle: "用户脚本 (userScripts)"
   webAccessTitle: 网页访问权限
   grantedWithInstall: 随安装授予
   installedListTitle: "安装时已授予权限 ({count})"
