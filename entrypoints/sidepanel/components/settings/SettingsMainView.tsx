@@ -3,11 +3,15 @@ import { i18n } from '#i18n';
 import {
   ArrowLeft,
   Plus,
+  Bot,
   Zap,
   Pencil,
   Trash2,
   Loader2,
   ShieldCheck,
+  Languages,
+  Sparkles,
+  Layers,
 } from 'lucide-react';
 import type { Settings, ProviderConfig, AuxThinkingLevel, ReasoningLevel } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
@@ -317,12 +321,11 @@ export function SettingsMainView({
           <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* 节标题行 */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-medium text-foreground">
-                  {i18n.t('settings.providers.title', { count: settings.providers.length })}
-                </span>
+              <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Bot className="size-3.5 text-muted-foreground" />
+                <span>{i18n.t('settings.providers.title', { count: settings.providers.length })}</span>
                 <InfoTip content={i18n.t('settings.providers.emptyDesc')} />
-              </div>
+              </h2>
               <Button
                 type="button"
                 size="sm"
@@ -336,7 +339,7 @@ export function SettingsMainView({
 
             {settings.providers.length === 0 ? (
               /* Empty state */
-              <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-5 text-center space-y-2">
+              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-5 text-center space-y-2">
                 <div className="space-y-0.5">
                   <div className="text-xs font-medium text-foreground">{i18n.t('settings.providers.emptyTitle')}</div>
                   <p className="text-[11px] text-muted-foreground max-w-[240px] leading-relaxed">
@@ -355,7 +358,7 @@ export function SettingsMainView({
                 </Button>
               </div>
             ) : (
-              <div className="divide-y divide-border/60">
+              <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
                 {settings.providers.map((p) => {
                   const isActive = p.id === settings.activeProviderId;
                   const isTesting = testingId === p.id;
@@ -364,7 +367,7 @@ export function SettingsMainView({
                     <div
                       key={p.id}
                       className={cn(
-                        'flex items-center justify-between gap-2.5 py-2 px-1 transition-colors cursor-pointer group',
+                        'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
                         isActive ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-muted/40',
                       )}
                       onClick={() => handleSetActiveProvider(p.id)}
@@ -445,13 +448,16 @@ export function SettingsMainView({
           <div className="space-y-4 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* 1. 偏好节 */}
             <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.pref.title')}</span>
-                <InfoTip content={i18n.t('settings.pref.desc')} />
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Languages className="size-3.5 text-muted-foreground" />
+                  <span>{i18n.t('settings.pref.title')}</span>
+                  <InfoTip content={i18n.t('settings.pref.desc')} />
+                </h2>
               </div>
 
-              <div className="divide-y divide-border/60">
-                <div className="flex items-center justify-between gap-2 py-2 px-1">
+              <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+                <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className="font-medium text-foreground text-[11px]">{i18n.t('settings.pref.langLabel')}</span>
                     <InfoTip content={i18n.t('settings.pref.langDesc')} />
@@ -500,18 +506,19 @@ export function SettingsMainView({
               </div>
             </div>
 
-            <div className="border-b border-border/60" />
-
             {/* 2. 模型分工节 */}
             <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.assignment.title')}</span>
-                <InfoTip content={i18n.t('settings.assignment.desc')} />
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-muted-foreground" />
+                  <span>{i18n.t('settings.assignment.title')}</span>
+                  <InfoTip content={i18n.t('settings.assignment.desc')} />
+                </h2>
               </div>
 
-              <div className="divide-y divide-border/60">
+              <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
                 {/* 1. 对话模型 */}
-                <div className="flex items-center justify-between gap-2 py-2 px-1">
+                <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                     <span className="font-medium text-foreground text-[11px] truncate">
                       {i18n.t('settings.assignment.chatModel')}
@@ -579,7 +586,7 @@ export function SettingsMainView({
                 </div>
 
                 {/* 2. 标题生成模型 */}
-                <div className="flex items-center justify-between gap-2 py-2 px-1">
+                <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                     <span className="font-medium text-foreground text-[11px] truncate">
                       {i18n.t('settings.assignment.titleModel')}
@@ -645,7 +652,7 @@ export function SettingsMainView({
                 </div>
 
                 {/* 3. 快捷指令生成模型 */}
-                <div className="flex items-center justify-between gap-2 py-2 px-1">
+                <div className="flex items-center justify-between gap-2 p-2.5">
                   <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                     <span className="font-medium text-foreground text-[11px] truncate">
                       {i18n.t('settings.assignment.promptModel')}
@@ -746,13 +753,16 @@ export function SettingsMainView({
             {/* Section 1: Basic Info */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.about.extInfo')}</span>
+                <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Bot className="size-3.5 text-muted-foreground" />
+                  <span>{i18n.t('settings.about.extInfo')}</span>
+                </h2>
                 <span className="text-[10px] text-muted-foreground font-mono">
                   v{appVersion}
                 </span>
               </div>
 
-              <div className="space-y-1">
+              <div className="rounded-xl border bg-background/50 p-3 space-y-1">
                 <div className="text-xs font-semibold text-foreground">{appName}</div>
                 <div className="text-[11px] text-muted-foreground">{i18n.t('settings.about.extDesc')}</div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
@@ -761,31 +771,32 @@ export function SettingsMainView({
               </div>
             </div>
 
-            <div className="border-b border-border/60" />
-
             {/* Section 2: Supported Protocols */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.about.protocolsTitle')}</span>
+                <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Layers className="size-3.5 text-muted-foreground" />
+                  <span>{i18n.t('settings.about.protocolsTitle')}</span>
+                </h2>
                 <span className="text-[10px] text-muted-foreground font-mono">{i18n.t('settings.about.protocolsCount')}</span>
               </div>
 
-              <div className="divide-y divide-border/60">
-                <div className="py-2 px-1 space-y-0.5">
+              <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+                <div className="p-2.5 space-y-0.5">
                   <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.about.chatCompletionsTitle')}</div>
                   <div className="text-[10px] text-muted-foreground leading-relaxed">
                     <code className="font-mono bg-muted px-1 py-0.2 rounded text-[10px]">/v1/chat/completions</code> {i18n.t('settings.about.chatCompletionsDesc')}
                   </div>
                 </div>
 
-                <div className="py-2 px-1 space-y-0.5">
+                <div className="p-2.5 space-y-0.5">
                   <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.about.responsesTitle')}</div>
                   <div className="text-[10px] text-muted-foreground leading-relaxed">
                     <code className="font-mono bg-muted px-1 py-0.2 rounded text-[10px]">/v1/responses</code> {i18n.t('settings.about.responsesDesc')}
                   </div>
                 </div>
 
-                <div className="py-2 px-1 space-y-0.5">
+                <div className="p-2.5 space-y-0.5">
                   <div className="font-medium text-foreground text-[11px]">Anthropic Messages</div>
                   <div className="text-[10px] text-muted-foreground leading-relaxed">
                     <code className="font-mono bg-muted px-1 py-0.2 rounded text-[10px]">/v1/messages</code> {i18n.t('settings.about.messagesDesc')}
@@ -794,10 +805,8 @@ export function SettingsMainView({
               </div>
             </div>
 
-            <div className="border-b border-border/60" />
-
             {/* Section 3: Security & Privacy */}
-            <div className="flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
+            <div className="rounded-xl border bg-background/50 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
               <ShieldCheck className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
               <div>
                 <span className="font-medium text-foreground">{i18n.t('settings.about.dataSecurityTitle')}</span>

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Download, Upload, TriangleAlert, CloudUpload, CloudDownload, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Download, Upload, TriangleAlert, CloudUpload, CloudDownload, Loader2, Eye, EyeOff, FileJson, CloudCog } from 'lucide-react';
 import type { Settings, Session } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { sanitizeSettings } from '@/lib/storage';
@@ -206,16 +206,17 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
   return (
     <div className="space-y-4 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
       {/* 1. 本地备份节 */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-medium text-[11px] text-foreground">
+          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <FileJson className="size-3.5 text-muted-foreground" />
             <span>{i18n.t('backup.title')}</span>
             <InfoTip content={i18n.t('backup.desc')} />
-          </div>
+          </h2>
           <span className="text-[10px] text-muted-foreground font-mono">JSON</span>
         </div>
 
-        <div className="space-y-2">
+        <div className="rounded-xl border bg-background/50 p-3 space-y-2.5">
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -262,98 +263,24 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
         </div>
       </div>
 
-      <div className="border-b border-border/60" />
-
       {/* 2. WebDAV 同步节 */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 font-medium text-[11px] text-foreground">
+          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <CloudCog className="size-3.5 text-muted-foreground" />
             <span>{i18n.t('sync.title')}</span>
             <InfoTip content={i18n.t('sync.desc')} />
-          </div>
-          <span className="text-[10px] text-muted-foreground font-mono">WebDAV</span>
-        </div>
-
-        <div className="space-y-2 text-xs">
-          <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.urlLabel')}</Label>
-            <Input
-              value={dav.url}
-              onChange={(e) => updateDav({ url: e.target.value })}
-              placeholder={i18n.t('sync.urlPlaceholder')}
-              className="h-7 text-xs bg-background"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.usernameLabel')}</Label>
-              <Input
-                value={dav.username}
-                onChange={(e) => updateDav({ username: e.target.value })}
-                className="h-7 text-xs bg-background"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.passwordLabel')}</Label>
-              {renderPasswordInput('webdav', dav.password, (v) => updateDav({ ...dav, password: v }))}
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.pathLabel')}</Label>
-            <Input
-              value={dav.remotePath}
-              onChange={(e) => updateDav({ remotePath: e.target.value })}
-              className="h-7 text-xs font-mono bg-background"
-            />
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={davBusy !== null}
-            onClick={handleTest}
-            className="h-7 text-xs cursor-pointer"
-          >
-            {davBusy === 'test' && <Loader2 className="size-3.5 animate-spin" />}
-            <span>{i18n.t('sync.testButton')}</span>
-          </Button>
-
-          <div className="border-t border-border/50 pt-2 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[11px] font-medium text-foreground">{i18n.t('sync.encryptLabel')}</span>
-                <InfoTip content={i18n.t('sync.encryptDesc')} />
-              </div>
-              <Switch
-                checked={dav.encrypt}
-                onCheckedChange={(v) => updateDav({ encrypt: v === true })}
-                className="shrink-0 cursor-pointer"
-              />
-            </div>
-            {(dav.encrypt || needPassword) && (
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.encryptPasswordLabel')}</Label>
-                {renderPasswordInput('encrypt', dav.encryptPassword, (v) => updateDav({ ...dav, encryptPassword: v }))}
-              </div>
-            )}
-            {!dav.encrypt && (
-              <div className="flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5">
-                <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                <span className="leading-snug">{i18n.t('sync.encryptWarning')}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 border-t border-border/50 pt-2">
+          </h2>
+          <div className="flex items-center gap-1.5">
             <Button
               type="button"
               size="sm"
               variant="outline"
               disabled={davBusy !== null}
               onClick={handleUpload}
-              className="gap-1.5 h-7 text-xs flex-1 cursor-pointer"
+              className="gap-1 h-7 text-xs px-2 cursor-pointer"
             >
-              {davBusy === 'upload' ? <Loader2 className="size-3.5 animate-spin" /> : <CloudUpload className="size-3.5" />}
+              {davBusy === 'upload' ? <Loader2 className="size-3 animate-spin" /> : <CloudUpload className="size-3" />}
               <span>{i18n.t('sync.upload')}</span>
             </Button>
             <Button
@@ -362,16 +289,92 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               variant="outline"
               disabled={davBusy !== null}
               onClick={handleRestoreClick}
-              className="gap-1.5 h-7 text-xs flex-1 cursor-pointer"
+              className="gap-1 h-7 text-xs px-2 cursor-pointer"
             >
-              {davBusy === 'restore' ? <Loader2 className="size-3.5 animate-spin" /> : <CloudDownload className="size-3.5" />}
+              {davBusy === 'restore' ? <Loader2 className="size-3 animate-spin" /> : <CloudDownload className="size-3" />}
               <span>{i18n.t('sync.restore')}</span>
             </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground leading-snug">
-            {i18n.t('sync.remoteHint')}
-          </p>
         </div>
+
+        <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden text-xs">
+          <div className="flex items-center justify-between gap-2 p-2.5">
+            <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('sync.urlLabel')}</Label>
+            <Input
+              value={dav.url}
+              onChange={(e) => updateDav({ url: e.target.value })}
+              placeholder={i18n.t('sync.urlPlaceholder')}
+              className="h-7 text-xs bg-background flex-1 max-w-[210px]"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2 p-2.5">
+            <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('sync.usernameLabel')}</Label>
+            <Input
+              value={dav.username}
+              onChange={(e) => updateDav({ username: e.target.value })}
+              className="h-7 text-xs bg-background flex-1 max-w-[210px]"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2 p-2.5">
+            <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('sync.passwordLabel')}</Label>
+            <div className="flex-1 max-w-[210px]">
+              {renderPasswordInput('webdav', dav.password, (v) => updateDav({ ...dav, password: v }))}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2 p-2.5">
+            <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('sync.pathLabel')}</Label>
+            <div className="flex items-center gap-1.5 flex-1 max-w-[210px]">
+              <Input
+                value={dav.remotePath}
+                onChange={(e) => updateDav({ remotePath: e.target.value })}
+                className="h-7 text-xs font-mono bg-background flex-1 min-w-0"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={davBusy !== null}
+                onClick={handleTest}
+                className="h-7 text-xs px-2 shrink-0 cursor-pointer"
+              >
+                {davBusy === 'test' && <Loader2 className="size-3 animate-spin" />}
+                <span>{i18n.t('sync.testButton')}</span>
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 p-2.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[11px] font-medium text-foreground">{i18n.t('sync.encryptLabel')}</span>
+              <InfoTip content={i18n.t('sync.encryptDesc')} />
+            </div>
+            <Switch
+              checked={dav.encrypt}
+              onCheckedChange={(v) => updateDav({ encrypt: v === true })}
+              className="shrink-0 cursor-pointer"
+            />
+          </div>
+          {(dav.encrypt || needPassword) && (
+            <div className="flex items-center justify-between gap-2 p-2.5">
+              <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('sync.encryptPasswordLabel')}</Label>
+              <div className="flex-1 max-w-[210px]">
+                {renderPasswordInput('encrypt', dav.encryptPassword, (v) => updateDav({ ...dav, encryptPassword: v }))}
+              </div>
+            </div>
+          )}
+          {!dav.encrypt && (
+            <div className="p-2.5 bg-amber-500/5">
+              <div className="flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300">
+                <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span className="leading-snug">{i18n.t('sync.encryptWarning')}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[10px] text-muted-foreground leading-snug px-0.5">
+          {i18n.t('sync.remoteHint')}
+        </p>
       </div>
 
       {/* 恢复确认:展示远端/本地时间对比,选边由用户显式点击 */}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Globe } from 'lucide-react';
 import type { Settings, WebSearchProvider } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -111,85 +111,92 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
 
   return (
     <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-foreground">{i18n.t('search.title')}</span>
+          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Globe className="size-3.5 text-muted-foreground" />
+            <span>{i18n.t('search.title')}</span>
+          </h2>
           <span className="text-[10px] text-muted-foreground font-mono">
             {currentProvider === 'none' ? i18n.t('search.providerNone') : providerOptions.find((p) => p.value === currentProvider)?.label}
           </span>
         </div>
 
-        <div className="space-y-2.5">
-          <div className="space-y-1.5">
-            <Label className="text-[11px] text-muted-foreground">{i18n.t('search.providerLabel')}</Label>
-            <Select
-              value={webSearch.provider}
-              onValueChange={(value) => update({ provider: value as WebSearchProvider })}
-            >
-              <SelectTrigger className="h-8 text-xs w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {providerOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 p-2.5">
+            <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('search.providerLabel')}</Label>
+            <div className="w-36 shrink-0">
+              <Select
+                value={webSearch.provider}
+                onValueChange={(value) => update({ provider: value as WebSearchProvider })}
+              >
+                <SelectTrigger className="h-7 text-xs w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {providerOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {webSearch.provider === 'searxng' && (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-[11px] text-muted-foreground">{i18n.t('search.searxngLabel')}</Label>
+            <div className="flex items-center justify-between gap-2 p-2.5">
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Label className="text-[11px] font-medium text-foreground">{i18n.t('search.searxngLabel')}</Label>
                 <InfoTip content={i18n.t('search.searxngHelp')} />
               </div>
               <Input
                 value={webSearch.searxngBaseUrl}
                 onChange={(e) => update({ searxngBaseUrl: e.target.value })}
                 placeholder="https://searx.example.com"
-                className="h-8 text-xs font-mono"
+                className="h-7 text-xs font-mono max-w-[210px] flex-1 bg-background"
               />
             </div>
           )}
 
           {isKeyBasedProvider(currentProvider) && keyConfig && (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-[11px] text-muted-foreground">API Key</Label>
-                <InfoTip content={i18n.t('search.keyStorageNote')} />
-              </div>
-              <div className="relative">
-                <Input
-                  type={showKey ? 'text' : 'password'}
-                  value={webSearch.apiKeys[currentProvider] ?? ''}
-                  onChange={(e) => updateApiKey(currentProvider, e.target.value)}
-                  placeholder={keyConfig.placeholder}
-                  className="h-8 text-xs pr-8 font-mono"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowKey((v) => !v)}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 size-6 text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                </Button>
+            <div className="p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Label className="text-[11px] font-medium text-foreground">API Key</Label>
+                  <InfoTip content={i18n.t('search.keyStorageNote')} />
+                </div>
+                <div className="relative max-w-[210px] flex-1">
+                  <Input
+                    type={showKey ? 'text' : 'password'}
+                    value={webSearch.apiKeys[currentProvider] ?? ''}
+                    onChange={(e) => updateApiKey(currentProvider, e.target.value)}
+                    placeholder={keyConfig.placeholder}
+                    className="h-7 text-xs pr-8 font-mono bg-background"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowKey((v) => !v)}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 size-5 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    {showKey ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+                  </Button>
+                </div>
               </div>
               {keyConfig.applyUrl && (
-                <p className="text-[10px] text-muted-foreground leading-normal">
+                <div className="text-[10px] text-muted-foreground leading-normal">
                   {i18n.t('search.applyUrlPrefix')}
                   <a
                     href={keyConfig.applyUrl.url}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="text-primary underline hover:opacity-80 transition-opacity"
+                    className="text-primary underline hover:opacity-80 transition-opacity ml-1"
                   >
                     {keyConfig.applyUrl.label}
                   </a>
-                </p>
+                </div>
               )}
             </div>
           )}

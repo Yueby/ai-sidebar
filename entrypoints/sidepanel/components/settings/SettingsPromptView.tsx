@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, PenLine, ScrollText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InfoTip } from './InfoTip';
 import { RuleDialog } from './RuleDialog';
@@ -103,10 +103,11 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
       {/* 1. 系统提示词节 */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.systemPrompt.title')}</span>
+          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <PenLine className="size-3.5 text-muted-foreground" />
+            <span>{i18n.t('settings.systemPrompt.title')}</span>
             <InfoTip content={i18n.t('settings.systemPrompt.desc')} />
-          </div>
+          </h2>
           <span
             aria-live="polite"
             className="text-[10px] text-muted-foreground select-none"
@@ -115,7 +116,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
           </span>
         </div>
 
-        <div className="space-y-1">
+        <div className="rounded-xl border bg-background/50 p-3 space-y-1.5">
           <Textarea
             value={promptDraft}
             onChange={(e) => handlePromptChange(e.target.value)}
@@ -137,15 +138,14 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
         </div>
       </div>
 
-      <div className="border-b border-border/60" />
-
       {/* 2. 规则节 */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-medium text-foreground">{i18n.t('settings.rules.title', { count: rules.length })}</span>
+          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <ScrollText className="size-3.5 text-muted-foreground" />
+            <span>{i18n.t('settings.rules.title', { count: rules.length })}</span>
             <InfoTip content={i18n.t('settings.rules.desc')} />
-          </div>
+          </h2>
 
           <Button
             type="button"
@@ -161,7 +161,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
 
         {/* 规则列表 / 空态 */}
         {rules.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-md border border-dashed p-5 text-center space-y-2">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-5 text-center space-y-2 bg-background/30">
             <div className="space-y-0.5">
               <div className="text-xs font-medium text-foreground">{i18n.t('settings.rules.emptyTitle')}</div>
               <p className="text-[11px] text-muted-foreground max-w-[260px] leading-normal">
@@ -180,12 +180,12 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
             </Button>
           </div>
         ) : (
-          <div className="divide-y divide-border/60">
+          <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
             {rules.map((rule) => (
               <div
                 key={rule.id}
                 className={cn(
-                  'flex items-center justify-between gap-2.5 py-2 px-1 transition-colors cursor-pointer group',
+                  'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
                   rule.enabled
                     ? 'hover:bg-muted/40'
                     : 'opacity-60 hover:opacity-100',

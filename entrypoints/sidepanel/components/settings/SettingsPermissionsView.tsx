@@ -36,15 +36,16 @@ export function SettingsPermissionsView() {
       {/* 1. 权限清单节 */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-foreground">
-            {i18n.t('permissions.installedListTitle', { count: INSTALL_PERMISSIONS.length + 1 })}
-          </span>
+          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Shield className="size-3.5 text-muted-foreground" />
+            <span>{i18n.t('permissions.installedListTitle', { count: INSTALL_PERMISSIONS.length + 1 })}</span>
+          </h2>
           <span className="text-[10px] text-muted-foreground font-mono">MANIFEST</span>
         </div>
 
-        <div className="divide-y divide-border/60">
+        <div className="divide-y divide-border/60 rounded-xl border bg-background/50 overflow-hidden">
           {/* 网页访问 (host <all_urls>) */}
-          <div className="flex items-center justify-between gap-2.5 py-2 px-1">
+          <div className="flex items-center justify-between gap-2.5 p-2.5">
             <div className="w-6 flex items-center justify-center shrink-0">
               <span className="size-2 rounded-full bg-emerald-500" />
             </div>
@@ -65,7 +66,7 @@ export function SettingsPermissionsView() {
           {INSTALL_PERMISSIONS.map((p) => {
             const isUserScripts = p.id === 'userScripts';
             return (
-              <div key={p.id} className="flex items-center justify-between gap-2.5 py-2 px-1">
+              <div key={p.id} className="flex items-center justify-between gap-2.5 p-2.5">
                 <div className="w-6 flex items-center justify-center shrink-0">
                   <span
                     className={cn(
@@ -105,14 +106,13 @@ export function SettingsPermissionsView() {
         </div>
       </div>
 
-      <div className="border-b border-border/60" />
-
       {/* 2. userScripts 引导节 */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-foreground">
-            {i18n.t('permissions.userScriptsTitle')}
-          </span>
+          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+            <Shield className="size-3.5 text-muted-foreground" />
+            <span>{i18n.t('permissions.userScriptsTitle')}</span>
+          </h2>
           <span
             className={cn(
               'text-[10px] font-mono',
@@ -123,7 +123,7 @@ export function SettingsPermissionsView() {
           </span>
         </div>
 
-        <div className="space-y-2 text-[11px] text-muted-foreground leading-relaxed">
+        <div className="rounded-xl border bg-background/50 p-3 space-y-2 text-[11px] text-muted-foreground leading-relaxed">
           <p>
             {INSTALL_PERMISSIONS.find((p) => p.id === 'userScripts')?.description}
           </p>
@@ -147,10 +147,8 @@ export function SettingsPermissionsView() {
         </div>
       </div>
 
-      <div className="border-b border-border/60" />
-
       {/* 3. 权限最小化声明 */}
-      <div className="flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
+      <div className="rounded-xl border bg-muted/20 p-3 flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
         <Shield className="size-3.5 shrink-0 mt-0.5 text-muted-foreground/80" />
         <div>
           <span className="font-medium text-foreground">{i18n.t('permissions.declarationTitle')}</span>
