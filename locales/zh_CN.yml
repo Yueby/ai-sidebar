@@ -186,6 +186,11 @@ settings:
     permissions: 权限
     backup: 备份
     about: 关于
+  systemPrompt:
+    title: 系统提示词
+    desc: "定义 AI 的角色与行为，常驻注入 system prompt，对所有对话生效；规则是其可开关的分段补充。"
+    placeholder: "如：你是我的编程助手，代码注释用中文，回答保持简短…"
+    saved: 已自动保存
   rules:
     title: "用户规则 ({count})"
     desc: "启用中的规则会注入每次对话，用于设定个人偏好或固定行为要求。"

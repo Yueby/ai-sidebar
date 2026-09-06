@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { i18n } from '#i18n';
 import type { Settings, UserRule } from '@/lib/types';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ScrollText, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ScrollText, Plus, Pencil, Trash2, PenLine } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SettingsPromptViewProps {
@@ -26,9 +26,29 @@ interface SettingsPromptViewProps {
 const MAX_RULES_COUNT = 20;
 const MAX_RULE_NAME_LENGTH = 100;
 const MAX_RULE_CONTENT_LENGTH = 4000;
+const MAX_SYSTEM_PROMPT_LENGTH = 4000;
+const SYSTEM_PROMPT_SAVE_DELAY = 500;
 
 export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromptViewProps) {
   const rules = settings.rules || [];
+
+  // 系统提示词:本地草稿 + 防抖落库(避免逐键写 chrome.storage)
+  const [promptDraft, setPromptDraft] = useState(settings.systemPrompt || '');
+  const [promptSaved, setPromptSaved] = useState(true);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+  }, []);
+
+  const handlePromptChange = (value: string) => {
+    setPromptDraft(value);
+    setPromptSaved(false);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      onUpdateSettings({ ...settings, systemPrompt: value.trim().slice(0, MAX_SYSTEM_PROMPT_LENGTH) });
+      setPromptSaved(true);
+    }, SYSTEM_PROMPT_SAVE_DELAY);
+  };
 
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -237,6 +257,40 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
 
   return (
     <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+      {/* 自定义系统提示词卡(常驻注入,独立于规则) */}
+      <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-1.5 font-medium text-foreground">
+            <PenLine className="size-3.5 text-muted-foreground" />
+            <span>{i18n.t('settings.systemPrompt.title')}</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-normal">{i18n.t('settings.systemPrompt.desc')}</p>
+        </div>
+        <div className="space-y-1">
+          <Textarea
+            value={promptDraft}
+            onChange={(e) => handlePromptChange(e.target.value)}
+            maxLength={MAX_SYSTEM_PROMPT_LENGTH}
+            placeholder={i18n.t('settings.systemPrompt.placeholder')}
+            className="text-xs bg-background min-h-[96px] leading-relaxed resize-y"
+            rows={4}
+          />
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+            <span aria-live="polite">
+              {promptSaved ? i18n.t('settings.systemPrompt.saved') : ''}
+            </span>
+            <span
+              className={cn(
+                'font-mono select-none',
+                promptDraft.length >= MAX_SYSTEM_PROMPT_LENGTH ? 'text-amber-500 font-semibold' : ''
+              )}
+            >
+              {promptDraft.length}/{MAX_SYSTEM_PROMPT_LENGTH}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* 规则卡片 */}
       <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
         <div className="flex items-center justify-between">

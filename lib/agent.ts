@@ -88,6 +88,8 @@ export function buildSystemPrompt(
   language: string | null = null,
   /** 用户自定义规则(启用中的规则常驻注入;四期规格 v1) */
   rules: UserRule[] = [],
+  /** 用户自定义系统提示词(常驻注入,独立于规则;四期规格 v1) */
+  customPrompt = '',
 ): string {
   const now = new Date();
   // 语言策略:未设置 = 跟随用户消息语言(原行为);设置 = 全局语言优先,用户消息明确指定时以用户为准
@@ -107,10 +109,26 @@ export function buildSystemPrompt(
     '- Inline tokens like [url: example.com] are URLs the user pasted as references — self-describing; treat them as plain links, not element markers.',
     '- Tool results are live and win over the block metadata when they conflict.',
   );
-  // 用户规则注入:常驻,超预算按序丢整条(与 HANDOFF 四期规格预算一致)
+  // 用户自定义内容注入:系统提示词框在前(定义角色与行为),规则列表在后(分段补充)
+  const promptBlock = renderCustomPromptBlock(customPrompt);
+  if (promptBlock) parts.push('', promptBlock);
+  // 规则注入:常驻,超预算按序丢整条(与 HANDOFF 四期规格预算一致)
   const rulesBlock = renderRulesBlock(rules);
   if (rulesBlock) parts.push('', rulesBlock);
   return parts.join('\n');
+}
+
+/** 自定义系统提示词预算(字符,独立于规则预算) */
+const CUSTOM_PROMPT_MAX = 4000;
+
+/** 自定义系统提示词块渲染:非空才注入 */
+function renderCustomPromptBlock(customPrompt: string): string | null {
+  const text = customPrompt.trim();
+  if (!text) return null;
+  return [
+    'The user has written a custom system prompt defining your role and behavior for every conversation. Follow it; it takes precedence over your default style but never overrides the user\'s current request:',
+    text.slice(0, CUSTOM_PROMPT_MAX),
+  ].join('\n');
 }
 
 /** 规则注入总预算(字符) */
@@ -149,6 +167,8 @@ export interface RunAgentOptions {
   language?: string | null;
   /** 用户自定义规则(启用中的常驻注入 system prompt;四期规格 v1) */
   rules?: UserRule[];
+  /** 用户自定义系统提示词(常驻注入;四期规格 v1) */
+  systemPrompt?: string;
   /** 会话 id,转发给支持提示缓存的提供商 */
   sessionId?: string;
   signal?: AbortSignal;
@@ -233,7 +253,7 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
 
   const agent = new Agent({
     initialState: {
-      systemPrompt: buildSystemPrompt(options.language ?? null, options.rules ?? []),
+      systemPrompt: buildSystemPrompt(options.language ?? null, options.rules ?? [], options.systemPrompt ?? ''),
       model,
       thinkingLevel: options.thinkingLevel,
       tools,

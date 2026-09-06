@@ -47,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   titleModel: null,
   quickPromptModel: null,
   language: null,
+  systemPrompt: '',
   rules: [],
   titleThinking: 'off',
   quickPromptThinking: 'off',

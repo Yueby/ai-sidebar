@@ -106,6 +106,8 @@ export interface Settings {
   quickPromptModel: AuxModelRef | null;
   /** AI 生成内容语言(BCP-47);null = 自动(跟随浏览器语言) */
   language: string | null;
+  /** 用户自定义系统提示词(常驻注入,独立于规则;四期规格 v1);空串 = 未设置 */
+  systemPrompt: string;
   /** 用户自定义规则(启用中的规则常驻注入 system prompt,四期规格 v1) */
   rules: UserRule[];
   /** 标题生成任务思考等级(默认 off:更快更省);旧版共享 auxThinking 由 sanitize 迁移 */

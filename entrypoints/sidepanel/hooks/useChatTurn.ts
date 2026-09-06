@@ -185,6 +185,8 @@ export function useChatTurn(params: {
           language: useAppStore.getState().settings.language,
           // 用户自定义规则(启用中的常驻注入 system prompt)
           rules: useAppStore.getState().settings.rules,
+          // 用户自定义系统提示词(常驻注入)
+          systemPrompt: useAppStore.getState().settings.systemPrompt,
           sessionId: session.id,
           signal: abortCtrl.signal,
           // search_web 工具注册配置:设置里配置了可用搜索源才下发

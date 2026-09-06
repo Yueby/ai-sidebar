@@ -186,6 +186,11 @@ settings:
     permissions: Permissions
     backup: Backup
     about: About
+  systemPrompt:
+    title: System Prompt
+    desc: "Defines the AI's role and behavior; injected into the system prompt for every conversation. Rules act as toggleable supplements."
+    placeholder: "e.g. You are my coding assistant; write code comments in Chinese; keep answers short…"
+    saved: Saved
   rules:
     title: "User Rules ({count})"
     desc: "Enabled rules are injected into every conversation for personal preferences and constraints."

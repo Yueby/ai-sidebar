@@ -87,7 +87,8 @@ function sanitizeWebSearch(value: unknown): Settings['webSearch'] {
   };
 }
 
-/** 规则字段预算(与 HANDOFF 四期规格一致) */
+/** 字段预算(与 HANDOFF 四期规格一致) */
+const SYSTEM_PROMPT_MAX = 4000;
 const RULE_NAME_MAX = 100;
 const RULE_CONTENT_MAX = 4000;
 const RULE_COUNT_MAX = 20;
@@ -133,6 +134,7 @@ export function sanitizeSettings(value: unknown): Settings {
     titleModel: sanitizeAuxModelRef(v.titleModel),
     quickPromptModel: sanitizeAuxModelRef(v.quickPromptModel),
     language: typeof v.language === 'string' && v.language ? v.language : null,
+    systemPrompt: typeof v.systemPrompt === 'string' ? v.systemPrompt.trim().slice(0, SYSTEM_PROMPT_MAX) : '',
     rules: sanitizeRules(v.rules),
     titleThinking: sanitizeAuxThinking(v.titleThinking, legacyAux),
     quickPromptThinking: sanitizeAuxThinking(v.quickPromptThinking, legacyAux),

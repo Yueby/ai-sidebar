@@ -523,7 +523,7 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
    - **参考**:AhYi8/browser-ai-assistant(CDP 驱动,特权层不可移植;可搬=AX 行格式/噪点过滤/预算截断/受控 fill 法/遮挡检测/wait_for_state 有界轮询/fail-closed 校验——克隆在 `.slim/clonedeps/repos/AhYi8__browser-ai-assistant`,只读)
    - **验收标尺**:模型经 search→click 链完成真实登录页填字点按钮,全程零手写 JS
 5. **四期规格 v1:自定义规则 / 技能 / 记忆与自改进**(自定义系统提示词扩展;调研对齐:pi/Agent Skills 标准(agentskills.io)+ OpenClaw 三层文件记忆 + Hermes 自改进循环 + Cline/Roo 具名规则列表;用户已拍板:规则列表形态、自动+手动双触发、memory 常驻注入、分三步实施):
-   - **注入架构(buildSystemPrompt v2)**:四层注入 + 字符预算——①启用中的规则(总 ≤6000 字符,超限按序丢弃整条)②memory.md 常驻(≤2000)③技能索引(name+description,≤3000)④技能正文按需(`read_skill` 工具取);注入头 model-facing 一律英文,明示"用户设定,优先级高于默认风格、低于当轮用户指令"
+   - **注入架构(buildSystemPrompt v2)**:五层注入 + 字符预算——⓪自定义系统提示词(独立文本框,常驻,≤4000;用户拍板:独立入口,非规则替代)①启用中的规则(总 ≤6000 字符,超限按序丢弃整条)②memory.md 常驻(≤2000)③技能索引(name+description,≤3000)④技能正文按需(`read_skill` 工具取);注入头 model-facing 一律英文,明示"用户设定,优先级高于默认风格、低于当轮用户指令"
    - **规则(UserRule)**:`{ id, name, content, enabled }[]` 存 `Settings.rules`;sanitize(uuid、name ≤100、content ≤4000、条数 ≤20);设置新「提示词」页签(步②扩技能/记忆区);UI = 列表(开关/内联编辑/删除走统一 AlertDialog)
    - **技能(Agent Skills 标准)**:SKILL.md 格式(name 小写连字符 ≤64/description ≤1024);存 chrome.storage.local `skills` 键:`{ id, name, description, content, source, createdAt }[]`;v1 纯指令 markdown,无脚本/引用文件(无文件系统,天然安全);新工具 `read_skill`(safe)/ `save_skill`(upsert,confirm);设置技能区 = 列表 + textarea 编辑 + .md 文件导入;`/skill:name` 斜杠命令(步③)
    - **记忆(memory.md)**:单文件常驻注入(≤2000),存 chrome.storage.local;`save_memory`(confirm)工具供 agent 沉淀;设置页可查看/编辑/重置
