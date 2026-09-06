@@ -533,7 +533,14 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
    - **实施序列**:①规则+注入架构骨架 → ②技能存储/工具/设置 UI → ③三内置技能+记忆+自动反思+同步
    - **安全**:技能/规则 = 提示注入面;安装必经预览确认;save_skill/save_memory 全程 confirm(永不进 grant);存储内容设置页全程可查可改
    - **验收标尺**:①规则开关下轮对话即时生效 ②经 skill-installer 从 GitHub 装真实技能并生效 ③/improve 从含纠错会话沉淀记忆且下轮生效
-6. 发布:图标 + `wxt zip`。
+6. **UI 官方化专项:聊天渲染全量迁移 shadcn 官方件**(用户拍板「全部换官方」;scout 调研报告见 subagent-artifacts/outputs/790c6362…/context.md):
+   - **底座结论**:bubble/message/attachment/marker 基于 radix-ui(Slot)+ 标准 new-york-v4 token,零主题改动;message-scroller 依赖新包 @shadcn/react(v0.3.1,peer react 19);prompt-input/response/reasoning/tool 官方不存在(404)—— TipTap Composer(元素 chip + 斜杠 cmdk)与 MarkdownView(react-markdown)保留自造
+   - **小件批(designer)**:`add bubble message spinner marker collapsible tabs` → 设置页签换 Tabs;消息行布局换 Message/Bubble(用户=default end、AI=ghost/tinted、错误=destructive);token 脚注进 MessageFooter;CompactionRow 换 Marker separator;思考折叠/工具卡展开换 Collapsible;流式 50ms 节流与状态流不动
+   - **小件批二(designer,等批一落地)**:`add questionnaire item button-group` → ApprovalSection 审批卡换 Item+ButtonGroup(工具信息 ItemContent、允许/拒绝 ItemActions、会话级 grant Switch 保留);ask_user 提问卡换 Questionnaire(单问题子集:choices/freeform/skip/submit);gate 状态流与 grant 语义零改动
+   - **大件批(独立 milestone,开发者自己做)**:MessageScroller 替换 overflow-anchor 钉底 —— 每轮首条用户消息标 scrollAnchor、启 autoScroll(上翻自动退避)、preserveScrollOnPrepend、defaultScrollPosition=last-anchor 恢复会话;数据流把 turnSeq/滚动协议对齐 messageId;窄栏流式+多轮工具循环回归
+   - **保留自造**:ToolCallCard 内容体、ApprovalSection、ContextRing/ContextPanel、元素 chip、md-body 排版
+   - **验收标尺**:流式追加零跳动、上翻挂起/回到底、会话重开滚动位置正确、窄栏 360px 密度不退化
+7. 发布:图标 + `wxt zip`。
 
 > 已完成(2026-09-02):`err: any` → `unknown`(lib/utils.ts `getErrorMessage` helper,App/SettingsMainView/ProviderDialog 5 处收窄);dev 可观测性(content.ts 对未知 `ai-sidebar/` 消息 DEV 下 console.warn)。用户拍板不做:highlight.js 语言包裁剪(本地加载 941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
 >

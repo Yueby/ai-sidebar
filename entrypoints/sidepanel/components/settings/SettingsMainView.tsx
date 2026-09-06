@@ -35,6 +35,7 @@ import {
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -281,38 +282,35 @@ export function SettingsMainView({
           <span className="sr-only">{i18n.t('settings.backToChat')}</span>
         </Button>
 
-        {/* Tab Switcher in Header (Segmented Control) */}
-        <nav
-          aria-label={i18n.t('settings.navAria')}
-          className="flex items-center rounded-lg border border-border/60 bg-muted/50 p-0.5 text-xs overflow-x-auto"
+        {/* Tab Switcher in Header (Controlled Tabs) */}
+        <Tabs
+          value={currentTab}
+          onValueChange={(val) => setCurrentTab(val as SettingsTab)}
+          className="flex-1 min-w-0"
         >
-          {[
-            { id: 'providers', label: i18n.t('settings.tabs.providers') },
-            { id: 'models', label: i18n.t('settings.tabs.models') },
-            { id: 'prompt', label: i18n.t('settings.tabs.prompt') },
-            { id: 'search', label: i18n.t('settings.tabs.search') },
-            { id: 'permissions', label: i18n.t('settings.tabs.permissions') },
-            { id: 'backup', label: i18n.t('settings.tabs.backup') },
-            { id: 'about', label: i18n.t('settings.tabs.about') },
-          ].map((tab) => {
-            const isActive = currentTab === tab.id;
-            return (
-              <button
+          <TabsList
+            aria-label={i18n.t('settings.navAria')}
+            className="flex group-data-[orientation=horizontal]/tabs:h-7 h-7 w-full max-w-full items-center justify-start overflow-x-auto p-0.5 border border-border/60 bg-muted/50 rounded-lg text-xs"
+          >
+            {[
+              { id: 'providers', label: i18n.t('settings.tabs.providers') },
+              { id: 'models', label: i18n.t('settings.tabs.models') },
+              { id: 'prompt', label: i18n.t('settings.tabs.prompt') },
+              { id: 'search', label: i18n.t('settings.tabs.search') },
+              { id: 'permissions', label: i18n.t('settings.tabs.permissions') },
+              { id: 'backup', label: i18n.t('settings.tabs.backup') },
+              { id: 'about', label: i18n.t('settings.tabs.about') },
+            ].map((tab) => (
+              <TabsTrigger
                 key={tab.id}
-                type="button"
-                onClick={() => setCurrentTab(tab.id as SettingsTab)}
-                className={cn(
-                  'h-6 px-1.5 sm:px-2 text-[11px] font-medium rounded-md transition-all cursor-pointer whitespace-nowrap shrink-0',
-                  isActive
-                    ? 'bg-background text-foreground shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
+                value={tab.id}
+                className="h-6 px-1.5 sm:px-2 text-[11px] font-medium rounded-md cursor-pointer whitespace-nowrap shrink-0"
               >
                 {tab.label}
-              </button>
-            );
-          })}
-        </nav>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </header>
 
       {/* Main Content Area */}

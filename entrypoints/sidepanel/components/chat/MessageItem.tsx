@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Globe,
   Wrench,
-  Loader2,
   SquareMousePointer,
   ShieldAlert,
   HelpCircle,
@@ -25,6 +24,11 @@ import { MarkdownView } from './MarkdownView';
 import { CompactionRow } from './CompactionRow';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Message, MessageAvatar, MessageContent, MessageFooter } from '@/components/ui/message';
+import { Bubble, BubbleContent } from '@/components/ui/bubble';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -177,21 +181,20 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
   return (
     <div className="pt-1 mt-1 border-t border-border/60 text-xs w-full">
       {isMany ? (
-        <div className="space-y-1">
-          <button
-            type="button"
-            onClick={() => setOpen((prev) => !prev)}
-            className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5"
-          >
-            <span>{i18n.t('messages.refCount', { total })}</span>
-            {open ? <ChevronDown className="size-2.5" /> : <ChevronRight className="size-2.5" />}
-          </button>
-          {open && (
-            <div className="animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
-              {renderItems()}
-            </div>
-          )}
-        </div>
+        <Collapsible open={open} onOpenChange={setOpen} className="space-y-1">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
+            >
+              <span>{i18n.t('messages.refCount', { total })}</span>
+              {open ? <ChevronDown className="size-2.5" /> : <ChevronRight className="size-2.5" />}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
+            {renderItems()}
+          </CollapsibleContent>
+        </Collapsible>
       ) : (
         renderItems()
       )}
@@ -222,26 +225,23 @@ function ThinkingBlock({
   if (!thinking || !thinking.trim()) return null;
 
   return (
-    <div className="my-1 text-xs w-full">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5"
-      >
-        {isGenerating ? (
-          <Brain className="size-3 animate-pulse text-foreground" />
-        ) : (
-          <Brain className="size-3" />
-        )}
-        <span>{isGenerating ? i18n.t('messages.thinking') : i18n.t('messages.thinkingDone')}</span>
-        {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-      </button>
+    <Collapsible open={open} onOpenChange={setOpen} className="my-1 text-xs w-full">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
+        >
+          {isGenerating ? (
+            <Spinner className="size-3 text-muted-foreground shrink-0" />
+          ) : (
+            <Brain className="size-3 shrink-0" />
+          )}
+          <span>{isGenerating ? i18n.t('messages.thinking') : i18n.t('messages.thinkingDone')}</span>
+          {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        </button>
+      </CollapsibleTrigger>
 
-      {open ? (
-        <div className="mt-1 whitespace-pre-wrap break-all border-l-2 border-border pl-2.5 text-[11px] leading-relaxed text-muted-foreground animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
-          {shownThinking}
-        </div>
-      ) : (
+      {!open && (
         <div
           onClick={() => setOpen(true)}
           className="group/preview relative mt-0.5 cursor-pointer border-l-2 border-border/60 pl-2.5 hover:border-border transition-colors select-none"
@@ -253,7 +253,13 @@ function ThinkingBlock({
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3.5 bg-gradient-to-t from-card to-transparent opacity-80" />
         </div>
       )}
-    </div>
+
+      <CollapsibleContent>
+        <div className="mt-1 whitespace-pre-wrap break-all border-l-2 border-border pl-2.5 text-[11px] leading-relaxed text-muted-foreground animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
+          {shownThinking}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -319,77 +325,82 @@ function ToolCallCard({
   const isAskGate = gateKind === 'ask';
 
   return (
-    <div className={`my-1.5 w-full max-w-full rounded-lg border p-2 text-xs text-foreground transition-all animate-in fade-in-0 duration-150 motion-reduce:animate-none ${cardBorderClass}`}>
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className={`my-1.5 w-full max-w-full rounded-lg border p-2 text-xs text-foreground transition-all animate-in fade-in-0 duration-150 motion-reduce:animate-none ${cardBorderClass}`}
+    >
       {/* Header row (Click to toggle expand) */}
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-80 transition-opacity cursor-pointer"
-      >
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          {isWaitingConfirmation ? (
-            isAskGate ? (
-              <HelpCircle className="size-3.5 shrink-0 text-blue-500" />
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-80 transition-opacity cursor-pointer"
+        >
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            {isWaitingConfirmation ? (
+              isAskGate ? (
+                <HelpCircle className="size-3.5 shrink-0 text-blue-500" />
+              ) : (
+                <ShieldAlert className="size-3.5 shrink-0 text-amber-500" />
+              )
+            ) : isQueued ? (
+              <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground/70" />
+            ) : isExecuting ? (
+              <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
             ) : (
-              <ShieldAlert className="size-3.5 shrink-0 text-amber-500" />
-            )
-          ) : isQueued ? (
-            <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground/70" />
-          ) : isExecuting ? (
-            <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-          ) : (
-            <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-          <span className="font-medium text-[11px] truncate">{label}</span>
-          <span className="text-[10px] text-muted-foreground font-mono truncate">
-            ({name})
-          </span>
-          {isWaitingConfirmation && pendingGateTotal && pendingGateTotal > 1 ? (
-            <span className="text-[10px] text-muted-foreground font-normal shrink-0">
-              {i18n.t('messages.pendingGates', { total: pendingGateTotal })}
+              <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
+            )}
+            <span className="font-medium text-[11px] truncate">{label}</span>
+            <span className="text-[10px] text-muted-foreground font-mono truncate">
+              ({name})
             </span>
-          ) : null}
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          {isWaitingConfirmation ? (
-            isAskGate ? (
-              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium animate-pulse">
-                {i18n.t('messages.waitingReply')}
+            {isWaitingConfirmation && pendingGateTotal && pendingGateTotal > 1 ? (
+              <span className="text-[10px] text-muted-foreground font-normal shrink-0">
+                {i18n.t('messages.pendingGates', { total: pendingGateTotal })}
               </span>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isWaitingConfirmation ? (
+              isAskGate ? (
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium animate-pulse">
+                  {i18n.t('messages.waitingReply')}
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium animate-pulse">
+                  {i18n.t('messages.waitingConfirm')}
+                </span>
+              )
+            ) : isQueued ? (
+              <span className="text-[10px] text-muted-foreground/80 font-normal">
+                {i18n.t('messages.queued')}
+              </span>
+            ) : isExecuting ? (
+              <span className="text-[10px] text-muted-foreground">{i18n.t('messages.executing')}</span>
+            ) : isDenied ? (
+              <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.userDenied')}</span>
+            ) : isError ? (
+              <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.failed')}</span>
+            ) : isDone ? (
+              <span className="text-[10px] text-muted-foreground/70">{i18n.t('messages.completed')}</span>
             ) : (
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium animate-pulse">
-                {i18n.t('messages.waitingConfirm')}
-              </span>
-            )
-          ) : isQueued ? (
-            <span className="text-[10px] text-muted-foreground/80 font-normal">
-              {i18n.t('messages.queued')}
-            </span>
-          ) : isExecuting ? (
-            <span className="text-[10px] text-muted-foreground">{i18n.t('messages.executing')}</span>
-          ) : isDenied ? (
-            <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.userDenied')}</span>
-          ) : isError ? (
-            <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.failed')}</span>
-          ) : isDone ? (
-            <span className="text-[10px] text-muted-foreground/70">{i18n.t('messages.completed')}</span>
-          ) : (
-            <span className="text-[10px] text-muted-foreground/70">{i18n.t('messages.invoked')}</span>
-          )}
+              <span className="text-[10px] text-muted-foreground/70">{i18n.t('messages.invoked')}</span>
+            )}
 
-          {open ? (
-            <ChevronDown className="size-3 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="size-3 text-muted-foreground" />
-          )}
-        </div>
-      </button>
+            {open ? (
+              <ChevronDown className="size-3 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="size-3 text-muted-foreground" />
+            )}
+          </div>
+        </button>
+      </CollapsibleTrigger>
 
       {/* 状态化卡:交互审批统一渲染在 App 的审批槽位,卡内只有状态与参数/结果展开 */}
 
       {/* Expanded details (参数与历史结果) */}
-      {open && (
+      <CollapsibleContent>
         <div className="mt-2 pt-2 border-t border-border/40 space-y-2 text-[11px] animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
           {/* Parameters */}
           {args && Object.keys(args).length > 0 && (
@@ -443,8 +454,8 @@ function ToolCallCard({
             )}
           </div>
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -560,25 +571,32 @@ export function MessageItem({
       );
     }
     return (
-      <div className="group flex justify-end px-3 py-1 animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none">
-        <div className="flex max-w-[85%] flex-col items-end gap-0.5">
-          <div className="w-fit max-w-full rounded-lg bg-secondary text-secondary-foreground px-3 py-1.5 text-sm shadow-xs">
-            {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON;标记渲染为内容预览 chip(新旧标记兼容) */}
-            <p className="whitespace-pre-wrap break-all leading-relaxed">
-              {renderUserMessageText(rawText, elementById)}
-            </p>
-            {pageRefs && <UserRefSnapshot refs={pageRefs} />}
-          </div>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-1"
-          >
-            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-            <span>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</span>
-          </button>
-        </div>
-      </div>
+      <Message
+        align="end"
+        className="group px-3 py-1 animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none"
+      >
+        <MessageContent className="max-w-[85%] items-end gap-0.5">
+          <Bubble variant="default" align="end" className="max-w-full">
+            <BubbleContent className="rounded-lg px-3 py-1.5 text-sm shadow-xs">
+              {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON;标记渲染为内容预览 chip(新旧标记兼容) */}
+              <p className="whitespace-pre-wrap break-all leading-relaxed">
+                {renderUserMessageText(rawText, elementById)}
+              </p>
+              {pageRefs && <UserRefSnapshot refs={pageRefs} />}
+            </BubbleContent>
+          </Bubble>
+          <MessageFooter className="px-1 py-0 justify-end">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
+            >
+              {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+              <span>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</span>
+            </button>
+          </MessageFooter>
+        </MessageContent>
+      </Message>
     );
   }
 
@@ -624,9 +642,11 @@ export function MessageItem({
         </div>
       )}
       {errorMessage && (
-        <div className="text-xs text-muted-foreground italic leading-relaxed break-all whitespace-pre-wrap">
-          {errorMessage}
-        </div>
+        <Bubble variant="destructive" align="start" className="mt-1 max-w-full">
+          <BubbleContent className="text-xs italic leading-relaxed break-all whitespace-pre-wrap rounded-md px-2 py-1">
+            {errorMessage}
+          </BubbleContent>
+        </Bubble>
       )}
       {isCancelled && (
         <div className="mt-1.5 text-xs text-muted-foreground">{i18n.t('messages.stopped')}</div>
@@ -681,58 +701,64 @@ export function MessageItem({
 
   return (
     <div className="flex flex-col gap-1 px-3 py-1">
-      <div
-        className={`group flex gap-2.5 py-0.5 ${
+      <Message
+        align="start"
+        className={cn(
+          "group flex gap-2.5 py-0.5",
           suppressAnimRef.current
             ? ''
             : 'animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none'
-        }`}
+        )}
       >
-        <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+        <MessageAvatar className="size-6 min-w-6 self-start rounded-md border bg-muted text-muted-foreground mt-0.5 group-has-data-[slot=message-footer]/message:translate-y-0">
           <Bot className="size-3.5" />
-        </div>
+        </MessageAvatar>
 
-        <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5 overflow-hidden">
+        <MessageContent className="min-w-0 flex-1 items-start gap-1 overflow-hidden">
           {/* 块序还原:thinking → text → toolCall 按 content 原始顺序渲染 */}
           {segments.map((seg, i) =>
             seg.kind === 'tool' ? (
               renderToolCard(seg.block, i)
             ) : (
-              <div
+              <Bubble
                 key={i}
-                className="relative min-w-0 w-fit max-w-full rounded-lg border bg-card p-2.5 text-card-foreground overflow-hidden"
+                variant="tinted"
+                align="start"
+                className="w-fit max-w-full"
               >
-                {/* Live streaming thinking block(仅 live 气泡;流式消息无物化 thinking 块,置于首段首位) */}
-                {i === 0 && liveThinking && (
-                  <ThinkingBlock
-                    thinking={liveThinking}
-                    isGenerating={Boolean(isStreaming) && !rawText}
-                  />
-                )}
+                <BubbleContent className="relative min-w-0 w-fit max-w-full rounded-lg border border-border/60 p-2.5 text-card-foreground overflow-hidden">
+                  {/* Live streaming thinking block(仅 live 气泡;流式消息无物化 thinking 块,置于首段首位) */}
+                  {i === 0 && liveThinking && (
+                    <ThinkingBlock
+                      thinking={liveThinking}
+                      isGenerating={Boolean(isStreaming) && !rawText}
+                    />
+                  )}
 
-                {seg.items.map((item, j) =>
-                  item.type === 'thinking' ? (
-                    <ThinkingBlock key={j} thinking={item.thinking} />
-                  ) : item.type === 'text' ? (
-                    i === lastBubbleIndex && j === seg.items.length - 1 && isStreaming && rawText ? (
-                      <SmoothMarkdown
-                        key={j}
-                        text={item.text}
-                        /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
-                        className="md-caret"
-                      />
-                    ) : (
-                      <MarkdownView
-                        key={j}
-                        content={item.text}
-                      />
-                    )
-                  ) : null
-                )}
+                  {seg.items.map((item, j) =>
+                    item.type === 'thinking' ? (
+                      <ThinkingBlock key={j} thinking={item.thinking} />
+                    ) : item.type === 'text' ? (
+                      i === lastBubbleIndex && j === seg.items.length - 1 && isStreaming && rawText ? (
+                        <SmoothMarkdown
+                          key={j}
+                          text={item.text}
+                          /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
+                          className="md-caret"
+                        />
+                      ) : (
+                        <MarkdownView
+                          key={j}
+                          content={item.text}
+                        />
+                      )
+                    ) : null
+                  )}
 
-                {/* 状态节点附在最后一个气泡段内;无气泡段时独立壳渲染 */}
-                {i === lastBubbleIndex && hasStatus && statusNodes}
-              </div>
+                  {/* 状态节点附在最后一个气泡段内;无气泡段时独立壳渲染 */}
+                  {i === lastBubbleIndex && hasStatus && statusNodes}
+                </BubbleContent>
+              </Bubble>
             )
           )}
 
@@ -763,20 +789,26 @@ export function MessageItem({
           {/* 无气泡段但有 live 思考/状态(纯 thinking 阶段、纯工具卡报错等):气泡壳兜底。
               仅 thinking 时此前整列无气泡壳 → 气泡"消失"空档;此处保证壳连续 */}
           {!hasBubble && (hasStatus || liveThinking) && (
-            <div className="relative min-w-0 w-fit max-w-full rounded-lg border bg-card p-2.5 text-card-foreground overflow-hidden">
-              {liveThinking && (
-                <ThinkingBlock
-                  thinking={liveThinking}
-                  isGenerating={Boolean(isStreaming) && !rawText}
-                />
-              )}
-              {statusNodes}
-            </div>
+            <Bubble
+              variant="tinted"
+              align="start"
+              className="w-fit max-w-full"
+            >
+              <BubbleContent className="relative min-w-0 w-fit max-w-full rounded-lg border border-border/60 p-2.5 text-card-foreground overflow-hidden">
+                {liveThinking && (
+                  <ThinkingBlock
+                    thinking={liveThinking}
+                    isGenerating={Boolean(isStreaming) && !rawText}
+                  />
+                )}
+                {statusNodes}
+              </BubbleContent>
+            </Bubble>
           )}
 
           {/* Action & Usage bar (Only shown when text or usage exists) */}
           {(hasVisibleTextOrThinking || hasUsage) && (
-            <div className="flex w-full items-center justify-between px-0.5 text-[11px] text-muted-foreground">
+            <MessageFooter className="w-full justify-between px-0.5 py-0 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1.5 truncate min-w-0">
                 <span>
                   {message.timestamp
@@ -815,10 +847,10 @@ export function MessageItem({
                   </Tooltip>
                 </TooltipProvider>
               )}
-            </div>
+            </MessageFooter>
           )}
-        </div>
-      </div>
+        </MessageContent>
+      </Message>
     </div>
   );
 }
