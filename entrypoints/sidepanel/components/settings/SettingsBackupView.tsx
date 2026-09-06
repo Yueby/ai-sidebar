@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { InfoTip } from './InfoTip';
 
 interface SettingsBackupViewProps {
   settings: Settings;
@@ -206,18 +207,15 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
     <div className="space-y-3.5 text-left animate-in fade-in-0 duration-150 motion-reduce:animate-none">
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 font-medium text-xs text-muted-foreground">
             <FileJson className="size-3.5 text-muted-foreground" />
             <span>{i18n.t('backup.title')}</span>
-          </h2>
+            <InfoTip content={i18n.t('backup.desc')} />
+          </div>
           <span className="text-[10px] text-muted-foreground font-mono">JSON</span>
         </div>
 
         <div className="rounded-lg border bg-card p-3 space-y-2.5">
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            {i18n.t('backup.desc')}
-          </p>
-
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -267,18 +265,15 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
       {/* WebDAV 同步段 */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 font-medium text-xs text-muted-foreground">
             <CloudCog className="size-3.5 text-muted-foreground" />
             <span>{i18n.t('sync.title')}</span>
-          </h2>
+            <InfoTip content={i18n.t('sync.desc')} />
+          </div>
           <span className="text-[10px] text-muted-foreground font-mono">WebDAV</span>
         </div>
 
         <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs">
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            {i18n.t('sync.desc')}
-          </p>
-
           <div className="space-y-2">
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground">{i18n.t('sync.urlLabel')}</Label>
@@ -326,9 +321,9 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
 
           <div className="border-t border-border/50 pt-2.5 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-[11px] font-medium text-foreground">{i18n.t('sync.encryptLabel')}</div>
-                <div className="text-[10px] text-muted-foreground leading-snug">{i18n.t('sync.encryptDesc')}</div>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-[11px] font-medium text-foreground">{i18n.t('sync.encryptLabel')}</span>
+                <InfoTip content={i18n.t('sync.encryptDesc')} />
               </div>
               <Switch
                 checked={dav.encrypt}

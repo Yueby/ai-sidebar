@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { i18n } from '#i18n';
+import { InfoTip } from './InfoTip';
 import {
   Select,
   SelectContent,
@@ -143,22 +144,25 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
 
           {webSearch.provider === 'searxng' && (
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">{i18n.t('search.searxngLabel')}</Label>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-[11px] text-muted-foreground">{i18n.t('search.searxngLabel')}</Label>
+                <InfoTip content={i18n.t('search.searxngHelp')} />
+              </div>
               <Input
                 value={webSearch.searxngBaseUrl}
                 onChange={(e) => update({ searxngBaseUrl: e.target.value })}
                 placeholder="https://searx.example.com"
                 className="h-8 text-xs font-mono"
               />
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {i18n.t('search.searxngHelp')}
-              </p>
             </div>
           )}
 
           {isKeyBasedProvider(currentProvider) && keyConfig && (
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">API Key</Label>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-[11px] text-muted-foreground">API Key</Label>
+                <InfoTip content={i18n.t('search.keyStorageNote')} />
+              </div>
               <div className="relative">
                 <Input
                   type={showKey ? 'text' : 'password'}
@@ -177,23 +181,19 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                   {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                 </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                {keyConfig.applyUrl && (
-                  <>
-                    {i18n.t('search.applyUrlPrefix')}
-                    <a
-                      href={keyConfig.applyUrl.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="text-primary underline hover:opacity-80 transition-opacity"
-                    >
-                      {keyConfig.applyUrl.label}
-                    </a>
-                    ；
-                  </>
-                )}
-                {i18n.t('search.keyStorageNote')}
-              </p>
+              {keyConfig.applyUrl && (
+                <p className="text-[10px] text-muted-foreground leading-normal">
+                  {i18n.t('search.applyUrlPrefix')}
+                  <a
+                    href={keyConfig.applyUrl.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-primary underline hover:opacity-80 transition-opacity"
+                  >
+                    {keyConfig.applyUrl.label}
+                  </a>
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -12,6 +12,7 @@ import {
   Layers,
   Sparkles,
   Languages,
+  Check,
 } from 'lucide-react';
 import type { Settings, ProviderConfig, AuxThinkingLevel, ReasoningLevel } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
@@ -21,6 +22,7 @@ import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
 import { SettingsPromptView } from './SettingsPromptView';
 import { SettingsBackupView } from './SettingsBackupView';
+import { InfoTip } from './InfoTip';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -359,116 +361,115 @@ export function SettingsMainView({
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
                 {settings.providers.map((p) => {
                   const isActive = p.id === settings.activeProviderId;
                   const isTesting = testingId === p.id;
-                  const isConfirmingDelete = deletingId === p.id;
 
                   return (
                     <div
                       key={p.id}
                       className={cn(
-                        'rounded-lg border p-3 text-left space-y-2.5 transition-colors',
-                        isActive
-                          ? 'border-primary/40 bg-primary/5 dark:bg-primary/10 shadow-2xs'
-                          : 'border-border bg-card hover:border-border/80'
+                        'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
+                        isActive ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-muted/40',
                       )}
+                      onClick={() => onEditProvider(p)}
                     >
-                      {/* Header: Name + Protocol + Active Badge */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="truncate text-xs font-semibold text-foreground">
-                            {p.name || i18n.t('settings.providers.unnamed')}
-                          </span>
+                      {/* Left: Indicator + Name + Info */}
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div
+                          className="flex items-center shrink-0"
+                          onClick={(e) => {
+                            if (!isActive) {
+                              e.stopPropagation();
+                              handleSetActiveProvider(p.id);
+                            }
+                          }}
+                          title={isActive ? i18n.t('settings.providers.activeBadge') : i18n.t('settings.providers.setActive')}
+                        >
+                          <span
+                            className={cn(
+                              'size-2 rounded-full transition-colors',
+                              isActive ? 'bg-primary ring-2 ring-primary/20' : 'bg-muted-foreground/30 group-hover:bg-muted-foreground/60',
+                            )}
+                          />
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          {isActive && (
-                            <Badge variant="default" className="text-[10px] h-4.5 px-1.5 font-normal">
-                              {i18n.t('settings.providers.activeBadge')}
-                            </Badge>
-                          )}
-                          <Badge variant="secondary" className="text-[10px] h-4.5 px-1.5 font-normal">
-                            {apiTypeLabel(p.api)}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Base URL and Models info */}
-                      <div className="text-xs text-muted-foreground space-y-0.5">
-                        <div className="truncate font-mono text-[11px]">{p.baseUrl || i18n.t('settings.providers.noBaseUrl')}</div>
-                        <div className="text-[11px]">
-                          <span>{i18n.t('settings.providers.modelsCount', { count: p.models.length })}</span>
-                          {p.models.length > 0 && (
-                            <span className="ml-1">
-                              ({p.models.map((m) => m.displayName || m.id).slice(0, 3).join(', ')}
-                              {p.models.length > 3 ? '...' : ''})
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={cn('font-medium text-[11px] truncate', isActive ? 'text-foreground font-semibold' : 'text-foreground')}>
+                              {p.name || i18n.t('settings.providers.unnamed')}
                             </span>
-                          )}
+                            {isActive && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-primary/15 text-primary font-normal shrink-0 leading-none">
+                                {i18n.t('settings.providers.activeBadge')}
+                              </span>
+                            )}
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-muted text-muted-foreground font-normal shrink-0 leading-none font-mono">
+                              {apiTypeLabel(p.api)}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground truncate leading-tight font-mono">
+                            {p.baseUrl || i18n.t('settings.providers.noBaseUrl')} · {i18n.t('settings.providers.modelsCount', { count: p.models.length })}
+                          </p>
                         </div>
                       </div>
 
-                      {/* Test result banner */}
-                      {isTesting && (
-                        <span className="text-[11px] text-muted-foreground">{i18n.t('settings.providers.testing')}</span>
-                      )}
-
-                      {/* Action Bar */}
-                      <div className="flex items-center justify-between pt-1 border-t">
-                        {/* Left: Test */}
+                      {/* Right: Actions */}
+                      <div
+                        className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
+                          size="icon"
                           disabled={isTesting}
                           onClick={() => handleTestProvider(p)}
-                          className="h-6 text-[11px] px-1.5 text-muted-foreground hover:text-foreground gap-1"
+                          className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                          title={i18n.t('settings.providers.test')}
                         >
-                          {isTesting ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <Zap className="size-3" />
-                          )}
-                          <span>{isTesting ? i18n.t('settings.providers.testing') : i18n.t('settings.providers.test')}</span>
+                          {isTesting ? <Loader2 className="size-3 animate-spin" /> : <Zap className="size-3" />}
+                          <span className="sr-only">{i18n.t('settings.providers.test')}</span>
                         </Button>
 
-                        {/* Right: Set Active / Edit / Delete */}
-                        <div className="flex items-center gap-1">
-                          {!isActive && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleSetActiveProvider(p.id)}
-                              className="h-6 text-[11px] px-2"
-                            >
-                              {i18n.t('settings.providers.setActive')}
-                            </Button>
-                          )}
-
+                        {!isActive && (
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => onEditProvider(p)}
-                            className="size-6 text-muted-foreground hover:text-foreground"
-                            title={i18n.t('settings.providers.editTitle')}
+                            onClick={() => handleSetActiveProvider(p.id)}
+                            className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                            title={i18n.t('settings.providers.setActive')}
                           >
-                            <Pencil className="size-3" />
+                            <Check className="size-3" />
+                            <span className="sr-only">{i18n.t('settings.providers.setActive')}</span>
                           </Button>
+                        )}
 
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteProviderTarget(p)}
-                            className="size-6 text-muted-foreground hover:text-destructive"
-                            title={i18n.t('settings.providers.deleteTitle')}
-                          >
-                            <Trash2 className="size-3" />
-                          </Button>
-                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onEditProvider(p)}
+                          className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                          title={i18n.t('settings.providers.editTitle')}
+                        >
+                          <Pencil className="size-3" />
+                          <span className="sr-only">{i18n.t('settings.providers.editTitle')}</span>
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteProviderTarget(p)}
+                          className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
+                          title={i18n.t('settings.providers.deleteTitle')}
+                        >
+                          <Trash2 className="size-3" />
+                          <span className="sr-only">{i18n.t('settings.providers.deleteTitle')}</span>
+                        </Button>
                       </div>
                     </div>
                   );
@@ -483,52 +484,45 @@ export function SettingsMainView({
           <div className="space-y-3.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* 偏好卡片 */}
             <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Languages className="size-3.5 text-muted-foreground" />
-                  <span>{i18n.t('settings.pref.title')}</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-normal">
-                  {i18n.t('settings.pref.desc')}
-                </p>
+              <div className="flex items-center gap-1.5 font-medium text-foreground">
+                <Languages className="size-3.5 text-muted-foreground" />
+                <span>{i18n.t('settings.pref.title')}</span>
+                <InfoTip content={i18n.t('settings.pref.desc')} />
               </div>
 
               <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
                 <div className="flex items-center justify-between gap-2 p-2.5">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.pref.langLabel')}</div>
-                    <div
-                      className="text-[10px] text-muted-foreground truncate"
-                      title={i18n.t('settings.pref.langDesc')}
-                    >
-                      {i18n.t('settings.pref.langDesc')}
-                    </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="font-medium text-foreground text-[11px]">{i18n.t('settings.pref.langLabel')}</span>
+                    <InfoTip content={i18n.t('settings.pref.langDesc')} />
                   </div>
-                  <div className="w-36 shrink-0 space-y-1.5">
-                    <Select
-                      value={settings.language || langDraft !== null ? 'custom' : 'auto'}
-                      onValueChange={(val) => {
-                        if (val === 'custom') {
-                          // 进入编辑态:预填已有值,输入非空才落库
-                          setLangDraft(settings.language ?? '');
-                        } else {
-                          setLangDraft(null);
-                          onUpdateSettings({ ...settings, language: null });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-7 text-xs w-full">
-                        <SelectValue placeholder={i18n.t('settings.pref.langAuto')} />
-                      </SelectTrigger>
-                      <SelectContent align="end">
-                        <SelectItem value="auto" className="text-xs font-medium">
-                          {i18n.t('settings.pref.langAuto')}
-                        </SelectItem>
-                        <SelectItem value="custom" className="text-xs">
-                          {i18n.t('settings.pref.langCustom')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+                    <div className={cn((langDraft !== null || settings.language) ? 'w-20 shrink-0' : 'w-28 shrink-0')}>
+                      <Select
+                        value={settings.language || langDraft !== null ? 'custom' : 'auto'}
+                        onValueChange={(val) => {
+                          if (val === 'custom') {
+                            // 进入编辑态:预填已有值,输入非空才落库
+                            setLangDraft(settings.language ?? '');
+                          } else {
+                            setLangDraft(null);
+                            onUpdateSettings({ ...settings, language: null });
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-full">
+                          <SelectValue placeholder={i18n.t('settings.pref.langAuto')} />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem value="auto" className="text-xs font-medium">
+                            {i18n.t('settings.pref.langAuto')}
+                          </SelectItem>
+                          <SelectItem value="custom" className="text-xs">
+                            {i18n.t('settings.pref.langCustom')}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     {(langDraft !== null || settings.language) && (
                       <Input
                         value={langDraft ?? settings.language ?? ''}
@@ -538,7 +532,7 @@ export function SettingsMainView({
                           onUpdateSettings({ ...settings, language: v.trim() || null });
                         }}
                         placeholder={i18n.t('settings.pref.langCustomPlaceholder')}
-                        className="h-7 text-xs"
+                        className="h-7 text-xs flex-1 min-w-0 bg-background"
                       />
                     )}
                   </div>
@@ -548,24 +542,20 @@ export function SettingsMainView({
 
             {/* 模型分工卡片（参考 CherryStudio 辅助模型配置模式） */}
             <div className="rounded-lg border bg-card p-3 space-y-2.5 text-xs shadow-2xs">
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Sparkles className="size-3.5 text-muted-foreground" />
-                  <span>{i18n.t('settings.assignment.title')}</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-normal">
-                  {i18n.t('settings.assignment.desc')}
-                </p>
+              <div className="flex items-center gap-1.5 font-medium text-foreground">
+                <Sparkles className="size-3.5 text-muted-foreground" />
+                <span>{i18n.t('settings.assignment.title')}</span>
+                <InfoTip content={i18n.t('settings.assignment.desc')} />
               </div>
 
               <div className="divide-y divide-border/60 rounded-md border bg-background/50 overflow-hidden">
                 {/* 1. 对话模型 */}
                 <div className="flex items-center justify-between gap-2 p-2.5">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.assignment.chatModel')}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">
-                      {i18n.t('settings.assignment.chatModelDesc')}
-                    </div>
+                  <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+                    <span className="font-medium text-foreground text-[11px] truncate">
+                      {i18n.t('settings.assignment.chatModel')}
+                    </span>
+                    <InfoTip content={i18n.t('settings.assignment.chatModelDesc')} />
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="w-28 shrink-0">
@@ -629,11 +619,11 @@ export function SettingsMainView({
 
                 {/* 2. 标题生成模型 */}
                 <div className="flex items-center justify-between gap-2 p-2.5">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.assignment.titleModel')}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">
-                      {i18n.t('settings.assignment.titleModelDesc')}
-                    </div>
+                  <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+                    <span className="font-medium text-foreground text-[11px] truncate">
+                      {i18n.t('settings.assignment.titleModel')}
+                    </span>
+                    <InfoTip content={i18n.t('settings.assignment.titleModelDesc')} />
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="w-28 shrink-0">
@@ -695,11 +685,11 @@ export function SettingsMainView({
 
                 {/* 3. 快捷指令生成模型 */}
                 <div className="flex items-center justify-between gap-2 p-2.5">
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="font-medium text-foreground text-[11px]">{i18n.t('settings.assignment.promptModel')}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">
-                      {i18n.t('settings.assignment.promptModelDesc')}
-                    </div>
+                  <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+                    <span className="font-medium text-foreground text-[11px] truncate">
+                      {i18n.t('settings.assignment.promptModel')}
+                    </span>
+                    <InfoTip content={i18n.t('settings.assignment.promptModelDesc')} />
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="w-28 shrink-0">
