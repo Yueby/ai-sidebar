@@ -10,7 +10,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
-import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, UserMessage, WebSearchConfig } from './types';
+import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, UserMessage, UserRule, WebSearchConfig } from './types';
 import { normalizeBaseUrl } from './providers';
 import type { RefTab } from './pageContext';
 import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
@@ -84,7 +84,11 @@ export function buildProvider(p: ProviderConfig) {
  * 组装 system prompt:身份 + <page-refs> 块协议的常量使用规则(压缩版,省 token)。
  * Model-facing 文本一律英文;注释是给开发者看的,保持中文。
  */
-export function buildSystemPrompt(language: string | null = null): string {
+export function buildSystemPrompt(
+  language: string | null = null,
+  /** 用户自定义规则(启用中的规则常驻注入;四期规格 v1) */
+  rules: UserRule[] = [],
+): string {
   const now = new Date();
   // 语言策略:未设置 = 跟随用户消息语言(原行为);设置 = 全局语言优先,用户消息明确指定时以用户为准
   const languageDirective = language
@@ -103,7 +107,30 @@ export function buildSystemPrompt(language: string | null = null): string {
     '- Inline tokens like [url: example.com] are URLs the user pasted as references — self-describing; treat them as plain links, not element markers.',
     '- Tool results are live and win over the block metadata when they conflict.',
   );
+  // 用户规则注入:常驻,超预算按序丢整条(与 HANDOFF 四期规格预算一致)
+  const rulesBlock = renderRulesBlock(rules);
+  if (rulesBlock) parts.push('', rulesBlock);
   return parts.join('\n');
+}
+
+/** 规则注入总预算(字符) */
+const RULES_TOTAL_BUDGET = 6000;
+
+/** 规则块渲染:启用中的规则逐条注入,超预算按序丢整条;无启用规则返回 null 不占位 */
+function renderRulesBlock(rules: UserRule[]): string | null {
+  const enabled = rules.filter((r) => r.enabled && r.content.trim());
+  if (enabled.length === 0) return null;
+  const header =
+    'The user has defined personal rules that apply to every conversation. Follow them; they take precedence over your default style but never override the user\'s current request:';
+  const lines: string[] = [];
+  let used = header.length;
+  for (const rule of enabled) {
+    const item = `- ${rule.name}: ${rule.content}`;
+    if (used + item.length > RULES_TOTAL_BUDGET) break;
+    lines.push(item);
+    used += item.length;
+  }
+  return lines.length > 0 ? [header, ...lines].join('\n') : null;
 }
 
 export interface RunAgentOptions {
@@ -120,6 +147,8 @@ export interface RunAgentOptions {
   thinkingLevel: ReasoningLevel;
   /** AI 生成内容语言(已解析英文名);null = 跟随用户消息语言 */
   language?: string | null;
+  /** 用户自定义规则(启用中的常驻注入 system prompt;四期规格 v1) */
+  rules?: UserRule[];
   /** 会话 id,转发给支持提示缓存的提供商 */
   sessionId?: string;
   signal?: AbortSignal;
@@ -204,7 +233,7 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
 
   const agent = new Agent({
     initialState: {
-      systemPrompt: buildSystemPrompt(options.language ?? null),
+      systemPrompt: buildSystemPrompt(options.language ?? null, options.rules ?? []),
       model,
       thinkingLevel: options.thinkingLevel,
       tools,

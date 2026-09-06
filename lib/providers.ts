@@ -47,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   titleModel: null,
   quickPromptModel: null,
   language: null,
+  rules: [],
   titleThinking: 'off',
   quickPromptThinking: 'off',
   includePageContext: true,

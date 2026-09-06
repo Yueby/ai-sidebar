@@ -522,7 +522,18 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
    - **实施序列**:①search_element(✅ 已完成 2026-09:dom-accessibility-api 0.7.1 + content script 侧计算、稀疏旗标行式、80 条预算(可见优先,隐藏项只填剩余名额)、序号全量计数保证步② locator 可重现、默认 focused tab 无白名单、打点 content durationMs + 工具 totalMs(仅 DEV console);实测 baidu 91 元素全链 5ms)→ ②click/fill + scroll + grant 扩展 + 高亮(✅ 已完成 2026-09:自门控先解析后确认、grant 工具+tab 面板生命周期、遮挡 fallback 直发、受控填充原生 setter、settle 内置、高亮 400ms、search_element query 数组 OR)→ ③screenshot_page(✅ 已完成 2026-09:仅活动 tab 可截(浏览器硬限制,描述明示)、仅 vision 模型注册(canUseImage)、confirm+grant 工具@tabId、拒绝原因原文透传 Browser said;权限前置 = host <all_urls>)→ ④返回模板 v2(✅ 已完成 2026-09:read_page/read_element 附页面指纹 FNV-1a(url|title|正文规模|正文采样),跨读取比对判变化;click/fill 结果附 after 注记——settle 后 re-resolve locator 比对元素状态,导航/失焦短路时跳过)→ ⑤chrome.debugger(条件触发,不排期)
    - **参考**:AhYi8/browser-ai-assistant(CDP 驱动,特权层不可移植;可搬=AX 行格式/噪点过滤/预算截断/受控 fill 法/遮挡检测/wait_for_state 有界轮询/fail-closed 校验——克隆在 `.slim/clonedeps/repos/AhYi8__browser-ai-assistant`,只读)
    - **验收标尺**:模型经 search→click 链完成真实登录页填字点按钮,全程零手写 JS
-5. 发布:图标 + `wxt zip`。
+5. **四期规格 v1:自定义规则 / 技能 / 记忆与自改进**(自定义系统提示词扩展;调研对齐:pi/Agent Skills 标准(agentskills.io)+ OpenClaw 三层文件记忆 + Hermes 自改进循环 + Cline/Roo 具名规则列表;用户已拍板:规则列表形态、自动+手动双触发、memory 常驻注入、分三步实施):
+   - **注入架构(buildSystemPrompt v2)**:四层注入 + 字符预算——①启用中的规则(总 ≤6000 字符,超限按序丢弃整条)②memory.md 常驻(≤2000)③技能索引(name+description,≤3000)④技能正文按需(`read_skill` 工具取);注入头 model-facing 一律英文,明示"用户设定,优先级高于默认风格、低于当轮用户指令"
+   - **规则(UserRule)**:`{ id, name, content, enabled }[]` 存 `Settings.rules`;sanitize(uuid、name ≤100、content ≤4000、条数 ≤20);设置新「提示词」页签(步②扩技能/记忆区);UI = 列表(开关/内联编辑/删除走统一 AlertDialog)
+   - **技能(Agent Skills 标准)**:SKILL.md 格式(name 小写连字符 ≤64/description ≤1024);存 chrome.storage.local `skills` 键:`{ id, name, description, content, source, createdAt }[]`;v1 纯指令 markdown,无脚本/引用文件(无文件系统,天然安全);新工具 `read_skill`(safe)/ `save_skill`(upsert,confirm);设置技能区 = 列表 + textarea 编辑 + .md 文件导入;`/skill:name` 斜杠命令(步③)
+   - **记忆(memory.md)**:单文件常驻注入(≤2000),存 chrome.storage.local;`save_memory`(confirm)工具供 agent 沉淀;设置页可查看/编辑/重置
+   - **内置三技能**(打包内置,可禁用不可删,variant=builtin):`skill-creator`(Anthropic 模式,教 agent 按 frontmatter 规范与描述最佳实践写技能,落 save_skill)/ `skill-installer`(OpenClaw 模式,fetch_url 抓 GitHub raw/gist → 解析 frontmatter → 预览确认落库)/ `self-improving-agent`(Hermes 模式:`/improve` 触发会话复盘——**先列用户纠正与失败**(补 Hermes 只学成功的已知短板)→ 提议 save_skill/save_memory 逐条审批)
+   - **自动反思(v1 范围)**:会话中出现用户纠正强信号或工具连续失败时,agent_end 后辅助模型后台生成记忆提议 → toast 提醒用户确认后落库;不做无人值守静默写入
+   - **同步**:WebDAV bundle 纳入 rules/skills/memory(version bump)
+   - **实施序列**:①规则+注入架构骨架 → ②技能存储/工具/设置 UI → ③三内置技能+记忆+自动反思+同步
+   - **安全**:技能/规则 = 提示注入面;安装必经预览确认;save_skill/save_memory 全程 confirm(永不进 grant);存储内容设置页全程可查可改
+   - **验收标尺**:①规则开关下轮对话即时生效 ②经 skill-installer 从 GitHub 装真实技能并生效 ③/improve 从含纠错会话沉淀记忆且下轮生效
+6. 发布:图标 + `wxt zip`。
 
 > 已完成(2026-09-02):`err: any` → `unknown`(lib/utils.ts `getErrorMessage` helper,App/SettingsMainView/ProviderDialog 5 处收窄);dev 可观测性(content.ts 对未知 `ai-sidebar/` 消息 DEV 下 console.warn)。用户拍板不做:highlight.js 语言包裁剪(本地加载 941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。
 >

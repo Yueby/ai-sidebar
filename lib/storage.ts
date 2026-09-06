@@ -10,6 +10,7 @@ import type {
   SessionCompaction,
   SessionDraft,
   Settings,
+  UserRule,
 } from './types';
 import { REASONING_LEVELS, AUX_THINKING_LEVELS } from './types';
 import { DEFAULT_SETTINGS } from './providers';
@@ -86,6 +87,26 @@ function sanitizeWebSearch(value: unknown): Settings['webSearch'] {
   };
 }
 
+/** 规则字段预算(与 HANDOFF 四期规格一致) */
+const RULE_NAME_MAX = 100;
+const RULE_CONTENT_MAX = 4000;
+const RULE_COUNT_MAX = 20;
+
+/** 用户规则数组清洗:逐条字段校验+截断,条数超限截断,非数组/非法条目丢弃 */
+function sanitizeRules(value: unknown): UserRule[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
+    .map((r) => ({
+      id: typeof r.id === 'string' && r.id ? r.id : '',
+      name: typeof r.name === 'string' ? r.name.trim().slice(0, RULE_NAME_MAX) : '',
+      content: typeof r.content === 'string' ? r.content.trim().slice(0, RULE_CONTENT_MAX) : '',
+      enabled: r.enabled === true,
+    }))
+    .filter((r) => r.id && r.name && r.content)
+    .slice(0, RULE_COUNT_MAX);
+}
+
 /** 辅助模型引用形状校验(引用失效不做深度校验,调用侧回退对话模型) */
 function sanitizeAuxModelRef(v: unknown): Settings['titleModel'] {
   if (!v || typeof v !== 'object') return null;
@@ -112,6 +133,7 @@ export function sanitizeSettings(value: unknown): Settings {
     titleModel: sanitizeAuxModelRef(v.titleModel),
     quickPromptModel: sanitizeAuxModelRef(v.quickPromptModel),
     language: typeof v.language === 'string' && v.language ? v.language : null,
+    rules: sanitizeRules(v.rules),
     titleThinking: sanitizeAuxThinking(v.titleThinking, legacyAux),
     quickPromptThinking: sanitizeAuxThinking(v.quickPromptThinking, legacyAux),
     includePageContext: v.includePageContext === true,

@@ -183,6 +183,8 @@ export function useChatTurn(params: {
           thinkingLevel: resolveReasoningLevel(active.model, useAppStore.getState().settings.reasoningLevel),
           // AI 生成内容语言(设置全局语言;null = 跟随用户消息语言)
           language: useAppStore.getState().settings.language,
+          // 用户自定义规则(启用中的常驻注入 system prompt)
+          rules: useAppStore.getState().settings.rules,
           sessionId: session.id,
           signal: abortCtrl.signal,
           // search_web 工具注册配置:设置里配置了可用搜索源才下发
