@@ -181,10 +181,37 @@ settings:
   tabs:
     providers: Providers
     models: Models
+    prompt: Prompts
     search: Search
     permissions: Permissions
     backup: Backup
     about: About
+  rules:
+    title: "User Rules ({count})"
+    desc: "Enabled rules are injected into every conversation for personal preferences and constraints."
+    addRule: New Rule
+    emptyTitle: No custom rules yet
+    emptyDesc: "Add rules to guide the AI's response style, code preferences, or constraints."
+    emptyAction: Create First Rule
+    maxLimitReached: "Limit reached (max {max})"
+    maxLimitHint: Up to 20 rules supported
+    nameLabel: Rule Name
+    namePlaceholder: "e.g. Concise responses, Prefer TypeScript"
+    contentLabel: Rule Content
+    contentPlaceholder: "Enter rule instructions. When enabled, this is persistently injected into the system prompt…"
+    save: Save
+    cancel: Cancel
+    edit: Edit
+    delete: Delete
+    enableHint: Enable rule
+    disableHint: Disable rule
+    disabledBadge: Disabled
+    validationNameRequired: Please enter a rule name
+    validationContentRequired: Please enter rule content
+    deleteConfirmTitle: Delete Rule
+    deleteConfirmDesc: "Delete rule \"{name}\"? This action cannot be undone."
+    deleteConfirmCancel: Cancel
+    deleteConfirmAction: Delete
   pref:
     title: Preferences
     desc: Global content preferences

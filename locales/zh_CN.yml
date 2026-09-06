@@ -181,10 +181,37 @@ settings:
   tabs:
     providers: 提供商
     models: 模型
+    prompt: 提示词
     search: 搜索
     permissions: 权限
     backup: 备份
     about: 关于
+  rules:
+    title: "用户规则 ({count})"
+    desc: "启用中的规则会注入每次对话，用于设定个人偏好或固定行为要求。"
+    addRule: 新建规则
+    emptyTitle: 暂无自定义规则
+    emptyDesc: "添加规则以设定 AI 的回答风格、代码偏好或约束要求，启用后自动随每次对话注入。"
+    emptyAction: 新建第一条规则
+    maxLimitReached: "已达上限 (最多 {max} 条)"
+    maxLimitHint: 最多支持配置 20 条规则
+    nameLabel: 规则名称
+    namePlaceholder: "如：精简回答、优先中文、代码禁止省略"
+    contentLabel: 规则内容
+    contentPlaceholder: "输入具体的规则指令，启用后将作为固定约束常驻注入 system prompt…"
+    save: 保存
+    cancel: 取消
+    edit: 编辑
+    delete: 删除
+    enableHint: 启用此规则
+    disableHint: 停用此规则
+    disabledBadge: 已停用
+    validationNameRequired: 请输入规则名称
+    validationContentRequired: 请输入规则内容
+    deleteConfirmTitle: 删除规则
+    deleteConfirmDesc: "将删除规则「{name}」，此操作不可撤销。"
+    deleteConfirmCancel: 取消
+    deleteConfirmAction: 删除
   pref:
     title: 偏好
     desc: 全局内容偏好设定

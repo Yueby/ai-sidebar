@@ -19,6 +19,7 @@ import { apiTypeLabel, getModelReasoningLevels, resolveReasoningLevel } from '@/
 import { toast } from 'sonner';
 import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
+import { SettingsPromptView } from './SettingsPromptView';
 import { SettingsBackupView } from './SettingsBackupView';
 import {
   AlertDialog,
@@ -62,7 +63,7 @@ interface SettingsMainViewProps {
   activeSessionId: string | null;
 }
 
-type SettingsTab = 'providers' | 'models' | 'search' | 'permissions' | 'backup' | 'about';
+type SettingsTab = 'providers' | 'models' | 'prompt' | 'search' | 'permissions' | 'backup' | 'about';
 
 const AUX_THINKING_OPTIONS: { value: AuxThinkingLevel; label: string }[] = [
   { value: 'off', label: REASONING_LEVEL_LABELS.off.full },
@@ -283,11 +284,12 @@ export function SettingsMainView({
         {/* Tab Switcher in Header (Segmented Control) */}
         <nav
           aria-label={i18n.t('settings.navAria')}
-          className="flex items-center rounded-lg border border-border/60 bg-muted/50 p-0.5 text-xs"
+          className="flex items-center rounded-lg border border-border/60 bg-muted/50 p-0.5 text-xs overflow-x-auto"
         >
           {[
             { id: 'providers', label: i18n.t('settings.tabs.providers') },
-    { id: 'models', label: i18n.t('settings.tabs.models') },
+            { id: 'models', label: i18n.t('settings.tabs.models') },
+            { id: 'prompt', label: i18n.t('settings.tabs.prompt') },
             { id: 'search', label: i18n.t('settings.tabs.search') },
             { id: 'permissions', label: i18n.t('settings.tabs.permissions') },
             { id: 'backup', label: i18n.t('settings.tabs.backup') },
@@ -300,7 +302,7 @@ export function SettingsMainView({
                 type="button"
                 onClick={() => setCurrentTab(tab.id as SettingsTab)}
                 className={cn(
-                  'h-6 px-2 text-[11px] font-medium rounded-md transition-all cursor-pointer whitespace-nowrap',
+                  'h-6 px-1.5 sm:px-2 text-[11px] font-medium rounded-md transition-all cursor-pointer whitespace-nowrap shrink-0',
                   isActive
                     ? 'bg-background text-foreground shadow-2xs'
                     : 'text-muted-foreground hover:text-foreground'
@@ -760,6 +762,11 @@ export function SettingsMainView({
             </div>
 
           </div>
+        )}
+
+        {/* VIEW: Prompt Settings (规则 / 技能 / 记忆) */}
+        {currentTab === 'prompt' && (
+          <SettingsPromptView settings={settings} onUpdateSettings={onUpdateSettings} />
         )}
 
         {/* VIEW 2: Search Settings */}
