@@ -136,12 +136,6 @@ export function MessageList({
 
   return (
     <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-background">
-      {/* Top Gradient Fade Mask */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-background to-transparent z-10"
-        aria-hidden="true"
-      />
-
       {/* Error Alert Banner (z-20) */}
       {errorMessage && (
         <div className="sticky top-0 z-20 m-2">
@@ -295,7 +289,7 @@ export function MessageList({
         >
           <GatePinner gateRequest={gateRequest ?? null} />
           <MessageScroller className="flex-1 min-h-0">
-            <MessageScrollerViewport aria-label="Messages" preserveScrollOnPrepend className="px-2 pt-2.5 pb-2.5">
+            <MessageScrollerViewport aria-label="Messages" preserveScrollOnPrepend className="scroll-fade-t px-2 pt-2.5 pb-2.5">
               {/* 位置键隐式契约:键依赖 pi agent-loop 的 message_end 与 newMessages 推送
                   同一消息对象引用(pi agent-loop.ts:355/368),React 才能跨 live→in-flight→落盘
                   复用同一 MessageItem 实例(live 槽键 = 未来物化位置);若 pi 升级改变此行为
@@ -360,12 +354,6 @@ export function MessageList({
           </MessageScroller>
         </MessageScrollerProvider>
       )}
-
-      {/* Bottom Gradient Fade Mask */}
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-background to-transparent z-10"
-        aria-hidden="true"
-      />
     </div>
   );
 }
