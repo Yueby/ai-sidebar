@@ -17,7 +17,7 @@
 - MVP(已完成,回归通过):sidePanel 聊天(流式/Markdown/工具卡片/思考折叠区/token 脚注/多会话/会话草稿/上下文占用环)+ 读取当前网页(`<page-refs>` 块 + 消息内 `<picked-element …/>` 块 + `read_page`/`read_element` 按需读取,框选元素 + vision 读图)+ BYOK 多提供商(三种协议)
 - 增补批次(已完成):websearch 十源(设置页"搜索"页签,search_web 条件注册)、fetch_url(自主取回任意公开 URL)、compact_context(模型申请压缩)
 - 二期(已完成):会话重命名(AI 命名 + 行内改名)、多模型快捷切换(输入框模型菜单)、**会话导出**(历史行 hover 下载 Markdown);划词快捷提问未做(backlog)
-- 增补体验批次(已完成):统一删除确认 AlertDialog、设置页全高 Drawer、userScripts 强引导弹窗、模型分工卡(per-role 思考档)、全局语言偏好、新会话动态快捷指令、sonner toast、备份页签
+- 增补体验批次(已完成):统一删除确认 AlertDialog、设置页全高 Drawer、userScripts 强引导弹窗、模型分工卡(per-role 思考档)、全局语言偏好、新会话动态快捷指令、Base UI toast、备份页签
 - 三期(规格 v2,见 §8.4):ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;①②③已落地,④未做
 
 **当前位置:三期步①②③已落地且回归通过;导出反馈驱动的动作可靠性修复(click tab 变化报告/open_page 同 URL 复用/settle 隐藏短路 + 8s 看门狗)已落地并验收(见 §4/§6),质量基线 = 每批代码审查 + 构建全绿。**
@@ -33,7 +33,7 @@
 | 框架 | WXT 0.21 + React 19 + TypeScript,包管理 pnpm |
 | 样式 | Tailwind v4(`@tailwindcss/vite`)+ shadcn/ui(new-york),token 在 `sidepanel/style.css` |
 | 深浅色 | 自动跟随系统(`sidepanel/theme.ts` 渲染前切 `.dark`) |
-| 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`;已装:alert-dialog/badge/button/checkbox/dialog/drawer/dropdown-menu/input/label/scroll-area/select/separator/switch/textarea/tooltip/sonner;**`components/ui/` 保持官方原样,严禁自定义组件/样式/变体** |
+| 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`;已装:alert-dialog/badge/button/checkbox/dialog/drawer/dropdown-menu/input/label/scroll-area/select/separator/switch/textarea/tooltip/toast;**`components/ui/` 保持官方原样,严禁自定义组件/样式/变体** |
 | 抽屉 | 设置页 = 全高 Drawer(vaul ^1.1.2,93dvh,聊天常驻挂载);删确认 = AlertDialog(会话/提供商) |
 | AI 请求 | **`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(见 §6/§7),sidepanel 直连,BYOK |
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,`idb` 封装,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat;devtools 仅 DEV 构建),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化 |
@@ -121,11 +121,11 @@ lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_elem
 | `entrypoints/sidepanel/components/UserScriptsGateDialog.tsx` | ✅ 完成 | userScripts 强引导 AlertDialog(挂载/focus/visibilitychange/1.5s 轮询四重检测;Esc/遮罩拦截;前往扩展详情页 + 暂时跳过仅本会话;开启后自动消失,跳过后监听全停) |
 | `entrypoints/sidepanel/style.css` | ✅ 完成 | 主题 token + markdown 排版(`.md-*`)+ hljs 主题 + 6px 细滚动条 + element-chip 族(元素预览 chip)+ messages-anchor/viewport(跟底锚点)+ composer-editor(TipTap) |
 | `entrypoints/sidepanel/theme.ts` / `main.tsx` / `index.html` | ✅ 完成 | 不用动 |
-| `components/ui/` | ✅ shadcn 官方原样 | **严禁自定义**;含 alert-dialog/drawer/sonner(vaul);button.tsx 曾被加 xs/icon-xs,已重置 |
+| `components/ui/` | ✅ shadcn 官方原样 | **严禁自定义**;含 alert-dialog/drawer/toast(@base-ui/react);button.tsx 曾被加 xs/icon-xs,已重置 |
 
 UI 细节基调:顶/底渐变遮罩衔接滚动区、用户气泡 `bg-secondary`、三点打字动画。
 
-依赖:`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`(^0.84.4)、`@tiptap/*` v3.31(Composer)、`@mozilla/readability` + `dom-to-semantic-markdown`(提取,content.ts 与 fetchPage 共用)、`@medv/finder`(框选 selector)、`highlight.js`(11.x)、`idb`、`zustand` v5、`vaul`(Drawer)、`sonner`(toast)。pnpm 曾提示 `@google/genai`/`protobufjs` 构建脚本被忽略,无害。
+依赖:`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`(^0.84.4)、`@tiptap/*` v3.31(Composer)、`@mozilla/readability` + `dom-to-semantic-markdown`(提取,content.ts 与 fetchPage 共用)、`@medv/finder`(框选 selector)、`highlight.js`(11.x)、`idb`、`zustand` v5、`@base-ui/react` 1.8(Drawer/Toast等)、`@shadcn/react`(MessageScroller等)。pnpm 曾提示 `@google/genai`/`protobufjs` 构建脚本被忽略,无害。
 
 ## 5. UI 设计稿(designer 当年产出的历史稿,实际实现以代码为准)
 

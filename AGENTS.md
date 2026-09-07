@@ -32,7 +32,7 @@
 |---|---|
 | 框架 | WXT 0.21 + React 19 + TypeScript,包管理 pnpm |
 | 样式 | Tailwind v4(`@tailwindcss/vite`)+ shadcn/ui,token 在 `sidepanel/style.css` |
-| 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`(components.json 已配好,已装 alert-dialog/badge/button/checkbox/dialog/drawer/dropdown-menu/input/label/popover/scroll-area/select/separator/switch/textarea/tooltip/sonner) |
+| 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`(components.json 已配好,已装 alert-dialog/badge/button/checkbox/dialog/drawer/dropdown-menu/input/label/popover/scroll-area/select/separator/switch/textarea/tooltip/toast) |
 | 设置页形态 | 全高 Drawer(vaul ^1.1.2)覆盖常驻聊天;四路关闭;内部五视图(提供商/搜索/权限/备份/关于);删除确认统一 AlertDialog |
 | 动作可靠性 | click 结果带 tab 变化报告;open_page 同 URL 复用;performPageAction 8s 看门狗(超时降级成功,绝不重发);content settle 失焦短路(隐藏 tab rAF 完全暂停) |
 | UI 底座 | shadcn Base UI 变体(@base-ui/react 1.8;radix-ui 已卸载;多态用 render prop 非 asChild;新装组件须走 base registry) |

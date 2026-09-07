@@ -34,7 +34,7 @@ import { UserScriptsGateDialog } from './components/UserScriptsGateDialog';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/toast';
 
 type ViewMode = 'chat' | 'settings';
 
@@ -326,12 +326,12 @@ export default function App() {
   // 错误状态收敛至 toast: errorMessage 变化且非空时触发常驻通知
   useEffect(() => {
     if (errorMessage) {
-      toast.error(errorMessage, {
+      toast.add({
         id: 'chat-error',
-        duration: Infinity,
-        closeButton: true,
-        onDismiss: () => setErrorMessage(null),
-        onAutoClose: () => setErrorMessage(null),
+        type: 'error',
+        description: errorMessage,
+        timeout: 0,
+        onClose: () => setErrorMessage(null),
       });
     }
   }, [errorMessage, setErrorMessage]);
@@ -344,22 +344,23 @@ export default function App() {
     prevSessionIdRef.current = currentSession?.id ?? null;
 
     if (overflowSuggest && (!prevOverflowSuggestRef.current || sessionChanged)) {
-      toast.warning(i18n.t('app.overflowSuggest'), {
+      toast.add({
         id: 'overflow-suggest',
-        duration: Infinity,
-        closeButton: true,
-        action: {
-          label: i18n.t('app.compact'),
+        type: 'warning',
+        description: i18n.t('app.overflowSuggest'),
+        timeout: 0,
+        actionProps: {
+          children: i18n.t('app.compact'),
           onClick: () => {
             void compact.handleCompact();
           },
         },
-        onDismiss: () => {
+        onClose: () => {
           setDismissedOverflowSessionId(currentSession?.id ?? 'temp');
         },
       });
     } else if (!overflowSuggest && (prevOverflowSuggestRef.current || sessionChanged)) {
-      toast.dismiss('overflow-suggest');
+      toast.close('overflow-suggest');
     }
     prevOverflowSuggestRef.current = overflowSuggest;
   }, [overflowSuggest, compact.handleCompact, currentSession?.id]);
@@ -368,12 +369,21 @@ export default function App() {
   const prevCompactingRef = useRef(false);
   useEffect(() => {
     if (compact.isCompacting) {
-      toast.loading(i18n.t('app.compacting'), { id: 'compaction', duration: Infinity });
+      toast.add({
+        id: 'compaction',
+        type: 'loading',
+        description: i18n.t('app.compacting'),
+        timeout: 0,
+      });
     } else if (prevCompactingRef.current) {
       if (useAppStore.getState().errorMessage) {
-        toast.dismiss('compaction');
+        toast.close('compaction');
       } else {
-        toast.success(i18n.t('app.compactSuccess'), { id: 'compaction', duration: 3000 });
+        toast.update('compaction', {
+          type: 'success',
+          description: i18n.t('app.compactSuccess'),
+          timeout: 3000,
+        });
       }
     }
     prevCompactingRef.current = compact.isCompacting;

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/toast';
 import { Download, Upload, TriangleAlert, CloudUpload, CloudDownload, Eye, EyeOff, FileJson, CloudCog } from 'lucide-react';
 import type { Settings, Session } from '@/lib/types';
 import { Button, buttonVariants } from '@/components/ui/button';

@@ -15,7 +15,7 @@ import {
 import type { Settings, ProviderConfig, AuxThinkingLevel, ReasoningLevel } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
 import { apiTypeLabel, getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/toast';
 import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
 import { SettingsPromptView } from './SettingsPromptView';
