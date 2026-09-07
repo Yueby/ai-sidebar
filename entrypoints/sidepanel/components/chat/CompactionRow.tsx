@@ -5,6 +5,7 @@ import { MarkdownView } from './MarkdownView';
 import { formatTokensShort } from './ContextRing';
 import { Marker, MarkerContent } from '@/components/ui/marker';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 /** 剥掉摘要消息的 <context-summary> 包裹(展示摘要正文;<page-refs> 块由 messageText 剥离) */
 function stripSummaryWrapper(text: string): string {
@@ -28,25 +29,36 @@ export function CompactionRow({ tokensBefore, summary }: CompactionRowProps) {
     <Collapsible open={open} onOpenChange={setOpen} className="px-3 py-2">
       <Marker variant="separator" className="my-1">
         <MarkerContent>
-          <CollapsibleTrigger
-            render={
-              <button
-                type="button"
-                className="flex max-w-[85%] items-center gap-1.5 rounded-full border border-border bg-muted/60 hover:bg-accent px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground cursor-pointer select-none shadow-2xs"
-                title={i18n.t(open ? 'compaction.collapse' : 'compaction.expand')}
-              />
-            }
-          >
-            <FoldVertical className="size-3 shrink-0 text-muted-foreground" />
-            <span className="truncate">
-              {i18n.t('compaction.title', { before: formatTokensShort(tokensBefore) })}
-            </span>
-            {open ? (
-              <ChevronDown className="size-3 shrink-0 opacity-70" />
-            ) : (
-              <ChevronRight className="size-3 shrink-0 opacity-70" />
-            )}
-          </CollapsibleTrigger>
+          <TooltipProvider delay={200}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <CollapsibleTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="flex max-w-[85%] items-center gap-1.5 rounded-full border border-border bg-muted/60 hover:bg-accent px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground cursor-pointer select-none shadow-2xs"
+                        aria-label={i18n.t(open ? 'compaction.collapse' : 'compaction.expand')}
+                      />
+                    }
+                  />
+                }
+              >
+                <FoldVertical className="size-3 shrink-0 text-muted-foreground" />
+                <span className="truncate">
+                  {i18n.t('compaction.title', { before: formatTokensShort(tokensBefore) })}
+                </span>
+                {open ? (
+                  <ChevronDown className="size-3 shrink-0 opacity-70" />
+                ) : (
+                  <ChevronRight className="size-3 shrink-0 opacity-70" />
+                )}
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {i18n.t(open ? 'compaction.collapse' : 'compaction.expand')}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </MarkerContent>
       </Marker>
 

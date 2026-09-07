@@ -507,25 +507,35 @@ export function ChatInput({
         </div>
 
         {/* Toolbar row inside composer */}
+        <TooltipProvider delay={200}>
         <div className="flex items-center justify-between px-2 pb-2 pt-0.5 gap-1">
           {/* Left: [+] Add menu (Far left), Model Switcher, Reasoning Level, Context Ring */}
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
             {/* 1. Permanent Unified Add [+] Menu on far left */}
             <DropdownMenu onOpenChange={handleDropdownOpenChange}>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-1.5 text-[11px] gap-0.5 text-muted-foreground hover:text-foreground shrink-0 font-normal"
-                    title={i18n.t('composer.addRefTitle')}
-                  />
-                }
-              >
-                <Plus className="size-3.5 shrink-0" />
-                <ChevronDown className="size-2.5 shrink-0 opacity-50" />
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-1.5 text-[11px] gap-0.5 text-muted-foreground hover:text-foreground shrink-0 font-normal"
+                          aria-label={i18n.t('composer.addRefTitle')}
+                        />
+                      }
+                    />
+                  }
+                >
+                  <Plus className="size-3.5 shrink-0" />
+                  <ChevronDown className="size-2.5 shrink-0 opacity-50" />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {i18n.t('composer.addRefTitle')}
+                </TooltipContent>
+              </Tooltip>
               {renderAddTabMenuContent('start')}
             </DropdownMenu>
 
@@ -610,21 +620,30 @@ export function ChatInput({
             {/* 3. Reasoning Level Dropdown (Only if model supports reasoning) */}
             {supportsReasoning && (
               <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground shrink-0 font-normal"
-                      title={i18n.t('composer.reasoningTitle', { level: currentReasoningShort })}
-                    />
-                  }
-                >
-                  <Brain className="size-3.5 shrink-0" />
-                  <span>{currentReasoningShort}</span>
-                  <ChevronDown className="size-3 shrink-0 opacity-50" />
-                </DropdownMenuTrigger>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground shrink-0 font-normal"
+                            aria-label={i18n.t('composer.reasoningTitle', { level: currentReasoningShort })}
+                          />
+                        }
+                      />
+                    }
+                  >
+                    <Brain className="size-3.5 shrink-0" />
+                    <span>{currentReasoningShort}</span>
+                    <ChevronDown className="size-3 shrink-0 opacity-50" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {i18n.t('composer.reasoningTitle', { level: currentReasoningShort })}
+                  </TooltipContent>
+                </Tooltip>
                 <DropdownMenuContent align="start" className="w-36">
                   <DropdownMenuGroup>
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
@@ -676,52 +695,49 @@ export function ChatInput({
           {/* Right: Send / Stop button */}
           <div className="flex items-center gap-1 shrink-0">
             {isStreaming ? (
-              <TooltipProvider delay={200}>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="destructive"
-                        onClick={handleStop}
-                        className="size-6"
-                      >
-                        <Square className="size-3 fill-current" />
-                        <span className="sr-only">{i18n.t('composer.stopSr')}</span>
-                      </Button>
-                    }
-                  />
-                  <TooltipContent side="top">
-                    {i18n.t('composer.stopHint')}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="destructive"
+                      onClick={handleStop}
+                      className="size-6"
+                    >
+                      <Square className="size-3 fill-current" />
+                      <span className="sr-only">{i18n.t('composer.stopSr')}</span>
+                    </Button>
+                  }
+                />
+                <TooltipContent side="top">
+                  {i18n.t('composer.stopHint')}
+                </TooltipContent>
+              </Tooltip>
             ) : (
-              <TooltipProvider delay={300}>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        type="button"
-                        size="icon"
-                        disabled={!text.trim() || disabled}
-                        onClick={handleSend}
-                        className="size-6"
-                      >
-                        <ArrowUp className="size-3.5" />
-                        <span className="sr-only">{i18n.t('composer.sendSr')}</span>
-                      </Button>
-                    }
-                  />
-                  <TooltipContent side="top">
-                    {i18n.t('composer.sendHint')}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon"
+                      disabled={!text.trim() || disabled}
+                      onClick={handleSend}
+                      className="size-6"
+                    >
+                      <ArrowUp className="size-3.5" />
+                      <span className="sr-only">{i18n.t('composer.sendSr')}</span>
+                    </Button>
+                  }
+                />
+                <TooltipContent side="top">
+                  {i18n.t('composer.sendHint')}
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
         </div>
+        </TooltipProvider>
       </div>
     </div>
   );
