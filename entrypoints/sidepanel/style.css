@@ -984,5 +984,9 @@
   .cn-marker-content {
     @apply group-data-[variant=separator]/marker:flex-none group-data-[variant=separator]/marker:text-center *:[a]:hover:text-foreground *:[a]:underline *:[a]:underline-offset-3;
   }
+  /* MARK: Message Scroller */
+  .cn-message-scroller-content {
+    @apply gap-6;
+  }
 }
 
