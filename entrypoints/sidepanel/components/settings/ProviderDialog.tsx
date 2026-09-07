@@ -37,6 +37,8 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Field, FieldGroup, FieldLabel, FieldDescription, FieldError } from '@/components/ui/field';
+import { InputGroup, InputGroupInput, InputGroupAddon } from '@/components/ui/input-group';
 import {
   Select,
   SelectContent,
@@ -359,21 +361,21 @@ export function ProviderDialog({
           </DialogHeader>
 
           {/* Form Content */}
-          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+          <FieldGroup className="flex-1 overflow-y-auto space-y-3 pr-1">
             {/* Provider Name */}
-            <div className="space-y-1">
-              <Label className="text-xs">{i18n.t('providerDialog.nameLabel')}</Label>
+            <Field>
+              <FieldLabel className="text-xs">{i18n.t('providerDialog.nameLabel')}</FieldLabel>
               <Input
                 value={draft.name}
                 onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
                 placeholder={i18n.t('providerDialog.namePlaceholder')}
                 className="h-8 text-xs"
               />
-            </div>
+            </Field>
 
             {/* Protocol */}
-            <div className="space-y-1">
-              <Label className="text-xs">{i18n.t('providerDialog.apiLabel')}</Label>
+            <Field>
+              <FieldLabel className="text-xs">{i18n.t('providerDialog.apiLabel')}</FieldLabel>
               <Select items={API_TYPE_OPTIONS} value={draft.api} onValueChange={(v) => handleApiChange(v as ApiType)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder={i18n.t('providerDialog.apiPlaceholder')} />
@@ -386,51 +388,55 @@ export function ProviderDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </Field>
 
             {/* Base URL */}
-            <div className="space-y-1">
-              <Label className="text-xs">Base URL</Label>
+            <Field>
+              <FieldLabel className="text-xs">Base URL</FieldLabel>
               <Input
                 value={draft.baseUrl}
                 onChange={(e) => setDraft((p) => ({ ...p, baseUrl: e.target.value }))}
                 placeholder="https://api.openai.com/v1"
                 className="h-8 text-xs font-mono truncate"
               />
-            </div>
+            </Field>
 
             {/* API Key */}
-            <div className="space-y-1">
-              <Label className="text-xs">API Key</Label>
-              <div className="relative">
-                <Input
+            <Field>
+              <FieldLabel className="text-xs">API Key</FieldLabel>
+              <InputGroup className="h-8">
+                <InputGroupInput
                   type={showApiKey ? 'text' : 'password'}
                   value={draft.apiKey}
                   onChange={(e) => setDraft((p) => ({ ...p, apiKey: e.target.value }))}
                   placeholder="sk-..."
-                  className="h-8 text-xs font-mono pr-8 truncate"
+                  className="text-xs font-mono truncate"
                 />
-                <TooltipProvider delay={200}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          type="button"
-                          onClick={() => setShowApiKey((v) => !v)}
-                          className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                          aria-label={showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
-                        >
-                          {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                        </button>
-                      }
-                    />
-                    <TooltipContent side="top">
-                      {showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
+                <InputGroupAddon align="inline-end">
+                  <TooltipProvider delay={200}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => setShowApiKey((v) => !v)}
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label={showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
+                          >
+                            {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                          </Button>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        {showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </InputGroupAddon>
+              </InputGroup>
+            </Field>
 
             {/* Test Connection Button & Result */}
             <div className="flex items-center gap-2 pt-0.5">
@@ -452,9 +458,11 @@ export function ProviderDialog({
 
               {testResult && (
                 <div className="text-[11px] truncate flex-1 font-medium">
-                  <span className={testResult.success ? 'text-foreground' : 'text-destructive'}>
-                    {testResult.message}
-                  </span>
+                  {testResult.success ? (
+                    <span className="text-foreground">{testResult.message}</span>
+                  ) : (
+                    <FieldError className="text-[11px] inline text-destructive font-medium">{testResult.message}</FieldError>
+                  )}
                 </div>
               )}
             </div>
@@ -485,15 +493,17 @@ export function ProviderDialog({
 
                 {/* Candidate filter input */}
                 {candidates.length > 3 && (
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2 size-3 text-muted-foreground" />
-                    <Input
+                  <InputGroup className="h-7">
+                    <InputGroupAddon align="inline-start">
+                      <Search className="size-3 text-muted-foreground" />
+                    </InputGroupAddon>
+                    <InputGroupInput
                       value={candidateSearch}
                       onChange={(e) => setCandidateSearch(e.target.value)}
                       placeholder={i18n.t('providerDialog.filterCandidatePlaceholder')}
-                      className="h-7 pl-7 text-xs font-mono"
+                      className="text-xs font-mono"
                     />
-                  </div>
+                  </InputGroup>
                 )}
 
                 {/* Candidate list items */}
@@ -692,27 +702,29 @@ export function ProviderDialog({
 
                 {/* Inline fetch status feedback */}
                 {fetchResultMsg && (
-                  <div className="text-[11px] text-muted-foreground bg-muted/40 p-1.5 rounded">
+                  <FieldDescription className="text-[11px] bg-muted/40 p-1.5 rounded">
                     {fetchResultMsg}
-                  </div>
+                  </FieldDescription>
                 )}
                 {fetchErrorMsg && (
-                  <div className="text-[11px] text-destructive bg-destructive/10 p-1.5 rounded">
+                  <FieldError className="text-[11px] bg-destructive/10 p-1.5 rounded">
                     {fetchErrorMsg}
-                  </div>
+                  </FieldError>
                 )}
 
                 {/* Search input for models */}
                 {draft.models.length > 3 && (
-                  <div className="relative">
-                    <Search className="absolute left-2 top-2 size-3 text-muted-foreground" />
-                    <Input
+                  <InputGroup className="h-7">
+                    <InputGroupAddon align="inline-start">
+                      <Search className="size-3 text-muted-foreground" />
+                    </InputGroupAddon>
+                    <InputGroupInput
                       value={modelSearch}
                       onChange={(e) => setModelSearch(e.target.value)}
                       placeholder={i18n.t('providerDialog.filterModelsPlaceholder')}
-                      className="h-7 pl-7 text-xs font-mono"
+                      className="text-xs font-mono"
                     />
-                  </div>
+                  </InputGroup>
                 )}
 
                 {/* Model items */}
@@ -819,7 +831,7 @@ export function ProviderDialog({
                 )}
               </div>
             )}
-          </div>
+          </FieldGroup>
 
           <DialogFooter className="flex-row justify-end gap-2">
             <Button
