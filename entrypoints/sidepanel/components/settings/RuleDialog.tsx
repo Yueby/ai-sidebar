@@ -3,6 +3,7 @@ import { i18n } from '#i18n';
 import type { UserRule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -95,7 +96,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
           {/* Rule Name */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <label className="font-medium text-foreground">{i18n.t('settings.rules.nameLabel')}</label>
+              <Label className="font-medium text-foreground text-[10px]">{i18n.t('settings.rules.nameLabel')}</Label>
               <span
                 className={cn(
                   'font-mono text-[10px]',
@@ -123,7 +124,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
           {/* Rule Content */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <label className="font-medium text-foreground">{i18n.t('settings.rules.contentLabel')}</label>
+              <Label className="font-medium text-foreground text-[10px]">{i18n.t('settings.rules.contentLabel')}</Label>
               <span
                 className={cn(
                   'font-mono text-[10px]',
