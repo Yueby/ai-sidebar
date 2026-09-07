@@ -33,6 +33,7 @@ import { ProviderDialog } from './components/settings/ProviderDialog';
 import { UserScriptsGateDialog } from './components/UserScriptsGateDialog';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 import { toast } from 'sonner';
 
@@ -403,14 +404,25 @@ export default function App() {
                   >
                     {i18n.t('app.compact')}
                   </Button>
-                  <button
-                    type="button"
-                    onClick={() => setDismissedOverflowSessionId(currentSession?.id ?? 'temp')}
-                    className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                    title={i18n.t('app.ignoreSuggest')}
-                  >
-                    <X className="size-3" />
-                  </button>
+                  <TooltipProvider delay={200}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            onClick={() => setDismissedOverflowSessionId(currentSession?.id ?? 'temp')}
+                            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                            aria-label={i18n.t('app.ignoreSuggest')}
+                          >
+                            <X className="size-3" />
+                          </button>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        {i18n.t('app.ignoreSuggest')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
             </div>
@@ -446,14 +458,25 @@ export default function App() {
               <div className="space-y-2 rounded-lg border border-border bg-card p-3 text-xs shadow-xs">
                 <div className="flex items-center justify-between border-b border-border/50 pb-1.5">
                   <span className="text-[11px] font-semibold text-foreground">{i18n.t('app.helpTitle')}</span>
-                  <button
-                    type="button"
-                    onClick={() => setSlashHelpOpen(false)}
-                    className="text-muted-foreground transition-colors hover:text-foreground cursor-pointer rounded p-0.5"
-                    title={i18n.t('app.close')}
-                  >
-                    <X className="size-3.5" />
-                  </button>
+                  <TooltipProvider delay={200}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            onClick={() => setSlashHelpOpen(false)}
+                            className="text-muted-foreground transition-colors hover:text-foreground cursor-pointer rounded p-0.5"
+                            aria-label={i18n.t('app.close')}
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        }
+                      />
+                      <TooltipContent side="left">
+                        {i18n.t('app.close')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <div className="space-y-1.5">
                   {SLASH_COMMANDS.map((cmd) => (
