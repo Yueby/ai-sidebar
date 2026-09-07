@@ -154,14 +154,16 @@ export function MessageList({
               {errorMessage}
             </AlertDescription>
             {onDismissError && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={onDismissError}
-                className="absolute right-2 top-2.5 text-destructive/70 hover:text-destructive p-0.5 rounded transition-colors shrink-0 cursor-pointer"
+                className="absolute right-2 top-2.5 size-5 p-0.5 text-destructive/70 hover:text-destructive hover:bg-destructive/10 rounded transition-colors shrink-0 cursor-pointer"
               >
                 <X className="size-3.5" />
                 <span className="sr-only">Close</span>
-              </button>
+              </Button>
             )}
           </Alert>
         </div>
