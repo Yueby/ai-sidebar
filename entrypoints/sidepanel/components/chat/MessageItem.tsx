@@ -182,14 +182,16 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
     <div className="pt-1 mt-1 border-t border-primary-foreground/20 text-xs w-full">
       {isMany ? (
         <Collapsible open={open} onOpenChange={setOpen} className="space-y-1">
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-1 text-[10px] font-medium text-primary-foreground/75 hover:text-primary-foreground select-none transition-colors py-0.5 cursor-pointer"
-            >
-              <span>{i18n.t('messages.refCount', { total })}</span>
-              {open ? <ChevronDown className="size-2.5" /> : <ChevronRight className="size-2.5" />}
-            </button>
+          <CollapsibleTrigger
+            render={
+              <button
+                type="button"
+                className="flex items-center gap-1 text-[10px] font-medium text-primary-foreground/75 hover:text-primary-foreground select-none transition-colors py-0.5 cursor-pointer"
+              />
+            }
+          >
+            <span>{i18n.t('messages.refCount', { total })}</span>
+            {open ? <ChevronDown className="size-2.5" /> : <ChevronRight className="size-2.5" />}
           </CollapsibleTrigger>
           <CollapsibleContent className="animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
             {renderItems()}
@@ -226,19 +228,21 @@ function ThinkingBlock({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="my-1 text-xs w-full">
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
-        >
-          {isGenerating ? (
-            <Spinner className="size-3 text-muted-foreground shrink-0" />
-          ) : (
-            <Brain className="size-3 shrink-0" />
-          )}
-          <span>{isGenerating ? i18n.t('messages.thinking') : i18n.t('messages.thinkingDone')}</span>
-          {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-        </button>
+      <CollapsibleTrigger
+        render={
+          <button
+            type="button"
+            className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
+          />
+        }
+      >
+        {isGenerating ? (
+          <Spinner className="size-3 text-muted-foreground shrink-0" />
+        ) : (
+          <Brain className="size-3 shrink-0" />
+        )}
+        <span>{isGenerating ? i18n.t('messages.thinking') : i18n.t('messages.thinkingDone')}</span>
+        {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
       </CollapsibleTrigger>
 
       {!open && (
@@ -330,11 +334,14 @@ function ToolCallCard({
       className={`my-1.5 w-full max-w-full rounded-lg border p-2 text-xs text-foreground transition-all animate-in fade-in-0 duration-150 motion-reduce:animate-none ${cardBorderClass}`}
     >
       {/* Header row (Click to toggle expand) */}
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-80 transition-opacity cursor-pointer"
-        >
+      <CollapsibleTrigger
+        render={
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-80 transition-opacity cursor-pointer"
+          />
+        }
+      >
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             {isWaitingConfirmation ? (
               isAskGate ? (
@@ -393,7 +400,6 @@ function ToolCallCard({
               <ChevronRight className="size-3 text-muted-foreground" />
             )}
           </div>
-        </button>
       </CollapsibleTrigger>
 
       {/* 状态化卡:交互审批统一渲染在 App 的审批槽位,卡内只有状态与参数/结果展开 */}

@@ -142,14 +142,16 @@ export function ApprovalSection({
         {/* 代码详情展开区 (Collapsible) */}
         {request.detail && (
           <Collapsible open={detailOpen} onOpenChange={setDetailOpen} className="space-y-1 pl-9">
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
-              >
-                {detailOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-                <span>{detailOpen ? i18n.t('approval.hideCode') : i18n.t('approval.showCode')}</span>
-              </button>
+            <CollapsibleTrigger
+              render={
+                <button
+                  type="button"
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
+                />
+              }
+            >
+              {detailOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+              <span>{detailOpen ? i18n.t('approval.hideCode') : i18n.t('approval.showCode')}</span>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <pre className="font-mono text-[10px] bg-background/90 p-2 rounded border border-border/50 max-h-48 overflow-y-auto overflow-x-auto whitespace-pre-wrap break-all text-muted-foreground leading-relaxed animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
