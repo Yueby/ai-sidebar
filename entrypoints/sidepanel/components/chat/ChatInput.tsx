@@ -478,7 +478,7 @@ export function ChatInput({
 
       {/* Input container (TipTap 编辑器 + 底部工具栏) */}
       <div
-        className={`relative z-10 flex flex-col rounded-lg border bg-background shadow-xs focus-within:ring-1 focus-within:ring-ring ${
+        className={`relative z-10 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs focus-within:ring-1 focus-within:ring-ring ${
           refTabs && refTabs.length > 0 ? '-mt-2' : ''
         }`}
       >
