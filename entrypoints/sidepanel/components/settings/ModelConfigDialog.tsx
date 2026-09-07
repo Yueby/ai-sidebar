@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Field, FieldGroup, FieldLabel, FieldDescription } from '@/components/ui/field';
 
 interface ModelConfigDialogProps {
   open: boolean;
@@ -110,10 +110,10 @@ export function ModelConfigDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-1 max-h-[60vh] overflow-y-auto pr-0.5">
+        <FieldGroup className="space-y-3 py-1 max-h-[60vh] overflow-y-auto pr-0.5">
           {/* Model ID */}
-          <div className="space-y-1">
-            <Label className="text-xs">{i18n.t('modelConfig.modelIdLabel')}</Label>
+          <Field>
+            <FieldLabel className="text-xs">{i18n.t('modelConfig.modelIdLabel')}</FieldLabel>
             <Input
               value={id}
               onChange={(e) => setId(e.target.value)}
@@ -121,23 +121,23 @@ export function ModelConfigDialog({
               placeholder={i18n.t('modelConfig.modelIdPlaceholder')}
               className="h-8 text-xs font-mono"
             />
-          </div>
+          </Field>
 
           {/* Display Name */}
-          <div className="space-y-1">
-            <Label className="text-xs">{i18n.t('modelConfig.nameLabel')}</Label>
+          <Field>
+            <FieldLabel className="text-xs">{i18n.t('modelConfig.nameLabel')}</FieldLabel>
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder={i18n.t('modelConfig.namePlaceholder')}
               className="h-8 text-xs"
             />
-          </div>
+          </Field>
 
           {/* Token limits: 2-column */}
           <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">{i18n.t('modelConfig.contextWindowLabel')}</Label>
+            <Field>
+              <FieldLabel className="text-xs">{i18n.t('modelConfig.contextWindowLabel')}</FieldLabel>
               <Input
                 type="number"
                 value={contextWindow}
@@ -145,9 +145,9 @@ export function ModelConfigDialog({
                 placeholder="128000"
                 className="h-8 text-xs font-mono"
               />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{i18n.t('modelConfig.maxOutputLabel')}</Label>
+            </Field>
+            <Field>
+              <FieldLabel className="text-xs">{i18n.t('modelConfig.maxOutputLabel')}</FieldLabel>
               <Input
                 type="number"
                 value={maxTokens}
@@ -155,47 +155,47 @@ export function ModelConfigDialog({
                 placeholder="4096"
                 className="h-8 text-xs font-mono"
               />
-            </div>
+            </Field>
           </div>
 
           {/* Capability Switches */}
           <div className="rounded-lg border bg-muted/30 p-2.5 space-y-2.5 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-foreground">{i18n.t('modelConfig.tools')}</span>
+            <Field orientation="horizontal">
+              <FieldLabel className="text-xs font-normal text-foreground">{i18n.t('modelConfig.tools')}</FieldLabel>
               <Switch checked={tools} onCheckedChange={setTools} size="sm" />
-            </div>
+            </Field>
 
-            <div className="flex items-center justify-between">
-              <span className="text-foreground">{i18n.t('modelConfig.vision')}</span>
+            <Field orientation="horizontal">
+              <FieldLabel className="text-xs font-normal text-foreground">{i18n.t('modelConfig.vision')}</FieldLabel>
               <Switch checked={vision} onCheckedChange={setVision} size="sm" />
-            </div>
+            </Field>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-foreground">{i18n.t('modelConfig.reasoning')}</span>
+              <Field orientation="horizontal">
+                <FieldLabel className="text-xs font-normal text-foreground">{i18n.t('modelConfig.reasoning')}</FieldLabel>
                 <Switch checked={reasoning} onCheckedChange={setReasoning} size="sm" />
-              </div>
+              </Field>
 
               {/* Reasoning Levels Multi-select */}
               {reasoning && (
                 <div className="pt-2 border-t space-y-1.5 animate-in fade-in duration-150">
-                  <div className="text-[11px] text-muted-foreground">
+                  <FieldDescription className="text-[11px] text-muted-foreground">
                     {i18n.t('modelConfig.supportedLevelsHint')}
-                  </div>
+                  </FieldDescription>
                   <div className="grid grid-cols-2 gap-2 pt-0.5">
                     {CANDIDATE_REASONING_LEVELS.map((opt) => {
                       const isChecked = reasoningLevels.includes(opt.value);
                       return (
-                        <Label
-                          key={opt.value}
-                          className="flex items-center gap-1.5 text-xs font-normal text-foreground select-none"
-                        >
+                        <Field key={opt.value} orientation="horizontal" className="gap-1.5">
                           <Checkbox
+                            id={`reasoning-${opt.value}`}
                             checked={isChecked}
                             onCheckedChange={() => handleToggleLevel(opt.value)}
                           />
-                          <span className="text-[11px]">{opt.label}</span>
-                        </Label>
+                          <FieldLabel htmlFor={`reasoning-${opt.value}`} className="text-[11px] font-normal text-foreground select-none">
+                            {opt.label}
+                          </FieldLabel>
+                        </Field>
                       );
                     })}
                   </div>
@@ -203,7 +203,7 @@ export function ModelConfigDialog({
               )}
             </div>
           </div>
-        </div>
+        </FieldGroup>
 
         <DialogFooter className="flex-row justify-end gap-2">
           <Button
