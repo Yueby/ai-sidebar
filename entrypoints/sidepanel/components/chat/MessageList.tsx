@@ -19,6 +19,13 @@ import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
+import {
+  Item,
+  ItemMedia,
+  ItemContent,
+  ItemTitle,
+  ItemDescription,
+} from '@/components/ui/item';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -246,22 +253,28 @@ export function MessageList({
                     {quickPrompts.items.map((item, idx) => {
                       const Icon = PROMPT_ICONS[idx] ?? Sparkles;
                       return (
-                        <button
+                        <Item
                           key={`${item.title}-${idx}`}
-                          type="button"
+                          variant="outline"
+                          render={<button type="button" />}
                           onClick={() => onSelectPrompt(item.prompt)}
-                          className="group flex items-start gap-2.5 rounded-lg border bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                          className="w-full rounded-lg bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer items-start gap-2.5"
                         >
-                          <Icon className="size-4 shrink-0 mt-0.5 text-muted-foreground" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-medium text-foreground">
+                          <ItemMedia
+                            variant="icon"
+                            className="size-7 rounded-md shrink-0 border bg-muted/60 text-muted-foreground"
+                          >
+                            <Icon className="size-3.5" />
+                          </ItemMedia>
+                          <ItemContent className="min-w-0 flex-1 gap-0.5">
+                            <ItemTitle className="text-xs font-medium text-foreground">
                               {item.title}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground truncate">
+                            </ItemTitle>
+                            <ItemDescription className="text-[11px] text-muted-foreground truncate">
                               {item.desc}
-                            </div>
-                          </div>
-                        </button>
+                            </ItemDescription>
+                          </ItemContent>
+                        </Item>
                       );
                     })}
                   </div>
