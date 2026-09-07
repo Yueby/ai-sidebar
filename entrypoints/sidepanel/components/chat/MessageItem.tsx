@@ -28,6 +28,8 @@ import { Message, MessageAvatar, MessageContent, MessageFooter } from '@/compone
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Spinner } from '@/components/ui/spinner';
+import { Item, ItemMedia, ItemContent, ItemTitle, ItemDescription, ItemActions } from '@/components/ui/item';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface MessageItemProps {
@@ -154,17 +156,21 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
           <Tooltip key={`tab-${idx}`}>
             <TooltipTrigger
               render={
-                <div
-                  className="flex items-center gap-1.5 text-[10px] text-primary-foreground/90 bg-primary-foreground/10 border border-primary-foreground/15 rounded px-1.5 py-0.5 max-w-full overflow-hidden cursor-default"
+                <Badge
+                  variant="outline"
+                  className="h-auto max-w-full justify-start rounded px-1.5 py-0.5 text-[10px] font-normal leading-normal gap-1.5 text-primary-foreground/90 bg-primary-foreground/10 border-primary-foreground/15 select-none hover:bg-primary-foreground/15"
                 />
               }
             >
               <Globe className="size-2.5 shrink-0 text-primary-foreground/70" />
               <span className="truncate max-w-full">{tab.title || tab.url}</span>
               {tab.focused && (
-                <span className="shrink-0 rounded bg-primary-foreground/20 px-1 text-[9px] leading-[14px] text-primary-foreground font-medium">
+                <Badge
+                  variant="secondary"
+                  className="h-auto shrink-0 rounded bg-primary-foreground/20 px-1 py-0 text-[9px] leading-[14px] text-primary-foreground font-medium border-transparent"
+                >
                   当前
-                </span>
+                </Badge>
               )}
             </TooltipTrigger>
             <TooltipContent side="top">
@@ -176,8 +182,9 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
           <Tooltip key={`elem-${elem.id}`}>
             <TooltipTrigger
               render={
-                <div
-                  className="flex items-center gap-1.5 text-[10px] text-primary-foreground/90 bg-primary-foreground/10 border border-primary-foreground/15 rounded px-1.5 py-0.5 max-w-full overflow-hidden cursor-default"
+                <Badge
+                  variant="outline"
+                  className="h-auto max-w-full justify-start rounded px-1.5 py-0.5 text-[10px] font-normal leading-normal gap-1.5 text-primary-foreground/90 bg-primary-foreground/10 border-primary-foreground/15 select-none hover:bg-primary-foreground/15"
                 />
               }
             >
@@ -354,139 +361,193 @@ function ToolCallCard({
 
   const isAskGate = gateKind === 'ask';
 
+  // 参数简要摘要 (单参数提炼或 JSON 截断)
+  const argsSummary = useMemo(() => {
+    if (!args || Object.keys(args).length === 0) return '';
+    const keys = Object.keys(args);
+    if (keys.length === 1) {
+      const key = keys[0];
+      if (key === undefined) return '';
+      const val = args[key];
+      if (typeof val === 'string') return val.trim().slice(0, 70);
+      if (typeof val === 'number' || typeof val === 'boolean') return `${key}: ${val}`;
+    }
+    const str = JSON.stringify(args);
+    return str.length > 70 ? `${str.slice(0, 70)}…` : str;
+  }, [args]);
+
+  const statusIcon = isWaitingConfirmation ? (
+    isAskGate ? (
+      <HelpCircle className="size-3.5 shrink-0 text-primary" />
+    ) : (
+      <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground" />
+    )
+  ) : isQueued ? (
+    <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground/70" />
+  ) : isExecuting ? (
+    <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
+  ) : isError ? (
+    <Wrench className="size-3.5 shrink-0 text-destructive" />
+  ) : (
+    <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
+  );
+
+  const statusText = isWaitingConfirmation ? (
+    isAskGate ? (
+      <span className="text-[10px] text-primary font-medium animate-pulse">
+        {i18n.t('messages.waitingReply')}
+      </span>
+    ) : (
+      <span className="text-[10px] text-muted-foreground font-medium animate-pulse">
+        {i18n.t('messages.waitingConfirm')}
+      </span>
+    )
+  ) : isQueued ? (
+    <span className="text-[10px] text-muted-foreground/80 font-normal">
+      {i18n.t('messages.queued')}
+    </span>
+  ) : isExecuting ? (
+    <span className="text-[10px] text-primary font-medium animate-pulse">
+      {i18n.t('messages.executing')}
+    </span>
+  ) : isDenied ? (
+    <span className="text-[10px] text-destructive font-medium">
+      {i18n.t('messages.userDenied')}
+    </span>
+  ) : isError ? (
+    <span className="text-[10px] text-destructive font-medium">
+      {i18n.t('messages.failed')}
+    </span>
+  ) : isDone ? (
+    <span className="text-[10px] text-muted-foreground/70">
+      {i18n.t('messages.completed')}
+    </span>
+  ) : (
+    <span className="text-[10px] text-muted-foreground/70">
+      {i18n.t('messages.invoked')}
+    </span>
+  );
+
   return (
     <Collapsible
       open={open}
       onOpenChange={setOpen}
-      className={`my-1.5 w-full max-w-full rounded-lg border p-2 text-xs text-foreground transition-all animate-in fade-in-0 duration-150 motion-reduce:animate-none ${cardBorderClass}`}
+      className="my-1.5 w-full max-w-full"
     >
-      {/* Header row (Click to toggle expand) */}
-      <CollapsibleTrigger
-        render={
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-80 transition-opacity"
-          />
-        }
+      <Item
+        variant="outline"
+        size="xs"
+        className={cn(
+          'w-full flex-col items-stretch p-2 text-xs text-foreground transition-all duration-150 animate-in fade-in-0 motion-reduce:animate-none',
+          cardBorderClass
+        )}
       >
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            {isWaitingConfirmation ? (
-              isAskGate ? (
-                <HelpCircle className="size-3.5 shrink-0 text-primary" />
-              ) : (
-                <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground" />
-              )
-            ) : isQueued ? (
-              <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground/70" />
-            ) : isExecuting ? (
-              <Spinner className="size-3.5 shrink-0 text-muted-foreground" />
-            ) : (
-              <Wrench className="size-3.5 shrink-0 text-muted-foreground" />
-            )}
-            <span className="font-medium text-[11px] truncate">{label}</span>
-            <span className="text-[10px] text-muted-foreground font-mono truncate">
-              ({name})
-            </span>
-            {isWaitingConfirmation && pendingGateTotal && pendingGateTotal > 1 ? (
-              <span className="text-[10px] text-muted-foreground font-normal shrink-0">
-                {i18n.t('messages.pendingGates', { total: pendingGateTotal })}
-              </span>
-            ) : null}
+        {/* Header row (Click to toggle expand) */}
+        <CollapsibleTrigger
+          nativeButton={false}
+          render={
+            <div
+              role="button"
+              tabIndex={0}
+              className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-85 transition-opacity"
+            />
+          }
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <ItemMedia variant="icon" className="shrink-0">
+              {statusIcon}
+            </ItemMedia>
+            <ItemContent className="min-w-0 flex-1 gap-0.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <ItemTitle className="font-medium text-[11px] truncate text-foreground leading-none">
+                  {label}
+                </ItemTitle>
+                <span className="text-[10px] text-muted-foreground font-mono truncate leading-none">
+                  ({name})
+                </span>
+                {isWaitingConfirmation && pendingGateTotal && pendingGateTotal > 1 ? (
+                  <span className="text-[10px] text-muted-foreground font-normal shrink-0 leading-none">
+                    {i18n.t('messages.pendingGates', { total: pendingGateTotal })}
+                  </span>
+                ) : null}
+              </div>
+              {argsSummary ? (
+                <ItemDescription className="text-[10px] font-mono text-muted-foreground truncate line-clamp-1 leading-tight">
+                  {argsSummary}
+                </ItemDescription>
+              ) : null}
+            </ItemContent>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            {isWaitingConfirmation ? (
-              isAskGate ? (
-                <span className="text-[10px] text-primary font-medium animate-pulse">
-                  {i18n.t('messages.waitingReply')}
-                </span>
-              ) : (
-                <span className="text-[10px] text-muted-foreground font-medium animate-pulse">
-                  {i18n.t('messages.waitingConfirm')}
-                </span>
-              )
-            ) : isQueued ? (
-              <span className="text-[10px] text-muted-foreground/80 font-normal">
-                {i18n.t('messages.queued')}
-              </span>
-            ) : isExecuting ? (
-              <span className="text-[10px] text-primary font-medium animate-pulse">{i18n.t('messages.executing')}</span>
-            ) : isDenied ? (
-              <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.userDenied')}</span>
-            ) : isError ? (
-              <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.failed')}</span>
-            ) : isDone ? (
-              <span className="text-[10px] text-muted-foreground/70">{i18n.t('messages.completed')}</span>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/70">{i18n.t('messages.invoked')}</span>
-            )}
-
+          <ItemActions className="shrink-0 gap-1.5">
+            {statusText}
             {open ? (
               <ChevronDown className="size-3 text-muted-foreground" />
             ) : (
               <ChevronRight className="size-3 text-muted-foreground" />
             )}
-          </div>
-      </CollapsibleTrigger>
+          </ItemActions>
+        </CollapsibleTrigger>
 
-      {/* 状态化卡:交互审批统一渲染在 App 的审批槽位,卡内只有状态与参数/结果展开 */}
+        {/* 状态化卡:交互审批统一渲染在 App 的审批槽位,卡内只有状态与参数/结果展开 */}
 
-      {/* Expanded details (参数与历史结果) */}
-      <CollapsibleContent>
-        <div className="mt-2 pt-2 border-t border-border/40 space-y-2 text-[11px] animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
-          {/* Parameters */}
-          {args && Object.keys(args).length > 0 && (
-            <div className="space-y-1">
-              <div className="text-[10px] font-medium text-muted-foreground">{i18n.t('messages.callArgs')}</div>
-              <pre className="font-mono text-[10px] bg-background/80 rounded p-1.5 border border-border/40 overflow-x-auto whitespace-pre-wrap break-all max-h-36">
-                {JSON.stringify(args, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {/* Result */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] font-medium text-muted-foreground">
-              <span>{i18n.t('messages.result')}</span>
-              {isTruncated && (
-                <span className="text-[9px] text-muted-foreground/70">
-                  {i18n.t('messages.resultTruncated', { total: resultText.length })}
-                </span>
-              )}
-            </div>
-
-            {isWaitingConfirmation ? (
-              <div className="text-[10px] text-muted-foreground italic py-0.5">
-                {i18n.t('messages.waitingUserConfirm')}
-              </div>
-            ) : isQueued ? (
-              <div className="text-[10px] text-muted-foreground italic py-0.5">
-                {i18n.t('messages.queuedBehind')}
-              </div>
-            ) : isExecuting ? (
-              <div className="text-[10px] text-muted-foreground italic py-0.5">
-                {i18n.t('messages.waitingResult')}
-              </div>
-            ) : resultText ? (
-              <pre
-                className={`font-mono text-[10px] bg-background/80 rounded p-1.5 border overflow-x-auto whitespace-pre-wrap break-all max-h-48 ${
-                  isError ? 'border-destructive/30 text-destructive' : 'border-border/40 text-muted-foreground'
-                }`}
-              >
-                {displayResultText}
-              </pre>
-            ) : isDone ? (
-              <div className="text-[10px] text-muted-foreground italic py-0.5">
-                {i18n.t('messages.completedNoOutput')}
-              </div>
-            ) : (
-              <div className="text-[10px] text-muted-foreground italic py-0.5">
-                {i18n.t('messages.waitingResultMore')}
+        {/* Expanded details (参数与历史结果) */}
+        <CollapsibleContent className="w-full">
+          <div className="mt-2 pt-2 border-t border-border/40 space-y-2 text-[11px] animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
+            {/* Parameters */}
+            {args && Object.keys(args).length > 0 && (
+              <div className="space-y-1">
+                <div className="text-[10px] font-medium text-muted-foreground">{i18n.t('messages.callArgs')}</div>
+                <pre className="font-mono text-[10px] bg-background/80 rounded p-1.5 border border-border/40 overflow-x-auto whitespace-pre-wrap break-all max-h-36">
+                  {JSON.stringify(args, null, 2)}
+                </pre>
               </div>
             )}
+
+            {/* Result */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] font-medium text-muted-foreground">
+                <span>{i18n.t('messages.result')}</span>
+                {isTruncated && (
+                  <span className="text-[9px] text-muted-foreground/70">
+                    {i18n.t('messages.resultTruncated', { total: resultText.length })}
+                  </span>
+                )}
+              </div>
+
+              {isWaitingConfirmation ? (
+                <div className="text-[10px] text-muted-foreground italic py-0.5">
+                  {i18n.t('messages.waitingUserConfirm')}
+                </div>
+              ) : isQueued ? (
+                <div className="text-[10px] text-muted-foreground italic py-0.5">
+                  {i18n.t('messages.queuedBehind')}
+                </div>
+              ) : isExecuting ? (
+                <div className="text-[10px] text-muted-foreground italic py-0.5">
+                  {i18n.t('messages.waitingResult')}
+                </div>
+              ) : resultText ? (
+                <pre
+                  className={`font-mono text-[10px] bg-background/80 rounded p-1.5 border overflow-x-auto whitespace-pre-wrap break-all max-h-48 ${
+                    isError ? 'border-destructive/30 text-destructive' : 'border-border/40 text-muted-foreground'
+                  }`}
+                >
+                  {displayResultText}
+                </pre>
+              ) : isDone ? (
+                <div className="text-[10px] text-muted-foreground italic py-0.5">
+                  {i18n.t('messages.completedNoOutput')}
+                </div>
+              ) : (
+                <div className="text-[10px] text-muted-foreground italic py-0.5">
+                  {i18n.t('messages.waitingResultMore')}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </CollapsibleContent>
+        </CollapsibleContent>
+      </Item>
     </Collapsible>
   );
 }
