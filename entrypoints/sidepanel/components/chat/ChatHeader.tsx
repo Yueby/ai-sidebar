@@ -317,7 +317,7 @@ export function ChatHeader({
               {i18n.t('header.deleteConfirmDesc', { title: deleteTarget?.title || i18n.t('header.untitled') })}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-row justify-end gap-2">
             <AlertDialogCancel onClick={() => setDeleteTarget(null)}>{i18n.t('header.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: 'destructive' })}
