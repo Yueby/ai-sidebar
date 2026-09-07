@@ -34,6 +34,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -338,24 +346,27 @@ export function SettingsMainView({
 
             {settings.providers.length === 0 ? (
               /* Empty state */
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-5 text-center space-y-2">
-                <div className="space-y-0.5">
-                  <div className="text-xs font-medium text-foreground">{i18n.t('settings.providers.emptyTitle')}</div>
-                  <p className="text-[11px] text-muted-foreground max-w-[240px] leading-relaxed">
-                    {i18n.t('settings.providers.emptyDesc')}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onAddProvider}
-                  className="h-7 text-xs gap-1.5 cursor-pointer"
-                >
-                  <Plus className="size-3" />
-                  <span>{i18n.t('settings.providers.emptyAction')}</span>
-                </Button>
-              </div>
+              <Empty className="border border-dashed">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Bot className="size-5" />
+                  </EmptyMedia>
+                  <EmptyTitle>{i18n.t('settings.providers.emptyTitle')}</EmptyTitle>
+                  <EmptyDescription>{i18n.t('settings.providers.emptyDesc')}</EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onAddProvider}
+                    className="h-7 text-xs gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="size-3" />
+                    <span>{i18n.t('settings.providers.emptyAction')}</span>
+                  </Button>
+                </EmptyContent>
+              </Empty>
             ) : (
               <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
                 {settings.providers.map((p) => {

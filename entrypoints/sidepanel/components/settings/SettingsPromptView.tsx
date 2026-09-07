@@ -3,6 +3,14 @@ import { i18n } from '#i18n';
 import type { Settings, UserRule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from '@/components/ui/empty';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -162,24 +170,27 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
 
         {/* 规则列表 / 空态 */}
         {rules.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-5 text-center space-y-2 bg-background/30">
-            <div className="space-y-0.5">
-              <div className="text-xs font-medium text-foreground">{i18n.t('settings.rules.emptyTitle')}</div>
-              <p className="text-[11px] text-muted-foreground max-w-[260px] leading-normal">
-                {i18n.t('settings.rules.emptyDesc')}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={startCreating}
-              className="h-7 text-xs gap-1.5 cursor-pointer"
-            >
-              <Plus className="size-3" />
-              <span>{i18n.t('settings.rules.emptyAction')}</span>
-            </Button>
-          </div>
+          <Empty className="border border-dashed">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <ScrollText className="size-5" />
+              </EmptyMedia>
+              <EmptyTitle>{i18n.t('settings.rules.emptyTitle')}</EmptyTitle>
+              <EmptyDescription>{i18n.t('settings.rules.emptyDesc')}</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={startCreating}
+                className="h-7 text-xs gap-1.5 cursor-pointer"
+              >
+                <Plus className="size-3" />
+                <span>{i18n.t('settings.rules.emptyAction')}</span>
+              </Button>
+            </EmptyContent>
+          </Empty>
         ) : (
           <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
             {rules.map((rule) => (
