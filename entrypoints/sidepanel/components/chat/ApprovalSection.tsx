@@ -13,15 +13,6 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
 import {
-  Item,
-  ItemMedia,
-  ItemContent,
-  ItemTitle,
-  ItemDescription,
-  ItemActions,
-  ItemFooter,
-} from '@/components/ui/item';
-import {
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
@@ -101,47 +92,38 @@ export function ApprovalSection({
 
   const isConfirm = request.kind === 'confirm';
 
-  // 1. 确认门控卡 (confirm 门控): 官方 Item + ButtonGroup 范式
+  // 1. 确认门控卡 (confirm 门控): 统一使用与 ask 卡一致的官方 card 容器
   if (isConfirm) {
     const isDanger = request.toolName === 'execute_js';
 
     return (
-      <Item
-        variant="outline"
-        className="flex-col items-stretch gap-2.5 p-3 text-xs rounded-lg transition-colors border shadow-xs"
-      >
-        {/* 头部行: ItemMedia 图标 + ItemContent (工具名 ItemTitle + 参数摘要 ItemDescription) */}
-        <div className="flex items-start gap-2.5 min-w-0">
-          <ItemMedia
-            variant="icon"
+      <div className="rounded-lg border border-border bg-card p-3 text-xs text-foreground shadow-xs flex flex-col gap-2.5">
+        {/* 头部行: 图标 + 工具名与参数摘要 (与 ask 卡完全同构) */}
+        <div className="flex items-start gap-2 min-w-0">
+          <div
             className={cn(
-              'size-7 rounded-md shrink-0 mt-0.5',
-              isDanger ? 'text-destructive' : 'text-muted-foreground'
+              'size-7 rounded-md border flex items-center justify-center shrink-0 mt-0.5',
+              isDanger
+                ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                : 'border-border bg-muted text-muted-foreground'
             )}
           >
             <ShieldAlert className="size-4" />
-          </ItemMedia>
+          </div>
 
-          <ItemContent className="min-w-0 flex-1 gap-0.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <ItemTitle className="text-xs font-semibold text-foreground truncate">
-                {request.label || request.toolName}
-              </ItemTitle>
-              {isDanger && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-destructive/15 text-destructive font-medium shrink-0 leading-none">
-                  High Risk
-                </span>
-              )}
+          <div className="flex-1 min-w-0 pt-0.5 space-y-0.5">
+            <div className="text-xs font-semibold text-foreground truncate">
+              {request.label || request.toolName}
             </div>
-            <ItemDescription className="text-xs text-foreground/90 font-normal leading-relaxed break-all whitespace-pre-wrap line-clamp-none">
+            <p className="text-xs text-foreground/90 font-normal leading-relaxed break-all whitespace-pre-wrap">
               {request.summary}
-            </ItemDescription>
-          </ItemContent>
+            </p>
+          </div>
         </div>
 
         {/* 代码详情展开区 (Collapsible) */}
         {request.detail && (
-          <Collapsible open={detailOpen} onOpenChange={setDetailOpen} className="space-y-1 pl-9">
+          <Collapsible open={detailOpen} onOpenChange={setDetailOpen} className="space-y-1 pl-9.5">
             <CollapsibleTrigger
               render={
                 <button
@@ -163,7 +145,7 @@ export function ApprovalSection({
 
         {/* 会话级 grant 勾选 (Switch 保持决策 22 会话级契约) */}
         {request.grantable && (
-          <div className="pl-9">
+          <div className="pl-9.5">
             <label
               className={cn(
                 'group/grant flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors select-none cursor-pointer text-xs',
@@ -189,42 +171,40 @@ export function ApprovalSection({
           </div>
         )}
 
-        {/* 底部操作区: ItemFooter + ItemActions 包 ButtonGroup */}
-        <ItemFooter className="flex items-center justify-end pt-1.5 border-t border-border/40">
-          <ItemActions>
-            <ButtonGroup>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={pendingAction !== null}
-                onClick={handleDenyClick}
-                className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
-              >
-                {pendingAction === 'deny' && <Loader2 className="size-3 animate-spin shrink-0" />}
-                <span>{pendingAction === 'deny' ? i18n.t('approval.denying') : i18n.t('approval.deny')}</span>
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={isDanger ? 'destructive' : 'default'}
-                disabled={pendingAction !== null}
-                onClick={handleApproveClick}
-                className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
-              >
-                {pendingAction === 'approve' && <Loader2 className="size-3 animate-spin shrink-0" />}
-                <span>
-                  {pendingAction === 'approve'
-                    ? i18n.t('approval.allowing')
-                    : grantChecked
-                      ? i18n.t('approval.allowRemember')
-                      : i18n.t('approval.allow')}
-                </span>
-              </Button>
-            </ButtonGroup>
-          </ItemActions>
-        </ItemFooter>
-      </Item>
+        {/* 底部操作区: ButtonGroup */}
+        <div className="flex items-center justify-end pt-1.5 border-t border-border/40">
+          <ButtonGroup>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={pendingAction !== null}
+              onClick={handleDenyClick}
+              className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
+            >
+              {pendingAction === 'deny' && <Loader2 className="size-3 animate-spin shrink-0" />}
+              <span>{pendingAction === 'deny' ? i18n.t('approval.denying') : i18n.t('approval.deny')}</span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={isDanger ? 'destructive' : 'default'}
+              disabled={pendingAction !== null}
+              onClick={handleApproveClick}
+              className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
+            >
+              {pendingAction === 'approve' && <Loader2 className="size-3 animate-spin shrink-0" />}
+              <span>
+                {pendingAction === 'approve'
+                  ? i18n.t('approval.allowing')
+                  : grantChecked
+                    ? i18n.t('approval.allowRemember')
+                    : i18n.t('approval.allow')}
+              </span>
+            </Button>
+          </ButtonGroup>
+        </div>
+      </div>
     );
   }
 
