@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ContextRing, formatTokensShort } from './ContextRing';
 
 /** 三角色 token 占比(本地估算,组合层传入) */
@@ -88,9 +89,20 @@ export function ContextPanel({
             </p>
           </div>
           {modelName && (
-            <span className="max-w-[100px] truncate rounded bg-muted/70 px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground text-right" title={modelName}>
-              {modelName}
-            </span>
+            <TooltipProvider delay={200}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="max-w-[100px] truncate rounded bg-muted/70 px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground text-right cursor-default" />
+                  }
+                >
+                  {modelName}
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {modelName}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
 

@@ -99,7 +99,7 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
           <p className="text-[10px] text-muted-foreground italic">{i18n.t('context.estimateOnlyRing')}</p>
         )}
         {modelName && (
-          <p className="truncate text-[9px] text-muted-foreground/80 pt-1 border-t border-border/40 font-mono" title={modelName}>
+          <p className="truncate text-[9px] text-muted-foreground/80 pt-1 border-t border-border/40 font-mono">
             {modelName}
           </p>
         )}

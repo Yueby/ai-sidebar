@@ -5,6 +5,12 @@ import type { RefTab } from '@/lib/pageContext';
 import { faviconUrl } from '@/lib/favicon';
 import { useTabMeta } from '@/lib/tabMetaStore';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface TabRefBarProps {
   refTabs: RefTab[];
@@ -64,127 +70,174 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
   if (count === 1) {
     const tab = refTabs[0]!;
     return (
-      <div className="relative z-0 w-full select-none animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-        <div
-          className="flex items-center justify-between gap-2 px-2.5 pt-1.5 pb-3 rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground group/single transition-colors hover:bg-muted/60"
-          title={tab.url}
-        >
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <FaviconIcon url={tab.url} tabId={tab.id} className="size-3.5" />
-            <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
-              {i18n.t('refBar.referencing')}
-            </span>
-            <span className="font-medium truncate text-[11px] text-foreground max-w-[calc(100%-90px)]">
-              “{tab.title || tab.url}”
-            </span>
-            <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
-              标签页
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemoveRefTab(tab.id);
-            }}
-            className="text-muted-foreground/70 hover:text-foreground rounded p-0.5 hover:bg-background/80 transition-colors shrink-0 cursor-pointer"
-            title={i18n.t('refBar.removeRefTitle')}
+      <TooltipProvider delay={200}>
+        <div className="relative z-0 w-full select-none animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <div
+            className="flex items-center justify-between gap-2 px-2.5 pt-1.5 pb-3 rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground group/single transition-colors hover:bg-muted/60"
           >
-            <X className="size-3" />
-          </button>
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+              <FaviconIcon url={tab.url} tabId={tab.id} className="size-3.5" />
+              <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
+                {i18n.t('refBar.referencing')}
+              </span>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="font-medium truncate text-[11px] text-foreground max-w-[calc(100%-90px)] cursor-default">
+                      “{tab.title || tab.url}”
+                    </span>
+                  }
+                />
+                <TooltipContent side="top">
+                  {tab.url}
+                </TooltipContent>
+              </Tooltip>
+              <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
+                标签页
+              </span>
+            </div>
+
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveRefTab(tab.id);
+                    }}
+                    className="text-muted-foreground/70 hover:text-foreground rounded p-0.5 hover:bg-background/80 transition-colors shrink-0 cursor-pointer"
+                    aria-label={i18n.t('refBar.removeRefTitle')}
+                  >
+                    <X className="size-3" />
+                  </button>
+                }
+              />
+              <TooltipContent side="top">
+                {i18n.t('refBar.removeRefTitle')}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
-      </div>
+      </TooltipProvider>
     );
   }
 
   // 2 & 3. 多引用态 (折叠 / 展开): 独立卡片控件
   return (
-    <div className="relative z-0 w-full select-none rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-      {/* 头部摘要栏 (点击可展开/收起) */}
-      <div
-        onClick={() => setExpanded((prev) => !prev)}
-        className={`flex items-center justify-between gap-2 px-2.5 pt-1.5 cursor-pointer hover:bg-muted/60 transition-colors ${
-          expanded ? 'pb-1.5' : 'pb-3'
-        }`}
-      >
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          {/* 多 Favicon 紧凑堆叠 / 并排 */}
-          <div className="flex items-center -space-x-1 shrink-0 pr-0.5">
-            {refTabs.slice(0, 4).map((t) => (
-              <div
-                key={t.id}
-                className="relative ring-1 ring-background rounded-[2px] bg-background"
-              >
-                <FaviconIcon url={t.url} tabId={t.id} className="size-3.5" />
-              </div>
-            ))}
-            {count > 4 && (
-              <span className="text-[9px] text-muted-foreground font-mono pl-1.5">
-                +{count - 4}
-              </span>
-            )}
+    <TooltipProvider delay={200}>
+      <div className="relative z-0 w-full select-none rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+        {/* 头部摘要栏 (点击可展开/收起) */}
+        <div
+          onClick={() => setExpanded((prev) => !prev)}
+          className={`flex items-center justify-between gap-2 px-2.5 pt-1.5 cursor-pointer hover:bg-muted/60 transition-colors ${
+            expanded ? 'pb-1.5' : 'pb-3'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            {/* 多 Favicon 紧凑堆叠 / 并排 */}
+            <div className="flex items-center -space-x-1 shrink-0 pr-0.5">
+              {refTabs.slice(0, 4).map((t) => (
+                <div
+                  key={t.id}
+                  className="relative ring-1 ring-background rounded-[2px] bg-background"
+                >
+                  <FaviconIcon url={t.url} tabId={t.id} className="size-3.5" />
+                </div>
+              ))}
+              {count > 4 && (
+                <span className="text-[9px] text-muted-foreground font-mono pl-1.5">
+                  +{count - 4}
+                </span>
+              )}
+            </div>
+
+            <span className="text-[11px] text-foreground font-medium truncate">
+              {i18n.t('refBar.referencingCount', { count })}
+            </span>
           </div>
 
-          <span className="text-[11px] text-foreground font-medium truncate">
-            {i18n.t('refBar.referencingCount', { count })}
-          </span>
-        </div>
-
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setExpanded((prev) => !prev);
-          }}
-          className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors shrink-0 cursor-pointer"
-          title={i18n.t(expanded ? 'refBar.collapseList' : 'refBar.expandList')}
-        >
-          {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-        </button>
-      </div>
-
-      {/* 展开列表 */}
-      {/* 展开列表:grid-rows 技巧实现高度双向平滑动画(条件渲染只能做进场,收起会瞬关) */}
-      <div
-        className={cn(
-          'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
-          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-        )}
-      >
-        <div className="overflow-hidden">
-          <div className="px-1.5 pb-3 pt-0.5 space-y-0.5 max-h-40 overflow-y-auto border-t border-border/30">
-            {refTabs.map((t, idx) => (
-              <div
-                key={t.id}
-                className="group/item flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-background/80 transition-colors text-[11px]"
-                title={t.url}
-              >
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <FaviconIcon url={t.url} tabId={t.id} className="size-3.5" />
-                  <span className="truncate font-normal text-foreground">
-                    {t.title || t.url}
-                  </span>
-                  {idx === 0 && (
-                    <span className="shrink-0 text-[9px] font-normal px-1 py-0.2 rounded bg-secondary text-muted-foreground">
-                      当前页
-                    </span>
-                  )}
-                </div>
-
+          <Tooltip>
+            <TooltipTrigger
+              render={
                 <button
                   type="button"
-                  onClick={() => onRemoveRefTab(t.id)}
-                  className="opacity-60 group-hover/item:opacity-100 text-muted-foreground hover:text-foreground p-0.5 hover:bg-muted rounded transition-colors shrink-0 cursor-pointer"
-                  title="移除此标签页"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpanded((prev) => !prev);
+                  }}
+                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors shrink-0 cursor-pointer"
+                  aria-label={i18n.t(expanded ? 'refBar.collapseList' : 'refBar.expandList')}
                 >
-                  <X className="size-3" />
+                  {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
                 </button>
-              </div>
-            ))}
+              }
+            />
+            <TooltipContent side="top">
+              {i18n.t(expanded ? 'refBar.collapseList' : 'refBar.expandList')}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* 展开列表 */}
+        {/* 展开列表:grid-rows 技巧实现高度双向平滑动画(条件渲染只能做进场,收起会瞬关) */}
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
+            expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+          )}
+        >
+          <div className="overflow-hidden">
+            <div className="px-1.5 pb-3 pt-0.5 space-y-0.5 max-h-40 overflow-y-auto border-t border-border/30">
+              {refTabs.map((t, idx) => (
+                <div
+                  key={t.id}
+                  className="group/item flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-background/80 transition-colors text-[11px]"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <FaviconIcon url={t.url} tabId={t.id} className="size-3.5" />
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="truncate font-normal text-foreground cursor-default">
+                            {t.title || t.url}
+                          </span>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        {t.url}
+                      </TooltipContent>
+                    </Tooltip>
+                    {idx === 0 && (
+                      <span className="shrink-0 text-[9px] font-normal px-1 py-0.2 rounded bg-secondary text-muted-foreground">
+                        当前页
+                      </span>
+                    )}
+                  </div>
+
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          onClick={() => onRemoveRefTab(t.id)}
+                          className="opacity-60 group-hover/item:opacity-100 text-muted-foreground hover:text-foreground p-0.5 hover:bg-muted rounded transition-colors shrink-0 cursor-pointer"
+                          aria-label={i18n.t('refBar.removeRefTitle')}
+                        >
+                          <X className="size-3" />
+                        </button>
+                      }
+                    />
+                    <TooltipContent side="top">
+                      {i18n.t('refBar.removeRefTitle')}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
