@@ -100,12 +100,12 @@ export function ModelConfigDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-24px)] max-w-[380px] p-4 gap-3">
-        <DialogHeader className="gap-1 text-left">
-          <DialogTitle className="text-base font-semibold">
+      <DialogContent className="w-[calc(100vw-24px)] max-w-[380px]">
+        <DialogHeader>
+          <DialogTitle>
             {isEditing ? i18n.t('modelConfig.editTitle') : i18n.t('modelConfig.addTitle')}
           </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
+          <DialogDescription>
             {i18n.t('modelConfig.subtitle')}
           </DialogDescription>
         </DialogHeader>
@@ -205,7 +205,7 @@ export function ModelConfigDialog({
           </div>
         </div>
 
-        <DialogFooter className="flex flex-row justify-end gap-2 pt-2 border-t">
+        <DialogFooter className="flex-row justify-end gap-2">
           <Button
             type="button"
             variant="outline"

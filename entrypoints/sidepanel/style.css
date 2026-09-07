@@ -347,3 +347,26 @@
   outline: 1px solid color-mix(in oklch, var(--ring) 45%, transparent);
   border-radius: 4px;
 }
+
+/* ---- 官方 default 气泡 (bg-primary / text-primary-foreground) 内部的引用 chip/quote 作用域覆盖 ---- */
+[data-slot=bubble][data-variant=default] .element-chip {
+  background: color-mix(in oklch, var(--primary-foreground) 15%, transparent);
+  color: var(--primary-foreground);
+  border-color: color-mix(in oklch, var(--primary-foreground) 22%, transparent);
+}
+[data-slot=bubble][data-variant=default] .element-chip-delete {
+  color: color-mix(in oklch, var(--primary-foreground) 70%, transparent);
+}
+[data-slot=bubble][data-variant=default] .element-chip-delete:hover {
+  color: var(--primary-foreground);
+  background: color-mix(in oklch, var(--primary-foreground) 20%, transparent);
+}
+[data-slot=bubble][data-variant=default] .element-chip-unknown {
+  background: color-mix(in oklch, var(--primary-foreground) 10%, transparent);
+  color: color-mix(in oklch, var(--primary-foreground) 70%, transparent);
+}
+[data-slot=bubble][data-variant=default] .element-quote {
+  background: color-mix(in oklch, var(--primary-foreground) 18%, transparent);
+  color: var(--primary-foreground);
+}
+

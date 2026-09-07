@@ -290,7 +290,7 @@ export function SettingsMainView({
         >
           <TabsList
             aria-label={i18n.t('settings.navAria')}
-            className="flex group-data-[orientation=horizontal]/tabs:h-7 h-7 w-full max-w-full items-center justify-start overflow-x-auto p-0.5 border border-border/60 bg-muted/50 rounded-lg text-xs"
+            className="w-full group-data-[orientation=horizontal]/tabs:h-8 h-8 p-0.5"
           >
             {[
               { id: 'providers', label: i18n.t('settings.tabs.providers') },
@@ -304,7 +304,7 @@ export function SettingsMainView({
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
-                className="h-6 px-1.5 sm:px-2 text-[11px] font-medium rounded-md cursor-pointer whitespace-nowrap shrink-0"
+                className="h-7 px-1 text-[11px] sm:text-xs cursor-pointer min-w-0 truncate"
               >
                 {tab.label}
               </TabsTrigger>

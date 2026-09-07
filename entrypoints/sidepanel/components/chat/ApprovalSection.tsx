@@ -108,12 +108,7 @@ export function ApprovalSection({
     return (
       <Item
         variant="outline"
-        className={cn(
-          'flex-col items-stretch gap-2.5 p-3 text-xs rounded-lg transition-colors border shadow-2xs',
-          isDanger
-            ? 'border-destructive/40 bg-destructive/5 dark:bg-destructive/10 text-foreground'
-            : 'border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 text-foreground'
-        )}
+        className="flex-col items-stretch gap-2.5 p-3 text-xs rounded-lg transition-colors border shadow-xs"
       >
         {/* 头部行: ItemMedia 图标 + ItemContent (工具名 ItemTitle + 参数摘要 ItemDescription) */}
         <div className="flex items-start gap-2.5 min-w-0">
@@ -121,9 +116,7 @@ export function ApprovalSection({
             variant="icon"
             className={cn(
               'size-7 rounded-md shrink-0 mt-0.5',
-              isDanger
-                ? 'border-destructive/30 bg-destructive/10 text-destructive'
-                : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+              isDanger ? 'text-destructive' : 'text-muted-foreground'
             )}
           >
             <ShieldAlert className="size-4" />
@@ -171,10 +164,7 @@ export function ApprovalSection({
           <div className="pl-9">
             <label
               className={cn(
-                'group/grant flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border transition-all select-none cursor-pointer text-xs',
-                grantChecked
-                  ? 'border-amber-500/35 bg-amber-500/10 text-amber-950 dark:text-amber-100 shadow-2xs'
-                  : 'border-border/50 bg-background/60 hover:bg-background text-muted-foreground hover:text-foreground',
+                'group/grant flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors select-none cursor-pointer text-xs',
                 pendingAction !== null && 'opacity-60 cursor-not-allowed pointer-events-none'
               )}
             >
@@ -182,14 +172,7 @@ export function ApprovalSection({
                 {i18n.t('approval.grantLabel', { label: request.label })}
               </span>
               <div className="flex items-center gap-1.5 shrink-0">
-                <span
-                  className={cn(
-                    'text-[9px] font-medium px-1 py-0.2 rounded transition-colors',
-                    grantChecked
-                      ? 'text-amber-700 dark:text-amber-300 bg-amber-500/15'
-                      : 'text-muted-foreground/70 group-hover/grant:text-muted-foreground'
-                  )}
-                >
+                <span className="text-[9px] font-medium px-1 py-0.2 rounded text-muted-foreground/70">
                   {i18n.t('approval.grantHint')}
                 </span>
                 <Switch
@@ -225,12 +208,7 @@ export function ApprovalSection({
                 variant={isDanger ? 'destructive' : 'default'}
                 disabled={pendingAction !== null}
                 onClick={handleApproveClick}
-                className={cn(
-                  'h-6.5 text-[11px] px-2.5 cursor-pointer gap-1 transition-colors',
-                  grantChecked && !isDanger
-                    ? 'bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-500 dark:hover:bg-amber-600 dark:text-neutral-950 shadow-xs'
-                    : ''
-                )}
+                className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
               >
                 {pendingAction === 'approve' && <Loader2 className="size-3 animate-spin shrink-0" />}
                 <span>
@@ -262,7 +240,7 @@ export function ApprovalSection({
   );
 
   return (
-    <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 p-3 text-xs text-foreground shadow-2xs">
+    <div className="rounded-lg border border-border bg-card p-3 text-xs text-foreground shadow-xs">
       <Questionnaire
         items={questionnaireItems}
         shortcuts={hasChoices ? 'numbers' : undefined}
@@ -272,7 +250,7 @@ export function ApprovalSection({
         <QuestionnaireItem name="answer" required={false}>
           {/* 标题栏: 图标 + 问题 (QuestionnaireTitle) */}
           <div className="flex items-start gap-2 min-w-0">
-            <div className="size-7 rounded-md border border-blue-500/30 bg-blue-500/10 flex items-center justify-center shrink-0 mt-0.5 text-blue-600 dark:text-blue-400">
+            <div className="size-7 rounded-md border bg-muted flex items-center justify-center shrink-0 mt-0.5 text-muted-foreground">
               <HelpCircle className="size-4" />
             </div>
             <div className="flex-1 min-w-0 pt-0.5">
@@ -302,10 +280,7 @@ export function ApprovalSection({
                         setPendingAction('answer');
                         onAnswer(opt);
                       }}
-                      className={cn(
-                        'px-2.5 py-1.5 text-xs transition-colors',
-                        isChecked && 'border-blue-500/50 bg-blue-500/10 text-foreground font-medium'
-                      )}
+                      className="px-2.5 py-1.5 text-xs transition-colors"
                     >
                       <QuestionnaireChoiceInput />
                       <QuestionnaireChoiceLabel className="text-xs">
@@ -368,7 +343,7 @@ export function ApprovalSection({
           )}
 
           {/* 操作区: QuestionnaireActions 布局 QuestionnaireSkip + QuestionnaireSubmit */}
-          <QuestionnaireActions className="border-t border-blue-500/20 pt-1.5">
+          <QuestionnaireActions className="border-t border-border/40 pt-1.5">
             <QuestionnaireSkip
               size="sm"
               variant="ghost"

@@ -73,14 +73,14 @@ export function UserScriptsGateDialog() {
     <AlertDialog open={true}>
       <AlertDialogContent
         onEscapeKeyDown={(e) => e.preventDefault()}
-        className="sm:max-w-md p-5 gap-4 select-none"
+        className="sm:max-w-md select-none"
       >
-        <AlertDialogHeader className="text-left space-y-2">
+        <AlertDialogHeader className="space-y-2">
           <div className="flex items-center gap-2">
-            <div className="size-7 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <div className="size-7 rounded-full bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
               <ShieldAlert className="size-4" />
             </div>
-            <AlertDialogTitle className="text-sm font-semibold text-foreground">
+            <AlertDialogTitle>
               {i18n.t('gate.title')}
             </AlertDialogTitle>
           </div>
@@ -97,7 +97,7 @@ export function UserScriptsGateDialog() {
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col sm:space-x-0 pt-1">
+        <AlertDialogFooter className="flex flex-col gap-2 sm:flex-col sm:space-x-0">
           <Button
             type="button"
             onClick={handleOpenDetails}

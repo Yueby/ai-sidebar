@@ -152,13 +152,13 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
       {tabs.map((tab, idx) => (
         <div
           key={`tab-${idx}`}
-          className="flex items-center gap-1.5 text-[10px] text-foreground bg-background/80 border border-border/50 rounded px-1.5 py-0.5 max-w-full overflow-hidden"
+          className="flex items-center gap-1.5 text-[10px] text-primary-foreground/90 bg-primary-foreground/10 border border-primary-foreground/15 rounded px-1.5 py-0.5 max-w-full overflow-hidden"
           title={`${tab.url} · #${tab.tabId}`}
         >
-          <Globe className="size-2.5 shrink-0 text-muted-foreground" />
+          <Globe className="size-2.5 shrink-0 text-primary-foreground/70" />
           <span className="truncate max-w-full">{tab.title || tab.url}</span>
           {tab.focused && (
-            <span className="shrink-0 rounded bg-muted px-1 text-[9px] leading-[14px] text-muted-foreground font-medium">
+            <span className="shrink-0 rounded bg-primary-foreground/20 px-1 text-[9px] leading-[14px] text-primary-foreground font-medium">
               当前
             </span>
           )}
@@ -167,11 +167,11 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
       {elements.map((elem) => (
         <div
           key={`elem-${elem.id}`}
-          className="flex items-center gap-1.5 text-[10px] text-foreground bg-background/80 border border-border/50 rounded px-1.5 py-0.5 max-w-full overflow-hidden"
+          className="flex items-center gap-1.5 text-[10px] text-primary-foreground/90 bg-primary-foreground/10 border border-primary-foreground/15 rounded px-1.5 py-0.5 max-w-full overflow-hidden"
           title={`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
         >
-          <span className="font-mono text-muted-foreground shrink-0">{elem.id}.</span>
-          <SquareMousePointer className="size-2.5 shrink-0 text-muted-foreground" />
+          <span className="font-mono text-primary-foreground/70 shrink-0">{elem.id}.</span>
+          <SquareMousePointer className="size-2.5 shrink-0 text-primary-foreground/70" />
           <span className="truncate max-w-full">{elementListLabel(elem)}</span>
         </div>
       ))}
@@ -179,13 +179,13 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
   );
 
   return (
-    <div className="pt-1 mt-1 border-t border-border/60 text-xs w-full">
+    <div className="pt-1 mt-1 border-t border-primary-foreground/20 text-xs w-full">
       {isMany ? (
         <Collapsible open={open} onOpenChange={setOpen} className="space-y-1">
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
+              className="flex items-center gap-1 text-[10px] font-medium text-primary-foreground/75 hover:text-primary-foreground select-none transition-colors py-0.5 cursor-pointer"
             >
               <span>{i18n.t('messages.refCount', { total })}</span>
               {open ? <ChevronDown className="size-2.5" /> : <ChevronRight className="size-2.5" />}
@@ -250,7 +250,6 @@ function ThinkingBlock({
           <p className="line-clamp-3 whitespace-pre-wrap break-all text-[11px] leading-relaxed text-muted-foreground/75 group-hover/preview:text-muted-foreground transition-colors">
             {previewText}
           </p>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3.5 bg-gradient-to-t from-card to-transparent opacity-80" />
         </div>
       )}
 

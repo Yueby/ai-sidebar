@@ -76,9 +76,9 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px] p-4 gap-3.5" onKeyDown={handleKeyDown}>
+      <DialogContent className="sm:max-w-[420px]" onKeyDown={handleKeyDown}>
         <DialogHeader className="flex flex-row items-center justify-between space-y-0 pr-6">
-          <DialogTitle className="text-sm font-semibold">
+          <DialogTitle>
             {rule ? i18n.t('settings.rules.edit') : i18n.t('settings.rules.addRule')}
           </DialogTitle>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -152,7 +152,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
             <p className="text-[11px] text-destructive leading-tight">{validationError}</p>
           )}
 
-          <DialogFooter className="flex flex-row items-center justify-end gap-2 pt-1">
+          <DialogFooter className="flex-row items-center justify-end gap-2">
             <Button
               type="button"
               variant="ghost"

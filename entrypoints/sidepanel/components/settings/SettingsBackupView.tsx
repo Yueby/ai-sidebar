@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Download, Upload, TriangleAlert, CloudUpload, CloudDownload, Loader2, Eye, EyeOff, FileJson, CloudCog } from 'lucide-react';
 import type { Settings, Session } from '@/lib/types';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { sanitizeSettings } from '@/lib/storage';
 import { i18n } from '#i18n';
@@ -393,7 +393,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setRemoteBundle(null)}>{i18n.t('sync.cancel')}</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={buttonVariants({ variant: 'destructive' })}
               onClick={handleRestoreConfirm}
             >
               {i18n.t('sync.restoreConfirm')}

@@ -342,12 +342,12 @@ export function ProviderDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[calc(100vw-24px)] max-w-[380px] p-4 gap-3 max-h-[88vh] flex flex-col">
-          <DialogHeader className="gap-1 text-left">
-            <DialogTitle className="text-base font-semibold">
+        <DialogContent className="w-[calc(100vw-24px)] max-w-[380px] max-h-[88vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
               {isNew ? i18n.t('providerDialog.addTitle') : i18n.t('providerDialog.editTitle')}
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
+            <DialogDescription>
               {i18n.t('providerDialog.subtitle')}
             </DialogDescription>
           </DialogHeader>
@@ -751,7 +751,7 @@ export function ProviderDialog({
             )}
           </div>
 
-          <DialogFooter className="flex flex-row justify-end gap-2 pt-2 border-t">
+          <DialogFooter className="flex-row justify-end gap-2">
             <Button
               type="button"
               variant="outline"
