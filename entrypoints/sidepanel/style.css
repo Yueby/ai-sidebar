@@ -443,5 +443,9 @@
   .cn-badge-variant-link {
     @apply text-primary underline-offset-4 hover:underline;
   }
+  /* MARK: Skeleton */
+  .cn-skeleton {
+    @apply bg-muted rounded-md;
+  }
 }
 
