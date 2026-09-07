@@ -16,6 +16,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { InfoTip } from './InfoTip';
 
 interface SettingsBackupViewProps {
@@ -193,14 +199,25 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
           onChange={(e) => onChange(e.target.value)}
           className={'h-7 text-xs pr-8 ' + placeholderClass}
         />
-        <button
-          type="button"
-          onClick={() => setVisiblePassword(visible ? null : visibleKey)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-          title={visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
-        >
-          {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-        </button>
+        <TooltipProvider delay={200}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={() => setVisiblePassword(visible ? null : visibleKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  aria-label={visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
+                >
+                  {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                </button>
+              }
+            />
+            <TooltipContent side="top">
+              {visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     );
   };

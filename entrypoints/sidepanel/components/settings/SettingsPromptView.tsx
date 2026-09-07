@@ -14,6 +14,12 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -233,33 +239,53 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
                 </div>
 
                 {/* ③ 右侧操作钮: flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity */}
-                <div
-                  className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => startEditing(rule)}
-                    title={i18n.t('settings.rules.edit')}
-                    className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                <TooltipProvider delay={200}>
+                  <div
+                    className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Pencil className="size-3" />
-                    <span className="sr-only">{i18n.t('settings.rules.edit')}</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setDeleteRuleTarget(rule)}
-                    title={i18n.t('settings.rules.delete')}
-                    className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
-                  >
-                    <Trash2 className="size-3" />
-                    <span className="sr-only">{i18n.t('settings.rules.delete')}</span>
-                  </Button>
-                </div>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => startEditing(rule)}
+                            aria-label={i18n.t('settings.rules.edit')}
+                            className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                          >
+                            <Pencil className="size-3" />
+                            <span className="sr-only">{i18n.t('settings.rules.edit')}</span>
+                          </Button>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        {i18n.t('settings.rules.edit')}
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteRuleTarget(rule)}
+                            aria-label={i18n.t('settings.rules.delete')}
+                            className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
+                          >
+                            <Trash2 className="size-3" />
+                            <span className="sr-only">{i18n.t('settings.rules.delete')}</span>
+                          </Button>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        {i18n.t('settings.rules.delete')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
               </div>
             ))}
           </Card>
