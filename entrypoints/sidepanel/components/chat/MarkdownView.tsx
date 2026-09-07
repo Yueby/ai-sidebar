@@ -13,7 +13,7 @@ export const MarkdownView = memo(function MarkdownView({
   className = '',
 }: MarkdownViewProps) {
   return (
-    <div className={`md-body ${className}`}>
+    <div className={`typeset typeset-chat ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
@@ -30,9 +30,14 @@ export const MarkdownView = memo(function MarkdownView({
             </a>
           ),
           pre: ({ children, ...props }) => (
-            <pre className="relative my-2 rounded-lg bg-zinc-950 text-zinc-100 overflow-x-auto text-xs p-3" {...props}>
+            <pre className="not-typeset relative my-2 rounded-lg bg-zinc-950 text-zinc-100 overflow-x-auto text-xs p-3" {...props}>
               {children}
             </pre>
+          ),
+          table: ({ children, ...props }) => (
+            <div className="typeset-scroll my-2">
+              <table {...props}>{children}</table>
+            </div>
           ),
           code: ({ className: codeClassName, children, ...props }) => {
             const isInline = !codeClassName;
