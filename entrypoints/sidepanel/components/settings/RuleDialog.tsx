@@ -101,7 +101,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
                 className={cn(
                   'font-mono text-[10px]',
                   name.length >= MAX_RULE_NAME_LENGTH
-                    ? 'text-amber-500 font-semibold'
+                    ? 'text-warning font-semibold'
                     : 'text-muted-foreground',
                 )}
               >
@@ -129,7 +129,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
                 className={cn(
                   'font-mono text-[10px]',
                   content.length >= MAX_RULE_CONTENT_LENGTH
-                    ? 'text-amber-500 font-semibold'
+                    ? 'text-warning font-semibold'
                     : 'text-muted-foreground',
                 )}
               >

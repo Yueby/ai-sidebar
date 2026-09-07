@@ -17,7 +17,7 @@ interface ContextRingProps {
   showTooltip?: boolean;
 }
 
-/** 上下文占用环:size-5 SVG 进度环;<60% 中性 / 60-85% amber / ≥85% destructive;hover 时以官方 HoverCard 展示明细 */
+/** 上下文占用环:size-5 SVG 进度环;<60% 中性 / 60-85% warning / ≥85% destructive;hover 时以官方 HoverCard 展示明细 */
 export function ContextRing({ usage, isStreaming, modelName, showTooltip = true }: ContextRingProps) {
   const C = 2 * Math.PI * 7.5;
   const clampedPct = Math.max(0, Math.min(100, usage.pct));
@@ -27,7 +27,7 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
     usage.pct >= 85
       ? 'stroke-destructive'
       : usage.pct >= 60
-        ? 'stroke-amber-600 dark:stroke-amber-400'
+        ? 'stroke-warning'
         : 'stroke-foreground/75 dark:stroke-foreground/80';
 
   const ringNode = (

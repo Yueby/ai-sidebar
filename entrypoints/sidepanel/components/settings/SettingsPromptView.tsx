@@ -144,7 +144,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
             <span
               className={cn(
                 'font-mono select-none',
-                promptDraft.length >= MAX_SYSTEM_PROMPT_LENGTH ? 'text-amber-500 font-semibold' : '',
+                promptDraft.length >= MAX_SYSTEM_PROMPT_LENGTH ? 'text-warning font-semibold' : '',
               )}
             >
               {promptDraft.length}/{MAX_SYSTEM_PROMPT_LENGTH}

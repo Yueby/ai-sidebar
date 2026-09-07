@@ -386,8 +386,8 @@ export default function App() {
           {/* 模型切换溢出建议条:不静默自动压缩,一键交给用户;支持关闭 */}
           {overflowSuggest && (
             <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
-              <div className="flex items-center gap-2 rounded-md border border-amber-600/30 bg-amber-500/10 dark:border-amber-400/30 dark:bg-amber-400/10 px-2.5 py-1.5 text-[11px] text-foreground shadow-2xs">
-                <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-[11px] text-foreground shadow-2xs">
+                <AlertTriangle className="size-3.5 shrink-0 text-warning" />
                 <span className="min-w-0 flex-1 truncate">
                   {i18n.t('app.overflowSuggest')}
                 </span>
@@ -396,7 +396,7 @@ export default function App() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-6 px-2 text-[11px] border-amber-600/40 hover:bg-amber-500/20 text-foreground cursor-pointer"
+                    className="h-6 px-2 text-[11px] border-warning/40 hover:bg-warning/20 text-foreground cursor-pointer"
                     disabled={compact.isCompacting}
                     onClick={() => {
                       void compact.handleCompact();

@@ -273,8 +273,8 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
           </div>
 
           {/* 收敛为单行紧凑警示 */}
-          <div className="flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5">
-            <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="flex items-center gap-1.5 text-[10px] text-warning bg-warning/10 border border-warning/20 rounded-md px-2.5 py-1.5">
+            <TriangleAlert className="size-3.5 shrink-0 text-warning" />
             <span className="leading-snug">
               {i18n.t('backup.warning')}
             </span>
@@ -382,9 +382,9 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
             </div>
           )}
           {!dav.encrypt && (
-            <div className="p-2.5 bg-amber-500/5">
-              <div className="flex items-center gap-1.5 text-[10px] text-amber-700 dark:text-amber-300">
-                <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="p-2.5 bg-warning/5">
+              <div className="flex items-center gap-1.5 text-[10px] text-warning">
+                <TriangleAlert className="size-3.5 shrink-0 text-warning" />
                 <span className="leading-snug">{i18n.t('sync.encryptWarning')}</span>
               </div>
             </div>
