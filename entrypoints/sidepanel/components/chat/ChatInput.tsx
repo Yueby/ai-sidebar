@@ -391,9 +391,11 @@ export function ChatInput({
       <DropdownMenuSeparator />
 
       {/* 2. Open Tabs List */}
+      <DropdownMenuGroup>
       <DropdownMenuLabel className="text-[11px] text-muted-foreground font-normal">
         {i18n.t('composer.openTabs')}
       </DropdownMenuLabel>
+      </DropdownMenuGroup>
 
       {/* Current Active Tab */}
       {activeTabMeta && (
@@ -624,9 +626,11 @@ export function ChatInput({
                   <ChevronDown className="size-3 shrink-0 opacity-50" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-36">
+                  <DropdownMenuGroup>
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                    思考深度
+                    {i18n.t('composer.thinkingDepth')}
                   </DropdownMenuLabel>
+                  </DropdownMenuGroup>
 
                   {/* Off option */}
                   <DropdownMenuItem

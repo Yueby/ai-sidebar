@@ -19,6 +19,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -133,9 +134,11 @@ export function ChatHeader({
 
               <DropdownMenuSeparator />
 
+              <DropdownMenuGroup>
               <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
                 {i18n.t('header.historyCount', { count: sessions.length })}
               </DropdownMenuLabel>
+              </DropdownMenuGroup>
 
               {sortedSessions.length === 0 ? (
                 <div className="px-2 py-3 text-center text-xs text-muted-foreground italic">
