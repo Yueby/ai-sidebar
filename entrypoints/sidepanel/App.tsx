@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { i18n } from '#i18n';
-import { AlertTriangle, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import type {
   ProviderConfig,
   ReasoningLevel,
@@ -337,6 +337,34 @@ export default function App() {
     }
   }, [errorMessage, setErrorMessage]);
 
+  // 溢出建议收敛至 toast: 条件 false → true 跳变时触发一次常驻警告(带压缩动作与关闭忽略)
+  const prevOverflowSuggestRef = useRef(false);
+  const prevSessionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const sessionChanged = prevSessionIdRef.current !== currentSession?.id;
+    prevSessionIdRef.current = currentSession?.id ?? null;
+
+    if (overflowSuggest && (!prevOverflowSuggestRef.current || sessionChanged)) {
+      toast.warning(i18n.t('app.overflowSuggest'), {
+        id: 'overflow-suggest',
+        duration: Infinity,
+        closeButton: true,
+        action: {
+          label: i18n.t('app.compact'),
+          onClick: () => {
+            void compact.handleCompact();
+          },
+        },
+        onDismiss: () => {
+          setDismissedOverflowSessionId(currentSession?.id ?? 'temp');
+        },
+      });
+    } else if (!overflowSuggest && (prevOverflowSuggestRef.current || sessionChanged)) {
+      toast.dismiss('overflow-suggest');
+    }
+    prevOverflowSuggestRef.current = overflowSuggest;
+  }, [overflowSuggest, compact.handleCompact, currentSession?.id]);
+
   if (!loaded) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
@@ -392,52 +420,7 @@ export default function App() {
             quickPrompts={quickPrompts}
           />
 
-          {/* 槽位区:溢出建议 → 压缩状态条 → 审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}
-
-          {/* 模型切换溢出建议条:不静默自动压缩,一键交给用户;支持关闭 */}
-          {overflowSuggest && (
-            <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
-              <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-[11px] text-foreground shadow-2xs">
-                <AlertTriangle className="size-3.5 shrink-0 text-warning" />
-                <span className="min-w-0 flex-1 truncate">
-                  {i18n.t('app.overflowSuggest')}
-                </span>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-6 px-2 text-[11px] border-warning/40 hover:bg-warning/20 text-foreground"
-                    disabled={compact.isCompacting}
-                    onClick={() => {
-                      void compact.handleCompact();
-                    }}
-                  >
-                    {i18n.t('app.compact')}
-                  </Button>
-                  <TooltipProvider delay={200}>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            onClick={() => setDismissedOverflowSessionId(currentSession?.id ?? 'temp')}
-                            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
-                            aria-label={i18n.t('app.ignoreSuggest')}
-                          >
-                            <X className="size-3" />
-                          </button>
-                        }
-                      />
-                      <TooltipContent side="top">
-                        {i18n.t('app.ignoreSuggest')}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* 槽位区:压缩状态条 → 审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}
 
           {/* 压缩状态条(轻量) */}
           {compact.isCompacting && (
