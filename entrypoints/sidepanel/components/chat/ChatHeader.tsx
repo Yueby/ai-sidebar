@@ -177,22 +177,40 @@ export function ChatHeader({
                           className="flex-1 min-w-0 bg-background/90 px-1.5 py-0.5 rounded text-xs border border-border outline-none focus:border-ring text-foreground font-normal"
                           maxLength={40}
                         />
-                        <button
-                          type="button"
-                          onClick={() => handleSaveRename(s.id)}
-                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
-                          title={i18n.t('header.saveTitle')}
-                        >
-                          <Check className="size-3 text-foreground" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelRename}
-                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
-                          title={i18n.t('header.cancelEdit')}
-                        >
-                          <X className="size-3" />
-                        </button>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                onClick={() => handleSaveRename(s.id)}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
+                                aria-label={i18n.t('header.saveTitle')}
+                              >
+                                <Check className="size-3 text-foreground" />
+                              </button>
+                            }
+                          />
+                          <TooltipContent side="top">
+                            {i18n.t('header.saveTitle')}
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                onClick={handleCancelRename}
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
+                                aria-label={i18n.t('header.cancelEdit')}
+                              >
+                                <X className="size-3" />
+                              </button>
+                            }
+                          />
+                          <TooltipContent side="top">
+                            {i18n.t('header.cancelEdit')}
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     );
                   }
@@ -206,77 +224,130 @@ export function ChatHeader({
                       )}
                       onClick={() => onSelectSession(s.id)}
                     >
-                      <span className="truncate flex-1 pr-1.5" title={s.title || i18n.t('header.untitled')}>
-                        {s.title || i18n.t('header.untitled')}
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className="truncate flex-1 pr-1.5">
+                              {s.title || i18n.t('header.untitled')}
+                            </span>
+                          }
+                        />
+                        <TooltipContent side="top">
+                          {s.title || i18n.t('header.untitled')}
+                        </TooltipContent>
+                      </Tooltip>
 
                       <div className="flex items-center gap-0.5 shrink-0">
                         {isAiTitling ? (
-                          <span className="p-0.5 text-muted-foreground" title={i18n.t('header.aiTitling')}>
-                            <Spinner className="size-3" />
-                          </span>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <span className="p-0.5 text-muted-foreground" aria-label={i18n.t('header.aiTitling')}>
+                                  <Spinner className="size-3" />
+                                </span>
+                              }
+                            />
+                            <TooltipContent side="top">
+                              {i18n.t('header.aiTitling')}
+                            </TooltipContent>
+                          </Tooltip>
                         ) : (
                           <>
                             {/* AI 命名按钮 (仅当有消息时显示 hover 入口) */}
                             {s.messages.length > 0 && onAiTitleSession && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onAiTitleSession(s.id);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                                title={i18n.t('header.aiTitle')}
-                              >
-                                <Sparkles className="size-3" />
-                              </button>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAiTitleSession(s.id);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                      aria-label={i18n.t('header.aiTitle')}
+                                    >
+                                      <Sparkles className="size-3" />
+                                    </button>
+                                  }
+                                />
+                                <TooltipContent side="top">
+                                  {i18n.t('header.aiTitle')}
+                                </TooltipContent>
+                              </Tooltip>
                             )}
 
                             {/* 导出会话按钮(空会话不导出:没有内容可导) */}
                             {s.messages.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  downloadSessionMarkdown(s);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                                title={i18n.t('header.exportMd')}
-                                aria-label={i18n.t('header.exportMd')}
-                              >
-                                <Download className="size-3" />
-                              </button>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        downloadSessionMarkdown(s);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                      aria-label={i18n.t('header.exportMd')}
+                                    >
+                                      <Download className="size-3" />
+                                    </button>
+                                  }
+                                />
+                                <TooltipContent side="top">
+                                  {i18n.t('header.exportMd')}
+                                </TooltipContent>
+                              </Tooltip>
                             )}
 
                             {/* 手动重命名按钮 */}
                             {onRenameSession && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleStartRename(s);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                                title={i18n.t('header.rename')}
-                              >
-                                <Pencil className="size-3" />
-                              </button>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStartRename(s);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                      aria-label={i18n.t('header.rename')}
+                                    >
+                                      <Pencil className="size-3" />
+                                    </button>
+                                  }
+                                />
+                                <TooltipContent side="top">
+                                  {i18n.t('header.rename')}
+                                </TooltipContent>
+                              </Tooltip>
                             )}
                           </>
                         )}
 
                         {/* 删除会话按钮 */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(s);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
-                          title={i18n.t('header.delete')}
-                        >
-                          <Trash2 className="size-3" />
-                        </button>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget(s);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                aria-label={i18n.t('header.delete')}
+                              >
+                                <Trash2 className="size-3" />
+                              </button>
+                            }
+                          />
+                          <TooltipContent side="top">
+                            {i18n.t('header.delete')}
+                          </TooltipContent>
+                        </Tooltip>
 
                         {/* 活跃指示勾标 */}
                         {isActive && <Check className="size-3 text-muted-foreground ml-0.5" />}
