@@ -17,6 +17,7 @@ import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import type { QuickPromptsState } from '@/entrypoints/sidepanel/hooks/useQuickPrompts';
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -135,18 +136,26 @@ export function MessageList({
 
       {/* Error Alert Banner (z-20) */}
       {errorMessage && (
-        <div className="sticky top-0 z-20 m-2 flex shrink-0 items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-xs text-destructive overflow-hidden animate-in fade-in-0 slide-in-from-top-2 duration-150 motion-reduce:animate-none">
-          <AlertCircle className="size-4 shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0 font-medium leading-relaxed break-all whitespace-pre-wrap">{errorMessage}</div>
-          {onDismissError && (
-            <button
-              type="button"
-              onClick={onDismissError}
-              className="text-destructive/70 hover:text-destructive p-0.5 rounded transition-colors shrink-0 cursor-pointer"
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
+        <div className="sticky top-0 z-20 m-2">
+          <Alert
+            variant="destructive"
+            className="animate-in fade-in-0 slide-in-from-top-2 duration-150 motion-reduce:animate-none pr-8 relative text-xs"
+          >
+            <AlertCircle className="size-4" />
+            <AlertDescription className="font-medium text-xs leading-relaxed break-all whitespace-pre-wrap text-destructive">
+              {errorMessage}
+            </AlertDescription>
+            {onDismissError && (
+              <button
+                type="button"
+                onClick={onDismissError}
+                className="absolute right-2 top-2.5 text-destructive/70 hover:text-destructive p-0.5 rounded transition-colors shrink-0 cursor-pointer"
+              >
+                <X className="size-3.5" />
+                <span className="sr-only">Close</span>
+              </button>
+            )}
+          </Alert>
         </div>
       )}
 
