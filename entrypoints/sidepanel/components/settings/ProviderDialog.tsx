@@ -342,7 +342,7 @@ export function ProviderDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[calc(100vw-24px)] max-w-[380px] max-h-[88vh] flex flex-col">
+        <DialogContent className="max-h-[88vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
               {isNew ? i18n.t('providerDialog.addTitle') : i18n.t('providerDialog.editTitle')}
