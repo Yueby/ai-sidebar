@@ -76,7 +76,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]" onKeyDown={handleKeyDown}>
+      <DialogContent onKeyDown={handleKeyDown}>
         <DialogHeader className="flex flex-row items-center justify-between space-y-0 pr-6">
           <DialogTitle>
             {rule ? i18n.t('settings.rules.edit') : i18n.t('settings.rules.addRule')}
