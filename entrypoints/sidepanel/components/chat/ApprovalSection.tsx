@@ -23,9 +23,6 @@ import {
   QuestionnaireTitle,
   QuestionnaireChoices,
   QuestionnaireChoice,
-  QuestionnaireChoiceInput,
-  QuestionnaireChoiceLabel,
-  QuestionnaireChoiceShortcut,
   QuestionnaireInput,
   QuestionnaireActions,
   QuestionnaireSkip,
@@ -264,11 +261,7 @@ export function ApprovalSection({
                       }}
                       className="px-2.5 py-1.5 text-xs transition-colors"
                     >
-                      <QuestionnaireChoiceInput />
-                      <QuestionnaireChoiceLabel className="text-xs">
-                        {opt}
-                      </QuestionnaireChoiceLabel>
-                      <QuestionnaireChoiceShortcut />
+                      <span className="text-xs">{opt}</span>
                     </QuestionnaireChoice>
                   );
                 })}
