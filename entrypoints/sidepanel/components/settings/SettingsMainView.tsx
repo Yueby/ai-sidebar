@@ -298,7 +298,7 @@ export function SettingsMainView({
         >
           <TabsList
             aria-label={i18n.t('settings.navAria')}
-            className="w-full group-data-[orientation=horizontal]/tabs:h-8 h-8 p-0.5"
+            className="w-full group-data-horizontal/tabs:h-8 h-8 p-0.5"
           >
             {[
               { id: 'providers', label: i18n.t('settings.tabs.providers') },
