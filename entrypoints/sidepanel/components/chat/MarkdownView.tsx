@@ -30,7 +30,7 @@ export const MarkdownView = memo(function MarkdownView({
             </a>
           ),
           pre: ({ children, ...props }) => (
-            <pre className="not-typeset relative my-2 rounded-lg bg-zinc-950 text-zinc-100 overflow-x-auto text-xs p-3" {...props}>
+            <pre className="not-typeset relative my-2 rounded-lg bg-code-background text-code-foreground overflow-x-auto text-xs p-3" {...props}>
               {children}
             </pre>
           ),
