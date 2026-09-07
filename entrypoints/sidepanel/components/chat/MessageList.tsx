@@ -67,6 +67,10 @@ interface MessageListProps {
   activeModelName?: string;
   onOpenSettings: () => void;
   quickPrompts: QuickPromptsState;
+  /** 编辑并重发用户消息 */
+  onEditResend?: (messageTimestamp: number, newText: string) => void;
+  /** 是否允许编辑(非流式、非门控、非压缩) */
+  canEditMessage?: boolean;
 }
 
 const PROMPT_ICONS = [FileText, Lightbulb, HelpCircle, CheckSquare];
@@ -101,6 +105,8 @@ export function MessageList({
   activeModelName,
   onOpenSettings,
   quickPrompts,
+  onEditResend,
+  canEditMessage,
 }: MessageListProps) {
   const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
   // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(随消息身份重估)
@@ -301,6 +307,8 @@ export function MessageList({
                           ? { tokensBefore: compaction.tokensBefore }
                           : null
                       }
+                      onEditResend={onEditResend}
+                      canEdit={canEditMessage}
                     />
                   </MessageScrollerItem>
                 ))}

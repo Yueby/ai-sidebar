@@ -105,6 +105,9 @@ messages:
   waitingResultMore: 等待结果...
   copied: 已复制
   copy: 复制
+  editResend: 编辑并重发
+  confirmResend: 重发
+  cancelResend: 取消
   stopped: (已停止生成)
   emptyReply: 无回复内容
 

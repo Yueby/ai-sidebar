@@ -316,6 +316,8 @@ export default function App() {
     inFlight && inFlight.sessionId === currentSession?.id
       ? inFlight.messages.filter((m) => m.role !== 'toolResult').length
       : 0;
+  // 编辑重发使能:非流式、非门控、非压缩时允许用户编辑已发送消息
+  const canEditMessage = !isStreaming && !gate.activeGate && !compact.isCompacting;
 
   // 新会话快捷指令:空会话展示时异步生成(模型失败静默回退静态四条)
   const quickPrompts = useQuickPrompts(
@@ -442,6 +444,8 @@ export default function App() {
             }
             onOpenSettings={handleOpenSettings}
             quickPrompts={quickPrompts}
+            onEditResend={chat.handleEditResend}
+            canEditMessage={canEditMessage}
           />
 
           {/* 槽位区:审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}

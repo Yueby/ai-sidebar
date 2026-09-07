@@ -3,6 +3,7 @@ import { i18n } from '#i18n';
 import {
   Copy,
   Check,
+  Pencil,
   Bot,
   Brain,
   ChevronDown,
@@ -23,6 +24,7 @@ import { renderMarkersInText } from './elementMarkerText';
 import { MarkdownView } from './MarkdownView';
 import { CompactionRow } from './CompactionRow';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Message, MessageAvatar, MessageContent, MessageFooter } from '@/components/ui/message';
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
@@ -56,6 +58,10 @@ interface MessageItemProps {
       会话为界的实例内冻结——同会话内 live→物化→finalize 的对象替换不重估,抑制态保持;
       跨会话实例复用时按新会话重估,入场动画正常播放 */
   suppressEntryAnimation?: boolean;
+  /** 编辑并重发用户消息回调(以原消息 timestamp 为定位键, 传入新编辑文本) */
+  onEditResend?: (messageTimestamp: number, newText: string) => void;
+  /** 外部编辑使能状态(非流式、非门控、非压缩时允许编辑) */
+  canEdit?: boolean;
 }
 
 function formatTokens(count: number): string {
@@ -565,8 +571,14 @@ export function MessageItem({
   compactionInfo,
   sessionKey,
   suppressEntryAnimation,
+  onEditResend,
+  canEdit: canEditProp,
 }: MessageItemProps) {
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const rawText = messageText(message);
+  const [editText, setEditText] = useState(rawText);
+
   // 入场动画抑制:重估以会话为界——同会话内 live→物化→finalize 的对象替换不重估
   // (抑制态冻结,避免 finalize 时抑制解除导致动画重播闪烁);跨会话实例复用
   // (位置键跨会话命中)时按新会话重估,入场动画正常播放
@@ -575,7 +587,46 @@ export function MessageItem({
   if (lastSessionKeyRef.current !== sessionKey) {
     lastSessionKeyRef.current = sessionKey;
     suppressAnimRef.current = Boolean(suppressEntryAnimation);
+    if (isEditing) setIsEditing(false);
   }
+
+  // 外部传入优先, 否则从流式和待处理门控状态推导
+  const canEdit = canEditProp ?? (!isStreaming && !activeGateRequest);
+
+  // 当外部进入不可编辑态(流式启动或弹出门控)且正在编辑时, 自动平稳收起
+  useEffect(() => {
+    if (!canEdit && isEditing) {
+      setIsEditing(false);
+    }
+  }, [canEdit, isEditing]);
+
+  const handleStartEdit = () => {
+    if (!canEdit) return;
+    setEditText(rawText);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditText(rawText);
+  };
+
+  const handleConfirmResend = () => {
+    const trimmed = editText.trim();
+    if (!trimmed || !canEdit || !onEditResend) return;
+    setIsEditing(false);
+    onEditResend(message.timestamp, trimmed);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEdit();
+    } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleConfirmResend();
+    }
+  };
 
   // 引用 chips:从本条消息 content 的 <page-refs> 块解析(与 LLM 消费同一份字符串,零中间状态)
   const pageRefs = useMemo(
@@ -642,8 +693,6 @@ export function MessageItem({
   // 工具结果消息不直接作为独立气泡渲染(已在对应 toolCall 卡片内展示)
   if (message.role === 'toolResult') return null;
 
-  const rawText = messageText(message);
-
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(rawText);
@@ -663,6 +712,57 @@ export function MessageItem({
         <CompactionRow tokensBefore={compactionInfo.tokensBefore} summary={rawText} />
       );
     }
+
+    if (isEditing) {
+      return (
+        <Message
+          align="end"
+          className="group px-3 py-1 animate-in fade-in-0 duration-150 motion-reduce:animate-none"
+        >
+          <MessageContent className="w-full max-w-[85%] items-end gap-1.5">
+            <div className="w-full rounded-xl border border-border/80 bg-card p-2.5 shadow-xs flex flex-col gap-2">
+              <Textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={handleEditKeyDown}
+                className="w-full text-xs leading-relaxed min-h-[72px] resize-y bg-background"
+                placeholder={i18n.t('composer.placeholder')}
+                autoFocus
+              />
+              {pageRefs && (pageRefs.tabs.length > 0 || pageRefs.elements.length > 0) && (
+                <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 px-0.5 select-none">
+                  <Globe className="size-3 shrink-0" />
+                  <span className="truncate">
+                    {i18n.t('messages.refCount', { total: pageRefs.tabs.length + pageRefs.elements.length })}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={handleCancelEdit}
+                  className="h-6 px-2 text-xs"
+                >
+                  {i18n.t('messages.cancelResend')}
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  disabled={!canEdit || !editText.trim()}
+                  onClick={handleConfirmResend}
+                  className="h-6 px-2.5 text-xs gap-1"
+                >
+                  {i18n.t('messages.confirmResend')}
+                </Button>
+              </div>
+            </div>
+          </MessageContent>
+        </Message>
+      );
+    }
+
     return (
       <Message
         align="end"
@@ -678,13 +778,28 @@ export function MessageItem({
               {pageRefs && <UserRefSnapshot refs={pageRefs} />}
             </BubbleContent>
           </Bubble>
-          <MessageFooter className="px-1 py-0 justify-end">
+          <MessageFooter className="px-1 py-0 justify-end gap-1">
+            {onEditResend && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={!canEdit}
+                onClick={handleStartEdit}
+                className="h-5 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 font-normal disabled:opacity-40 disabled:pointer-events-none"
+                aria-label={i18n.t('messages.editResend')}
+              >
+                <Pencil className="size-3" />
+                <span>{i18n.t('messages.editResend')}</span>
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
               size="xs"
               onClick={handleCopy}
               className="h-5 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 font-normal"
+              aria-label={i18n.t('messages.copy')}
             >
               {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
               <span>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</span>

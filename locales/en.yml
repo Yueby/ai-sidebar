@@ -105,6 +105,9 @@ messages:
   waitingResultMore: Waiting for result...
   copied: Copied
   copy: Copy
+  editResend: Edit & resend
+  confirmResend: Resend
+  cancelResend: Cancel
   stopped: (Generation stopped)
   emptyReply: No response content
 
