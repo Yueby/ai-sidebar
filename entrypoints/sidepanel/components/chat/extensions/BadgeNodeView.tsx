@@ -45,6 +45,7 @@ export function BadgeNodeView({ node, editor, getPos, deleteNode }: NodeViewProp
         onMouseDown={(e) => e.preventDefault()}
         onClick={deleteBadgeWithSpace}
         title={i18n.t('refBar.removeElementRefTitle')}
+        aria-label={i18n.t('refBar.removeElementRefTitle')}
       >
         <X className="size-2.5" />
       </button>

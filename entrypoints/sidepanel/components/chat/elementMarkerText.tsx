@@ -2,6 +2,12 @@ import type { ReactNode } from 'react';
 import type { RefElementMeta } from '@/lib/types';
 import { elementChipLabel } from '@/lib/elementLabel';
 import { SquareMousePointer } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 /**
  * 用户消息内元素引用的 chip 渲染:
@@ -33,18 +39,42 @@ function renderChip(
   fallbackId: number,
 ): ReactNode {
   if (el) {
+    const tooltipText = `#${el.id} · ${el.selector}`;
     return (
-      <span key={key} className="element-chip select-all" title={`#${el.id} · ${el.selector}`}>
-        <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
-        <span className="element-chip-label">{elementChipLabel(el)}</span>
-      </span>
+      <TooltipProvider key={key} delay={200}>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="element-chip select-all cursor-default" />
+            }
+          >
+            <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
+            <span className="element-chip-label">{elementChipLabel(el)}</span>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {tooltipText}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
+  const fallbackText = `#${fallbackId}`;
   return (
-    <span key={key} className="element-chip element-chip-unknown" title={`#${fallbackId}`}>
-      <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
-      <span className="element-chip-label">{label}</span>
-    </span>
+    <TooltipProvider key={key} delay={200}>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span className="element-chip element-chip-unknown cursor-default" />
+          }
+        >
+          <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
+          <span className="element-chip-label">{label}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          {fallbackText}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
