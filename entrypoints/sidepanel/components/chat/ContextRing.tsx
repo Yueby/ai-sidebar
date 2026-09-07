@@ -1,4 +1,4 @@
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { i18n } from '#i18n';
 import type { ContextUsage } from '@/lib/contextTokens';
 
@@ -17,7 +17,7 @@ interface ContextRingProps {
   showTooltip?: boolean;
 }
 
-/** 上下文占用环:size-5 SVG 进度环;<60% 中性 / 60-85% amber / ≥85% destructive;hover tooltip */
+/** 上下文占用环:size-5 SVG 进度环;<60% 中性 / 60-85% amber / ≥85% destructive;hover 时以官方 HoverCard 展示明细 */
 export function ContextRing({ usage, isStreaming, modelName, showTooltip = true }: ContextRingProps) {
   const C = 2 * Math.PI * 7.5;
   const clampedPct = Math.max(0, Math.min(100, usage.pct));
@@ -66,46 +66,44 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
   }
 
   return (
-    <TooltipProvider delay={200}>
-      <Tooltip>
-        <TooltipTrigger render={ringNode} />
-        <TooltipContent
-          side="top"
-          align="center"
-          className="tooltip-popover max-w-56 space-y-1.5 rounded-md border border-border bg-popover p-2 text-xs text-popover-foreground shadow-md"
-        >
-          <div className="flex items-baseline justify-between gap-2 border-b border-border/50 pb-1">
-            <span className="font-semibold text-foreground text-xs font-mono">
-              {formatTokensShort(usage.tokens ?? 0)}{' '}
-              <span className="text-[10px] font-normal text-muted-foreground font-sans">
-                / {formatTokensShort(usage.window ?? 0)}
-              </span>
+    <HoverCard>
+      <HoverCardTrigger delay={200} closeDelay={150} render={ringNode} />
+      <HoverCardContent
+        side="top"
+        align="center"
+        className="w-56 space-y-1.5 p-2.5 text-xs"
+      >
+        <div className="flex items-baseline justify-between gap-2 border-b border-border/50 pb-1">
+          <span className="font-semibold text-foreground text-xs font-mono">
+            {formatTokensShort(usage.tokens ?? 0)}{' '}
+            <span className="text-[10px] font-normal text-muted-foreground font-sans">
+              / {formatTokensShort(usage.window ?? 0)}
             </span>
-            <span className="font-mono text-[10px] font-semibold text-foreground">
-              {(usage.pct ?? 0).toFixed(2)}%
-            </span>
-          </div>
-          {usage.hasUsageAnchor ? (
-            <div className="space-y-0.5 text-[10px] text-muted-foreground">
-              <div className="flex justify-between items-center">
-                <span>{i18n.t('context.anchor')}</span>
-                <span className="font-mono text-foreground/80">{formatTokensShort(usage.usageTokens ?? 0)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>{i18n.t('context.tail')}</span>
-                <span className="font-mono text-foreground/80">{formatTokensShort(usage.trailingTokens ?? 0)}</span>
-              </div>
+          </span>
+          <span className="font-mono text-[10px] font-semibold text-foreground">
+            {(usage.pct ?? 0).toFixed(2)}%
+          </span>
+        </div>
+        {usage.hasUsageAnchor ? (
+          <div className="space-y-0.5 text-[10px] text-muted-foreground">
+            <div className="flex justify-between items-center">
+              <span>{i18n.t('context.anchor')}</span>
+              <span className="font-mono text-foreground/80">{formatTokensShort(usage.usageTokens ?? 0)}</span>
             </div>
-          ) : (
-            <p className="text-[10px] text-muted-foreground italic">{i18n.t('context.estimateOnlyRing')}</p>
-          )}
-          {modelName && (
-            <p className="truncate text-[9px] text-muted-foreground/80 pt-1 border-t border-border/40 font-mono" title={modelName}>
-              {modelName}
-            </p>
-          )}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+            <div className="flex justify-between items-center">
+              <span>{i18n.t('context.tail')}</span>
+              <span className="font-mono text-foreground/80">{formatTokensShort(usage.trailingTokens ?? 0)}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[10px] text-muted-foreground italic">{i18n.t('context.estimateOnlyRing')}</p>
+        )}
+        {modelName && (
+          <p className="truncate text-[9px] text-muted-foreground/80 pt-1 border-t border-border/40 font-mono" title={modelName}>
+            {modelName}
+          </p>
+        )}
+      </HoverCardContent>
+    </HoverCard>
   );
 }

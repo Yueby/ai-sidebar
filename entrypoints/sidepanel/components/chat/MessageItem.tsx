@@ -849,7 +849,7 @@ export function MessageItem({
                       <span className="sr-only">{i18n.t('messages.copy')}</span>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      <p>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</p>
+                      {copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

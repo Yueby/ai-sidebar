@@ -47,7 +47,7 @@ export function InfoTip({
         </TooltipTrigger>
         <TooltipContent
           side={side}
-          className="max-w-[260px] text-xs leading-relaxed text-foreground bg-popover border border-border shadow-md"
+          className="max-w-[260px] leading-normal"
         >
           {content}
         </TooltipContent>

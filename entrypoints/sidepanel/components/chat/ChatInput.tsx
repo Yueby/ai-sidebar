@@ -693,7 +693,7 @@ export function ChatInput({
                     }
                   />
                   <TooltipContent side="top">
-                    <p>{i18n.t('composer.stopHint')}</p>
+                    {i18n.t('composer.stopHint')}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -715,7 +715,7 @@ export function ChatInput({
                     }
                   />
                   <TooltipContent side="top">
-                    <p>{i18n.t('composer.sendHint')}</p>
+                    {i18n.t('composer.sendHint')}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

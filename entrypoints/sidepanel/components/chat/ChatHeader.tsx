@@ -118,8 +118,8 @@ export function ChatHeader({
                   />
                 }
               />
-              <TooltipContent side="bottom" className="text-xs">
-                <p>{i18n.t('header.history')}</p>
+              <TooltipContent side="bottom">
+                {i18n.t('header.history')}
               </TooltipContent>
             </Tooltip>
 
@@ -304,8 +304,8 @@ export function ChatHeader({
                 </Button>
               }
             />
-            <TooltipContent side="bottom" className="text-xs">
-              <p>{i18n.t('header.settings')}</p>
+            <TooltipContent side="bottom">
+              {i18n.t('header.settings')}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

@@ -42,6 +42,7 @@ export function ContextPanel({
   onCompact,
 }: ContextPanelProps) {
   const [instructions, setInstructions] = useState('');
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const shares = roleShares ?? { user: 0, assistant: 0, toolResult: 0 };
   const total = shares.user + shares.assistant + shares.toolResult;
   const pctOf = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
@@ -53,21 +54,22 @@ export function ContextPanel({
   };
 
   return (
-    <Popover>
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
       <PopoverTrigger
         render={
           <button
             type="button"
             className="flex items-center justify-center size-7 rounded-md outline-none transition-colors hover:bg-muted/70 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
-            title={i18n.t('context.detailsTitle')}
+            aria-label={i18n.t('context.detailsTitle')}
           />
         }
       >
-        {/* hover 简要 tooltip 与点击面板并存(Radix tooltip 在 pointerdown 时自动收起,不冲突) */}
+        {/* hover 简要 HoverCard 与点击面板并存:面板展开时收起 hover 卡避免重叠 */}
         <ContextRing
           usage={usage}
           isStreaming={isStreaming}
           modelName={modelName}
+          showTooltip={!popoverOpen}
         />
       </PopoverTrigger>
       <PopoverContent side="top" align="end" sideOffset={8} className="w-64 space-y-2.5 p-3 shadow-lg border-border">
