@@ -3,9 +3,9 @@ import { i18n } from '#i18n';
 import type { UserRule } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Field, FieldGroup, FieldLabel, FieldError } from '@/components/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -92,66 +92,70 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-3 pt-1">
-          {/* Rule Name */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <Label className="font-medium text-foreground text-[10px]">{i18n.t('settings.rules.nameLabel')}</Label>
-              <span
-                className={cn(
-                  'font-mono text-[10px]',
-                  name.length >= MAX_RULE_NAME_LENGTH
-                    ? 'text-warning font-semibold'
-                    : 'text-muted-foreground',
-                )}
-              >
-                {name.length}/{MAX_RULE_NAME_LENGTH}
-              </span>
-            </div>
-            <Input
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (validationError) setValidationError(null);
-              }}
-              maxLength={MAX_RULE_NAME_LENGTH}
-              placeholder={i18n.t('settings.rules.namePlaceholder')}
-              className="h-7 text-xs"
-              autoFocus
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="pt-1">
+          <FieldGroup className="gap-3">
+            {/* Rule Name */}
+            <Field data-invalid={!!(validationError && !name.trim())}>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <FieldLabel className="text-[10px]">{i18n.t('settings.rules.nameLabel')}</FieldLabel>
+                <span
+                  className={cn(
+                    'font-mono text-[10px]',
+                    name.length >= MAX_RULE_NAME_LENGTH
+                      ? 'text-warning font-semibold'
+                      : 'text-muted-foreground',
+                  )}
+                >
+                  {name.length}/{MAX_RULE_NAME_LENGTH}
+                </span>
+              </div>
+              <Input
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (validationError) setValidationError(null);
+                }}
+                maxLength={MAX_RULE_NAME_LENGTH}
+                placeholder={i18n.t('settings.rules.namePlaceholder')}
+                className="h-7 text-xs"
+                autoFocus
+                aria-invalid={!!(validationError && !name.trim())}
+              />
+            </Field>
 
-          {/* Rule Content */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <Label className="font-medium text-foreground text-[10px]">{i18n.t('settings.rules.contentLabel')}</Label>
-              <span
-                className={cn(
-                  'font-mono text-[10px]',
-                  content.length >= MAX_RULE_CONTENT_LENGTH
-                    ? 'text-warning font-semibold'
-                    : 'text-muted-foreground',
-                )}
-              >
-                {content.length}/{MAX_RULE_CONTENT_LENGTH}
-              </span>
-            </div>
-            <Textarea
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
-                if (validationError) setValidationError(null);
-              }}
-              maxLength={MAX_RULE_CONTENT_LENGTH}
-              placeholder={i18n.t('settings.rules.contentPlaceholder')}
-              className="text-xs min-h-[110px] leading-relaxed resize-y"
-              rows={4}
-            />
-          </div>
+            {/* Rule Content */}
+            <Field data-invalid={!!(validationError && !content.trim())}>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <FieldLabel className="text-[10px]">{i18n.t('settings.rules.contentLabel')}</FieldLabel>
+                <span
+                  className={cn(
+                    'font-mono text-[10px]',
+                    content.length >= MAX_RULE_CONTENT_LENGTH
+                      ? 'text-warning font-semibold'
+                      : 'text-muted-foreground',
+                  )}
+                >
+                  {content.length}/{MAX_RULE_CONTENT_LENGTH}
+                </span>
+              </div>
+              <Textarea
+                value={content}
+                onChange={(e) => {
+                  setContent(e.target.value);
+                  if (validationError) setValidationError(null);
+                }}
+                maxLength={MAX_RULE_CONTENT_LENGTH}
+                placeholder={i18n.t('settings.rules.contentPlaceholder')}
+                className="text-xs min-h-[110px] leading-relaxed resize-y"
+                rows={4}
+                aria-invalid={!!(validationError && !content.trim())}
+              />
+            </Field>
 
-          {validationError && (
-            <p className="text-[11px] text-destructive leading-tight">{validationError}</p>
-          )}
+            {validationError && (
+              <FieldError className="text-[11px] leading-tight">{validationError}</FieldError>
+            )}
+          </FieldGroup>
 
           <DialogFooter className="flex-row items-center justify-end gap-2">
             <Button
