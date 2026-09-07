@@ -48,7 +48,7 @@ export function SettingsPermissionsView() {
           {/* 网页访问 (host <all_urls>) */}
           <div className="flex items-center justify-between gap-2.5 p-2.5">
             <div className="w-6 flex items-center justify-center shrink-0">
-              <span className="size-2 rounded-full bg-emerald-500" />
+              <span className="size-2 rounded-full bg-success" />
             </div>
             <div className="flex-1 min-w-0 space-y-0.5">
               <div className="flex items-center gap-1.5">
@@ -73,8 +73,8 @@ export function SettingsPermissionsView() {
                     className={cn(
                       'size-2 rounded-full',
                       isUserScripts
-                        ? (userScriptsReady ? 'bg-emerald-500' : 'bg-amber-500')
-                        : 'bg-emerald-500',
+                        ? (userScriptsReady ? 'bg-success' : 'bg-warning')
+                        : 'bg-success',
                     )}
                   />
                 </div>
@@ -89,8 +89,8 @@ export function SettingsPermissionsView() {
                         className={cn(
                           'text-[9px] px-1 py-0.2 rounded font-normal leading-none',
                           userScriptsReady
-                            ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/15'
-                            : 'text-amber-700 dark:text-amber-300 bg-amber-500/15',
+                            ? 'text-success bg-success/15'
+                            : 'text-warning bg-warning/15',
                         )}
                       >
                         {userScriptsReady ? i18n.t('permissions.enabled') : i18n.t('permissions.disabled')}
@@ -117,7 +117,7 @@ export function SettingsPermissionsView() {
           <span
             className={cn(
               'text-[10px] font-mono',
-              userScriptsReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+              userScriptsReady ? 'text-success' : 'text-warning',
             )}
           >
             {userScriptsReady ? i18n.t('permissions.enabled') : i18n.t('permissions.disabled')}
