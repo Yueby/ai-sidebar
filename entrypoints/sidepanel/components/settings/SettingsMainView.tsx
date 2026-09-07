@@ -7,7 +7,6 @@ import {
   Zap,
   Pencil,
   Trash2,
-  Loader2,
   ShieldCheck,
   Languages,
   Sparkles,
@@ -33,6 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Card } from '@/components/ui/card';
 import {
   Empty,
@@ -453,7 +453,7 @@ export function SettingsMainView({
                           className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
                           title={i18n.t('settings.providers.test')}
                         >
-                          {isTesting ? <Loader2 className="size-3 animate-spin" /> : <Zap className="size-3" />}
+                          {isTesting ? <Spinner className="size-3" /> : <Zap className="size-3" />}
                           <span className="sr-only">{i18n.t('settings.providers.test')}</span>
                         </Button>
 

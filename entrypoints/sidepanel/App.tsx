@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { i18n } from '#i18n';
-import { AlertTriangle, Loader2, X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import type {
   ProviderConfig,
   ReasoningLevel,
@@ -32,6 +32,7 @@ import { SettingsMainView } from './components/settings/SettingsMainView';
 import { ProviderDialog } from './components/settings/ProviderDialog';
 import { UserScriptsGateDialog } from './components/UserScriptsGateDialog';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 import { toast } from 'sonner';
 
@@ -419,7 +420,7 @@ export default function App() {
           {compact.isCompacting && (
             <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/70 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-2xs">
-                <Loader2 className="size-3.5 animate-spin shrink-0 text-foreground" />
+                <Spinner className="size-3.5 shrink-0 text-foreground" />
                 <span className="font-medium text-foreground">{i18n.t('app.compacting')}</span>
               </div>
             </div>

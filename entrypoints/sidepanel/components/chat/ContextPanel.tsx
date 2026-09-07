@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { i18n } from '#i18n';
-import { FoldVertical, Loader2 } from 'lucide-react';
+import { FoldVertical } from 'lucide-react';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { ContextRing, formatTokensShort } from './ContextRing';
 
 /** 三角色 token 占比(本地估算,组合层传入) */
@@ -156,7 +157,7 @@ export function ContextPanel({
           >
             {isCompacting ? (
               <>
-                <Loader2 className="size-3 animate-spin shrink-0" />
+                <Spinner className="size-3 shrink-0" />
                 <span>{i18n.t('context.compacting')}</span>
               </>
             ) : (

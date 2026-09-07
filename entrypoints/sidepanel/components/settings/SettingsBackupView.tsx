@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Download, Upload, TriangleAlert, CloudUpload, CloudDownload, Loader2, Eye, EyeOff, FileJson, CloudCog } from 'lucide-react';
+import { Download, Upload, TriangleAlert, CloudUpload, CloudDownload, Eye, EyeOff, FileJson, CloudCog } from 'lucide-react';
 import type { Settings, Session } from '@/lib/types';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Card } from '@/components/ui/card';
 import { sanitizeSettings } from '@/lib/storage';
 import { i18n } from '#i18n';
@@ -281,7 +282,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               onClick={handleUpload}
               className="gap-1 h-7 text-xs px-2 cursor-pointer"
             >
-              {davBusy === 'upload' ? <Loader2 className="size-3 animate-spin" /> : <CloudUpload className="size-3" />}
+              {davBusy === 'upload' ? <Spinner className="size-3" /> : <CloudUpload className="size-3" />}
               <span>{i18n.t('sync.upload')}</span>
             </Button>
             <Button
@@ -292,7 +293,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               onClick={handleRestoreClick}
               className="gap-1 h-7 text-xs px-2 cursor-pointer"
             >
-              {davBusy === 'restore' ? <Loader2 className="size-3 animate-spin" /> : <CloudDownload className="size-3" />}
+              {davBusy === 'restore' ? <Spinner className="size-3" /> : <CloudDownload className="size-3" />}
               <span>{i18n.t('sync.restore')}</span>
             </Button>
           </div>
@@ -338,7 +339,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
                 onClick={handleTest}
                 className="h-7 text-xs px-2 shrink-0 cursor-pointer"
               >
-                {davBusy === 'test' && <Loader2 className="size-3 animate-spin" />}
+                {davBusy === 'test' && <Spinner className="size-3" />}
                 <span>{i18n.t('sync.testButton')}</span>
               </Button>
             </div>

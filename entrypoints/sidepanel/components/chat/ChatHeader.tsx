@@ -8,13 +8,13 @@ import {
   X,
   Pencil,
   Sparkles,
-  Loader2,
   Download,
 } from 'lucide-react';
 import type { Session } from '@/lib/types';
 import { i18n } from '#i18n';
 import { downloadSessionMarkdown } from '@/lib/sessionExport';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -210,7 +210,7 @@ export function ChatHeader({
                       <div className="flex items-center gap-0.5 shrink-0">
                         {isAiTitling ? (
                           <span className="p-0.5 text-muted-foreground" title={i18n.t('header.aiTitling')}>
-                            <Loader2 className="size-3 animate-spin" />
+                            <Spinner className="size-3" />
                           </span>
                         ) : (
                           <>

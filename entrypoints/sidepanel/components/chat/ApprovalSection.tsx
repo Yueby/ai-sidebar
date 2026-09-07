@@ -5,11 +5,11 @@ import {
   HelpCircle,
   ChevronDown,
   ChevronRight,
-  Loader2,
   PenLine,
 } from 'lucide-react';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -182,7 +182,7 @@ export function ApprovalSection({
               onClick={handleDenyClick}
               className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
             >
-              {pendingAction === 'deny' && <Loader2 className="size-3 animate-spin shrink-0" />}
+              {pendingAction === 'deny' && <Spinner className="size-3 shrink-0" />}
               <span>{pendingAction === 'deny' ? i18n.t('approval.denying') : i18n.t('approval.deny')}</span>
             </Button>
             <Button
@@ -193,7 +193,7 @@ export function ApprovalSection({
               onClick={handleApproveClick}
               className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
             >
-              {pendingAction === 'approve' && <Loader2 className="size-3 animate-spin shrink-0" />}
+              {pendingAction === 'approve' && <Spinner className="size-3 shrink-0" />}
               <span>
                 {pendingAction === 'approve'
                   ? i18n.t('approval.allowing')
@@ -333,7 +333,7 @@ export function ApprovalSection({
               onClick={handleCancelClick}
               className="h-6.5 text-[11px] px-2 text-muted-foreground hover:text-foreground cursor-pointer gap-1"
             >
-              {pendingAction === 'cancel' && <Loader2 className="size-3 animate-spin shrink-0" />}
+              {pendingAction === 'cancel' && <Spinner className="size-3 shrink-0" />}
               <span>{pendingAction === 'cancel' ? i18n.t('approval.skipping') : i18n.t('approval.skip')}</span>
             </QuestionnaireSkip>
 
@@ -346,7 +346,7 @@ export function ApprovalSection({
               }
               className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
             >
-              {pendingAction === 'answer' && <Loader2 className="size-3 animate-spin shrink-0" />}
+              {pendingAction === 'answer' && <Spinner className="size-3 shrink-0" />}
               <span>{i18n.t('approval.submit')}</span>
             </QuestionnaireSubmit>
           </QuestionnaireActions>

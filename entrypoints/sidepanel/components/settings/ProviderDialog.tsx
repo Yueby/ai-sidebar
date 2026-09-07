@@ -4,7 +4,6 @@ import {
   Eye,
   EyeOff,
   Zap,
-  Loader2,
   CheckCircle2,
   XCircle,
   Plus,
@@ -35,6 +34,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -426,7 +426,7 @@ export function ProviderDialog({
                 className="h-7 text-xs gap-1.5"
               >
                 {testing ? (
-                  <Loader2 className="size-3 animate-spin" />
+                  <Spinner className="size-3" />
                 ) : (
                   <Zap className="size-3" />
                 )}
@@ -599,7 +599,7 @@ export function ProviderDialog({
                       title={i18n.t('providerDialog.fetchModelsTitle')}
                     >
                       {fetchingModels ? (
-                        <Loader2 className="size-3 animate-spin" />
+                        <Spinner className="size-3" />
                       ) : (
                         <CloudDownload className="size-3" />
                       )}
@@ -616,7 +616,7 @@ export function ProviderDialog({
                       title={i18n.t('providerDialog.syncModelsTitle')}
                     >
                       {syncingModels ? (
-                        <Loader2 className="size-3 animate-spin" />
+                        <Spinner className="size-3" />
                       ) : (
                         <RefreshCw className="size-3" />
                       )}
