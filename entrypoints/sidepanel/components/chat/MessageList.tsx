@@ -29,6 +29,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   MessageScrollerProvider,
   MessageScroller,
   MessageScrollerViewport,
@@ -215,16 +221,28 @@ export function MessageList({
               <div className="space-y-1.5 text-left">
                 <div className="flex items-center justify-between px-1">
                   <p className="text-xs font-medium text-muted-foreground">{i18n.t('messages.starterPrompts')}</p>
-                  <button
-                    type="button"
-                    onClick={quickPrompts.regenerate}
-                    disabled={quickPrompts.loading}
-                    className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/60 transition-colors disabled:opacity-40 cursor-pointer"
-                    title={i18n.t('messages.refreshPrompts')}
-                    aria-label={i18n.t('messages.refreshPrompts')}
-                  >
-                    <RefreshCw className={quickPrompts.loading ? 'size-3 animate-spin' : 'size-3'} />
-                  </button>
+                  <TooltipProvider delay={200}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="inline-flex">
+                            <button
+                              type="button"
+                              onClick={quickPrompts.regenerate}
+                              disabled={quickPrompts.loading}
+                              className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/60 transition-colors disabled:opacity-40 cursor-pointer"
+                              aria-label={i18n.t('messages.refreshPrompts')}
+                            >
+                              <RefreshCw className={quickPrompts.loading ? 'size-3 animate-spin' : 'size-3'} />
+                            </button>
+                          </span>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        {i18n.t('messages.refreshPrompts')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
 
                 {quickPrompts.loading ? (
@@ -345,12 +363,23 @@ export function MessageList({
               </MessageScrollerContent>
             </MessageScrollerViewport>
             {/* 回到底按钮:官方件自带 active 态(离底出现/贴底隐藏) */}
-            <MessageScrollerButton
-              direction="end"
-              size="icon"
-              className="bottom-3 z-20 size-7 rounded-full border border-border shadow-md"
-              title={i18n.t('messages.backToBottom')}
-            />
+            <TooltipProvider delay={200}>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <MessageScrollerButton
+                      direction="end"
+                      size="icon"
+                      className="bottom-3 z-20 size-7 rounded-full border border-border shadow-md"
+                      aria-label={i18n.t('messages.backToBottom')}
+                    />
+                  }
+                />
+                <TooltipContent side="top">
+                  {i18n.t('messages.backToBottom')}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </MessageScroller>
         </MessageScrollerProvider>
       )}

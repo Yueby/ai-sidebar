@@ -148,34 +148,50 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
   const isMany = total > 2;
 
   const renderItems = () => (
-    <div className="space-y-1">
-      {tabs.map((tab, idx) => (
-        <div
-          key={`tab-${idx}`}
-          className="flex items-center gap-1.5 text-[10px] text-primary-foreground/90 bg-primary-foreground/10 border border-primary-foreground/15 rounded px-1.5 py-0.5 max-w-full overflow-hidden"
-          title={`${tab.url} · #${tab.tabId}`}
-        >
-          <Globe className="size-2.5 shrink-0 text-primary-foreground/70" />
-          <span className="truncate max-w-full">{tab.title || tab.url}</span>
-          {tab.focused && (
-            <span className="shrink-0 rounded bg-primary-foreground/20 px-1 text-[9px] leading-[14px] text-primary-foreground font-medium">
-              当前
-            </span>
-          )}
-        </div>
-      ))}
-      {elements.map((elem) => (
-        <div
-          key={`elem-${elem.id}`}
-          className="flex items-center gap-1.5 text-[10px] text-primary-foreground/90 bg-primary-foreground/10 border border-primary-foreground/15 rounded px-1.5 py-0.5 max-w-full overflow-hidden"
-          title={`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
-        >
-          <span className="font-mono text-primary-foreground/70 shrink-0">{elem.id}.</span>
-          <SquareMousePointer className="size-2.5 shrink-0 text-primary-foreground/70" />
-          <span className="truncate max-w-full">{elementListLabel(elem)}</span>
-        </div>
-      ))}
-    </div>
+    <TooltipProvider delay={200}>
+      <div className="space-y-1">
+        {tabs.map((tab, idx) => (
+          <Tooltip key={`tab-${idx}`}>
+            <TooltipTrigger
+              render={
+                <div
+                  className="flex items-center gap-1.5 text-[10px] text-primary-foreground/90 bg-primary-foreground/10 border border-primary-foreground/15 rounded px-1.5 py-0.5 max-w-full overflow-hidden cursor-default"
+                />
+              }
+            >
+              <Globe className="size-2.5 shrink-0 text-primary-foreground/70" />
+              <span className="truncate max-w-full">{tab.title || tab.url}</span>
+              {tab.focused && (
+                <span className="shrink-0 rounded bg-primary-foreground/20 px-1 text-[9px] leading-[14px] text-primary-foreground font-medium">
+                  当前
+                </span>
+              )}
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {`${tab.url} · #${tab.tabId}`}
+            </TooltipContent>
+          </Tooltip>
+        ))}
+        {elements.map((elem) => (
+          <Tooltip key={`elem-${elem.id}`}>
+            <TooltipTrigger
+              render={
+                <div
+                  className="flex items-center gap-1.5 text-[10px] text-primary-foreground/90 bg-primary-foreground/10 border border-primary-foreground/15 rounded px-1.5 py-0.5 max-w-full overflow-hidden cursor-default"
+                />
+              }
+            >
+              <span className="font-mono text-primary-foreground/70 shrink-0">{elem.id}.</span>
+              <SquareMousePointer className="size-2.5 shrink-0 text-primary-foreground/70" />
+              <span className="truncate max-w-full">{elementListLabel(elem)}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
+            </TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    </TooltipProvider>
   );
 
   return (
@@ -246,15 +262,26 @@ function ThinkingBlock({
       </CollapsibleTrigger>
 
       {!open && (
-        <div
-          onClick={() => setOpen(true)}
-          className="group/preview relative mt-0.5 cursor-pointer border-l-2 border-border/60 pl-2.5 hover:border-border transition-colors select-none"
-          title={i18n.t('messages.thinkingExpand')}
-        >
-          <p className="line-clamp-3 whitespace-pre-wrap break-all text-[11px] leading-relaxed text-muted-foreground/75 group-hover/preview:text-muted-foreground transition-colors">
-            {previewText}
-          </p>
-        </div>
+        <TooltipProvider delay={200}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <div
+                  onClick={() => setOpen(true)}
+                  className="group/preview relative mt-0.5 cursor-pointer border-l-2 border-border/60 pl-2.5 hover:border-border transition-colors select-none"
+                  aria-label={i18n.t('messages.thinkingExpand')}
+                />
+              }
+            >
+              <p className="line-clamp-3 whitespace-pre-wrap break-all text-[11px] leading-relaxed text-muted-foreground/75 group-hover/preview:text-muted-foreground transition-colors">
+                {previewText}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {i18n.t('messages.thinkingExpand')}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
 
       <CollapsibleContent>
