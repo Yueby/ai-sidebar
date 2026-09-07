@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { i18n } from '#i18n';
 import { AlertTriangle, X } from 'lucide-react';
 import type {
@@ -324,6 +324,19 @@ export default function App() {
     displayedMessages.length === 0 && !isStreaming,
   );
 
+  // 错误状态收敛至 toast: errorMessage 变化且非空时触发常驻通知
+  useEffect(() => {
+    if (errorMessage) {
+      toast.error(errorMessage, {
+        id: 'chat-error',
+        duration: Infinity,
+        closeButton: true,
+        onDismiss: () => setErrorMessage(null),
+        onAutoClose: () => setErrorMessage(null),
+      });
+    }
+  }, [errorMessage, setErrorMessage]);
+
   if (!loaded) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
@@ -369,8 +382,6 @@ export default function App() {
                 : null
             }
             isCancelled={isCancelled}
-            errorMessage={errorMessage}
-            onDismissError={() => setErrorMessage(null)}
             onSelectPrompt={handleSelectPrompt}
             hasProvider={settings.providers.length > 0}
             hasModel={Boolean(activeModelInfo)}

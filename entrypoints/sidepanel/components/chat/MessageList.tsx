@@ -8,8 +8,6 @@ import {
   CheckSquare,
   Sparkles,
   RefreshCw,
-  AlertCircle,
-  X,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/types';
@@ -63,8 +61,6 @@ interface MessageListProps {
   /** 会话压缩标记:摘要 user 消息在消息流内渲染为分隔线卡 */
   compaction?: { summaryTimestamp: number; tokensBefore: number } | null;
   isCancelled?: boolean;
-  errorMessage?: string | null;
-  onDismissError?: () => void;
   onSelectPrompt: (prompt: string) => void;
   hasProvider: boolean;
   hasModel: boolean;
@@ -99,8 +95,6 @@ export function MessageList({
   compaction,
   sessionKey,
   isCancelled,
-  errorMessage,
-  onDismissError,
   onSelectPrompt,
   hasProvider,
   hasModel,
@@ -142,33 +136,6 @@ export function MessageList({
 
   return (
     <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-background">
-      {/* Error Alert Banner (z-20) */}
-      {errorMessage && (
-        <div className="sticky top-0 z-20 m-2">
-          <Alert
-            variant="destructive"
-            className="animate-in fade-in-0 slide-in-from-top-2 duration-150 motion-reduce:animate-none pr-8 relative text-xs"
-          >
-            <AlertCircle className="size-4" />
-            <AlertDescription className="font-medium text-xs leading-relaxed break-all whitespace-pre-wrap text-destructive">
-              {errorMessage}
-            </AlertDescription>
-            {onDismissError && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onDismissError}
-                className="absolute right-2 top-2.5 size-5 p-0.5 text-destructive/70 hover:text-destructive hover:bg-destructive/10 rounded transition-colors shrink-0"
-              >
-                <X className="size-3.5" />
-                <span className="sr-only">Close</span>
-              </Button>
-            )}
-          </Alert>
-        </div>
-      )}
-
       {isEmpty ? (
         /* 空态:无滚动语义,独立容器居中 */
         <div className="flex-1 min-h-0 overflow-y-auto">
