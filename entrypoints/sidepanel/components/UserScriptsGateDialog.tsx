@@ -71,10 +71,7 @@ export function UserScriptsGateDialog() {
 
   return (
     <AlertDialog open={true}>
-      <AlertDialogContent
-        onEscapeKeyDown={(e) => e.preventDefault()}
-        className="sm:max-w-md select-none"
-      >
+      <AlertDialogContent className="sm:max-w-md select-none">
         <AlertDialogHeader className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="size-7 rounded-full bg-muted flex items-center justify-center shrink-0 text-muted-foreground">
@@ -85,14 +82,16 @@ export function UserScriptsGateDialog() {
             </AlertDialogTitle>
           </div>
 
-          <AlertDialogDescription asChild>
-            <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-0.5">
-              <p>
-                {i18n.t('gate.desc1')}
-              </p>
-              <div className="rounded-md bg-muted/60 p-2.5 text-[11px] border border-border/50 text-foreground/85 leading-normal">
-                {i18n.t('gate.desc2')}
-              </div>
+          <AlertDialogDescription
+            render={
+              <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-0.5" />
+            }
+          >
+            <p>
+              {i18n.t('gate.desc1')}
+            </p>
+            <div className="rounded-md bg-muted/60 p-2.5 text-[11px] border border-border/50 text-foreground/85 leading-normal">
+              {i18n.t('gate.desc2')}
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
