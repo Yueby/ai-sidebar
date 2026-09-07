@@ -16,6 +16,7 @@ import { useChatTurn } from './hooks/useChatTurn';
 import { usePageContextRefs } from './hooks/usePageContextRefs';
 import { useCompact } from './hooks/useCompact';
 import { useQuickPrompts } from './hooks/useQuickPrompts';
+import { useFollowUpSuggestions } from './hooks/useFollowUpSuggestions';
 import { clearPendingDraftSaves } from './store/sessionSlice';
 import { replaceAllSessions } from '@/lib/sessionStore';
 import { activeSessionIdItem, sanitizeSessions, sanitizeSettings } from '@/lib/storage';
@@ -80,6 +81,16 @@ export default function App() {
     void compact.handleCompact();
   }, [compact.handleCompact]);
 
+  // ── Composer 草稿(提升至此以供建议域感知输入) ──────────────────
+  const draft = currentSession?.draft ?? EMPTY_DRAFT;
+
+  // ── 推荐跟进建议域 ──────────────────────────────────────────────
+  const followUps = useFollowUpSuggestions({
+    settings,
+    currentSessionId: activeSessionId,
+    draftInput: draft.input,
+  });
+
   // ── 对话轮次域 ──────────────────────────────────────────────────
   const chat = useChatTurn({
     isCompacting: compact.isCompacting,
@@ -87,6 +98,7 @@ export default function App() {
     onAutoAiTitle: (sessionId) => {
       void session.handleAiTitleSession(sessionId, true);
     },
+    onTurnSuccess: followUps.triggerGeneration,
   });
 
   // ── Settings 处理器 ────────────────────────────────────────────
@@ -194,22 +206,25 @@ export default function App() {
     setProviderDialogOpen(true);
   }, []);
 
-  // ── Composer 草稿 ──────────────────────────────────────────────
-  const draft = currentSession?.draft ?? EMPTY_DRAFT;
+  // ── Composer 草稿处理器 ────────────────────────────────────────
   const handleSelectPrompt = useCallback(
     (promptText: string) => {
+      followUps.clearSuggestions();
       patchActiveDraft((d) => ({ ...d, input: promptText }));
       setComposerNonce((n) => n + 1);
     },
-    [patchActiveDraft]
+    [patchActiveDraft, followUps]
   );
 
   // ChatInput 上报输入变化 → 写入当前会话 draft(会话域防抖落盘,见 commitSessions)
   const handleDraftInput = useCallback(
     (text: string) => {
+      if (text.trim().length > 0) {
+        followUps.clearSuggestions();
+      }
       patchActiveDraft((d) => (d.input === text ? d : { ...d, input: text }));
     },
-    [patchActiveDraft]
+    [patchActiveDraft, followUps]
   );
 
   // 统计本轮 in-flight / live 消息中需要门控确认的工具调用总数(支持分页 1/N 呈现)
@@ -446,8 +461,12 @@ export default function App() {
             }
             onOpenSettings={handleOpenSettings}
             quickPrompts={quickPrompts}
-            onEditResend={chat.handleEditResend}
+            onEditResend={(timestamp, newText) => {
+              followUps.clearSuggestions();
+              void chat.handleEditResend(timestamp, newText);
+            }}
             canEditMessage={canEditMessage}
+            followUpSuggestions={followUps.suggestions}
           />
 
           {/* 槽位区:审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}
@@ -510,7 +529,10 @@ export default function App() {
           {/* Composer:按会话重挂载(key),草稿输入/引用派生自当前会话 draft */}
           <ChatInput
             key={`${activeSessionId ?? 'none'}#${composerNonce}`}
-            onSend={chat.handleSendMessage}
+            onSend={(text) => {
+              followUps.clearSuggestions();
+              void chat.handleSendMessage(text);
+            }}
             onStop={chat.handleStopGeneration}
             isStreaming={isStreaming}
             queuedMessages={queuedMessages}

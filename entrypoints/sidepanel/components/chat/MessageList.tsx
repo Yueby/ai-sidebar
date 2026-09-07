@@ -13,6 +13,7 @@ import {
 import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import type { QuickPromptsState } from '@/entrypoints/sidepanel/hooks/useQuickPrompts';
+import type { FollowUpSuggestion } from '@/lib/followUpSuggestions';
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -25,6 +26,7 @@ import {
   ItemDescription,
 } from '@/components/ui/item';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
@@ -71,6 +73,8 @@ interface MessageListProps {
   onEditResend?: (messageTimestamp: number, newText: string) => void;
   /** 是否允许编辑(非流式、非门控、非压缩) */
   canEditMessage?: boolean;
+  /** 推荐跟进建议 */
+  followUpSuggestions?: FollowUpSuggestion[];
 }
 
 const PROMPT_ICONS = [FileText, Lightbulb, HelpCircle, CheckSquare];
@@ -107,6 +111,7 @@ export function MessageList({
   quickPrompts,
   onEditResend,
   canEditMessage,
+  followUpSuggestions,
 }: MessageListProps) {
   const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
   // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(随消息身份重估)
@@ -336,6 +341,29 @@ export function MessageList({
                       sessionKey={sessionKey}
                     />
                   </MessageScrollerItem>
+                )}
+                {/* 推荐跟进建议 chips: AI 回复完成后显示, 点击填入输入框 */}
+                {!isStreaming && followUpSuggestions && followUpSuggestions.length > 0 && (
+                  <div className="pt-1 pb-1 space-y-1.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground px-1">
+                      <Sparkles className="size-3 text-muted-foreground" />
+                      <span>{i18n.t('messages.followUps')}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 px-0.5">
+                      {followUpSuggestions.map((item, idx) => (
+                        <Badge
+                          key={idx}
+                          variant="outline"
+                          render={<button type="button" />}
+                          onClick={() => onSelectPrompt(item.prompt)}
+                          className="h-auto py-1 px-2.5 text-xs font-normal rounded-full gap-1.5 text-foreground hover:bg-muted transition-colors text-left select-none"
+                        >
+                          <Sparkles className="size-3 text-muted-foreground shrink-0" />
+                          <span className="truncate max-w-[260px]">{item.title}</span>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </MessageScrollerContent>
             </MessageScrollerViewport>
