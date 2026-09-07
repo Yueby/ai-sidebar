@@ -47,6 +47,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { ModelConfigDialog } from './ModelConfigDialog';
 
@@ -404,14 +410,25 @@ export function ProviderDialog({
                   placeholder="sk-..."
                   className="h-8 text-xs font-mono pr-8 truncate"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey((v) => !v)}
-                  className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                  title={showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
-                >
-                  {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                </button>
+                <TooltipProvider delay={200}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey((v) => !v)}
+                          className="absolute right-2 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                          aria-label={showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
+                        >
+                          {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                        </button>
+                      }
+                    />
+                    <TooltipContent side="top">
+                      {showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
 
@@ -588,56 +605,89 @@ export function ProviderDialog({
                     </Badge>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={fetchingModels || syncingModels || !draft.baseUrl}
-                      onClick={handleFetchModels}
-                      className="h-6.5 text-xs gap-1 px-1.5"
-                      title={i18n.t('providerDialog.fetchModelsTitle')}
-                    >
-                      {fetchingModels ? (
-                        <Spinner className="size-3" />
-                      ) : (
-                        <CloudDownload className="size-3" />
-                      )}
-                      <span>{fetchingModels ? i18n.t('providerDialog.fetching') : i18n.t('providerDialog.fetch')}</span>
-                    </Button>
+                  <TooltipProvider delay={200}>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className="inline-flex">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={fetchingModels || syncingModels || !draft.baseUrl}
+                                onClick={handleFetchModels}
+                                className="h-6.5 text-xs gap-1 px-1.5"
+                                aria-label={i18n.t('providerDialog.fetchModelsTitle')}
+                              >
+                                {fetchingModels ? (
+                                  <Spinner className="size-3" />
+                                ) : (
+                                  <CloudDownload className="size-3" />
+                                )}
+                                <span>{fetchingModels ? i18n.t('providerDialog.fetching') : i18n.t('providerDialog.fetch')}</span>
+                              </Button>
+                            </span>
+                          }
+                        />
+                        <TooltipContent side="top">
+                          {i18n.t('providerDialog.fetchModelsTitle')}
+                        </TooltipContent>
+                      </Tooltip>
 
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={syncingModels || fetchingModels || draft.models.length === 0}
-                      onClick={handleSyncModels}
-                      className="h-6.5 text-xs gap-1 px-1.5"
-                      title={i18n.t('providerDialog.syncModelsTitle')}
-                    >
-                      {syncingModels ? (
-                        <Spinner className="size-3" />
-                      ) : (
-                        <RefreshCw className="size-3" />
-                      )}
-                      <span>{syncingModels ? i18n.t('providerDialog.syncing') : i18n.t('providerDialog.sync')}</span>
-                    </Button>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span className="inline-flex">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={syncingModels || fetchingModels || draft.models.length === 0}
+                                onClick={handleSyncModels}
+                                className="h-6.5 text-xs gap-1 px-1.5"
+                                aria-label={i18n.t('providerDialog.syncModelsTitle')}
+                              >
+                                {syncingModels ? (
+                                  <Spinner className="size-3" />
+                                ) : (
+                                  <RefreshCw className="size-3" />
+                                )}
+                                <span>{syncingModels ? i18n.t('providerDialog.syncing') : i18n.t('providerDialog.sync')}</span>
+                              </Button>
+                            </span>
+                          }
+                        />
+                        <TooltipContent side="top">
+                          {i18n.t('providerDialog.syncModelsTitle')}
+                        </TooltipContent>
+                      </Tooltip>
 
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setModelConfigTarget(null);
-                        setModelConfigOpen(true);
-                      }}
-                      className="h-6.5 text-xs gap-1 px-1.5"
-                      title={i18n.t('providerDialog.addManualTitle')}
-                    >
-                      <Plus className="size-3" />
-                      <span>{i18n.t('providerDialog.manual')}</span>
-                    </Button>
-                  </div>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setModelConfigTarget(null);
+                                setModelConfigOpen(true);
+                              }}
+                              className="h-6.5 text-xs gap-1 px-1.5"
+                              aria-label={i18n.t('providerDialog.addManualTitle')}
+                            >
+                              <Plus className="size-3" />
+                              <span>{i18n.t('providerDialog.manual')}</span>
+                            </Button>
+                          }
+                        />
+                        <TooltipContent side="top">
+                          {i18n.t('providerDialog.addManualTitle')}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
                 </div>
 
                 {/* Inline fetch status feedback */}
@@ -717,31 +767,51 @@ export function ProviderDialog({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setModelConfigTarget(m);
-                                setModelConfigOpen(true);
-                              }}
-                              className="size-6 text-muted-foreground hover:text-foreground"
-                              title={i18n.t('providerDialog.configParamsTitle')}
-                            >
-                              <Pencil className="size-3" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteModel(m.id)}
-                              className="size-6 text-muted-foreground hover:text-destructive"
-                              title={i18n.t('providerDialog.deleteModelTitle')}
-                            >
-                              <Trash2 className="size-3" />
-                            </Button>
-                          </div>
+                          <TooltipProvider delay={200}>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        setModelConfigTarget(m);
+                                        setModelConfigOpen(true);
+                                      }}
+                                      className="size-6 text-muted-foreground hover:text-foreground"
+                                      aria-label={i18n.t('providerDialog.configParamsTitle')}
+                                    >
+                                      <Pencil className="size-3" />
+                                    </Button>
+                                  }
+                                />
+                                <TooltipContent side="top">
+                                  {i18n.t('providerDialog.configParamsTitle')}
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleDeleteModel(m.id)}
+                                      className="size-6 text-muted-foreground hover:text-destructive"
+                                      aria-label={i18n.t('providerDialog.deleteModelTitle')}
+                                    >
+                                      <Trash2 className="size-3" />
+                                    </Button>
+                                  }
+                                />
+                                <TooltipContent side="top">
+                                  {i18n.t('providerDialog.deleteModelTitle')}
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TooltipProvider>
                         </div>
                       );
                     })}
