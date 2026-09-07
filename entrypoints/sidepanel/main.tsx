@@ -8,6 +8,6 @@ import { Toaster } from './components/ui/sonner';
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
-    <Toaster richColors position="bottom-right" />
+    <Toaster richColors position="top-right" offset={{ top: '52px', right: '10px' }} />
   </React.StrictMode>,
 );
