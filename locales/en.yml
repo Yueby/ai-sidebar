@@ -81,6 +81,7 @@ messages:
   goSettings: Open settings
   starterPrompts: Starter prompts
   refreshPrompts: Refresh
+  followUps: Suggested follow-ups
   backToBottom: Back to bottom
   current: Current
   refCount: "{total} references"
