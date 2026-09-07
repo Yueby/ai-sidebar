@@ -102,17 +102,19 @@ export function ChatHeader({
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-7"
-                    >
-                      <History className="size-3.5" />
-                      <span className="sr-only">{i18n.t('header.history')}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                      >
+                        <History className="size-3.5" />
+                        <span className="sr-only">{i18n.t('header.history')}</span>
+                      </Button>
+                    }
+                  />
                 }
               />
               <TooltipContent side="bottom" className="text-xs">

@@ -510,17 +510,19 @@ export function ChatInput({
           <div className="flex items-center gap-1 min-w-0 flex-1 overflow-x-auto">
             {/* 1. Permanent Unified Add [+] Menu on far left */}
             <DropdownMenu onOpenChange={handleDropdownOpenChange}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-1.5 text-[11px] gap-0.5 text-muted-foreground hover:text-foreground shrink-0 font-normal"
-                  title={i18n.t('composer.addRefTitle')}
-                >
-                  <Plus className="size-3.5 shrink-0" />
-                  <ChevronDown className="size-2.5 shrink-0 opacity-50" />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-1.5 text-[11px] gap-0.5 text-muted-foreground hover:text-foreground shrink-0 font-normal"
+                    title={i18n.t('composer.addRefTitle')}
+                  />
+                }
+              >
+                <Plus className="size-3.5 shrink-0" />
+                <ChevronDown className="size-2.5 shrink-0 opacity-50" />
               </DropdownMenuTrigger>
               {renderAddTabMenuContent('start')}
             </DropdownMenu>
@@ -528,17 +530,19 @@ export function ChatInput({
             {/* 2. Model Switcher Dropdown */}
             {activeProvider && activeModel ? (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground max-w-[120px] justify-start font-normal shrink-0"
-                  >
-                    <Bot className="size-3.5 shrink-0" />
-                    <span className="truncate">{modelDisplayName}</span>
-                    <ChevronDown className="size-3 shrink-0 opacity-50" />
-                  </Button>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground max-w-[120px] justify-start font-normal shrink-0"
+                    />
+                  }
+                >
+                  <Bot className="size-3.5 shrink-0" />
+                  <span className="truncate">{modelDisplayName}</span>
+                  <ChevronDown className="size-3 shrink-0 opacity-50" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-y-auto">
                   {providersWithModels.length === 0 ? (
@@ -604,18 +608,20 @@ export function ChatInput({
             {/* 3. Reasoning Level Dropdown (Only if model supports reasoning) */}
             {supportsReasoning && (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground shrink-0 font-normal"
-                    title={i18n.t('composer.reasoningTitle', { level: currentReasoningShort })}
-                  >
-                    <Brain className="size-3.5 shrink-0" />
-                    <span>{currentReasoningShort}</span>
-                    <ChevronDown className="size-3 shrink-0 opacity-50" />
-                  </Button>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-[11px] gap-1 text-muted-foreground hover:text-foreground shrink-0 font-normal"
+                      title={i18n.t('composer.reasoningTitle', { level: currentReasoningShort })}
+                    />
+                  }
+                >
+                  <Brain className="size-3.5 shrink-0" />
+                  <span>{currentReasoningShort}</span>
+                  <ChevronDown className="size-3 shrink-0 opacity-50" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-36">
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
