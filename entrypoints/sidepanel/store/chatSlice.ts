@@ -13,6 +13,8 @@ export interface ChatSlice {
   activeToolNames: string[];
   isCancelled: boolean;
   inFlight: InFlightRun | null;
+  /** 消息队列:流式期间用户排队发送的消息列表(仅内存,FIFO) */
+  queuedMessages: string[];
 
   setIsStreaming: (value: boolean) => void;
   setStreamingContent: (value: string) => void;
@@ -22,6 +24,10 @@ export interface ChatSlice {
   setInFlight: (
     value: InFlightRun | null | ((prev: InFlightRun | null) => InFlightRun | null),
   ) => void;
+  enqueueMessage: (text: string) => void;
+  dequeueMessage: () => string | undefined;
+  removeQueuedMessage: (index: number) => void;
+  clearQueue: () => void;
 }
 
 type SliceSet = (
@@ -36,6 +42,7 @@ export function createChatSlice(set: SliceSet): ChatSlice {
     activeToolNames: [],
     isCancelled: false,
     inFlight: null,
+    queuedMessages: [],
 
     setIsStreaming: (isStreaming) => set({ isStreaming }),
     setStreamingContent: (streamingContent) => set({ streamingContent }),
@@ -45,5 +52,23 @@ export function createChatSlice(set: SliceSet): ChatSlice {
     setIsCancelled: (isCancelled) => set({ isCancelled }),
     setInFlight: (value) =>
       set((s) => ({ inFlight: typeof value === 'function' ? value(s.inFlight) : value })),
+    enqueueMessage: (text) =>
+      set((s) => ({ queuedMessages: [...(s.queuedMessages ?? []), text] })),
+    dequeueMessage: () => {
+      let item: string | undefined;
+      set((s) => {
+        const queue = s.queuedMessages ?? [];
+        if (queue.length === 0) return s;
+        const [first, ...rest] = queue;
+        item = first;
+        return { queuedMessages: rest };
+      });
+      return item;
+    },
+    removeQueuedMessage: (index) =>
+      set((s) => ({
+        queuedMessages: (s.queuedMessages ?? []).filter((_, i) => i !== index),
+      })),
+    clearQueue: () => set({ queuedMessages: [] }),
   };
 }

@@ -77,7 +77,13 @@ export function createSessionSlice(set: SliceSet, get: SliceGet): SessionSlice {
     loaded: false,
 
     setSessions: (sessions) => set({ sessions }),
-    setActiveSessionId: (activeSessionId) => set({ activeSessionId }),
+    setActiveSessionId: (activeSessionId) => {
+      // 切换会话时重置在途消息队列(队列为当前会话流式期间 ephemeral 队列)
+      (set as (state: Partial<SessionSlice> & { queuedMessages?: string[] }) => void)({
+        activeSessionId,
+        queuedMessages: [],
+      });
+    },
     setLoaded: (loaded) => set({ loaded }),
 
     commitSessions: (next, changedIds) => {

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type {
   ChatMessage,
   ModelConfig,
@@ -60,6 +60,35 @@ export function useChatTurn(params: {
   });
   // AI 自主压缩标记:compact_context 工具 execute 只置位;轮末由本 hook 消费
   const compactRequestedRef = useRef(false);
+
+  // 引用稳定的 handleSendMessage 指针(避免循环依赖,供出队延后调用)
+  const handleSendMessageRef = useRef<(text: string) => Promise<void>>(async () => {});
+
+  // 检查并出队发送下一条排队消息
+  const checkAndDispatchQueue = useCallback(() => {
+    const s = useAppStore.getState();
+    if (s.queuedMessages.length === 0) return;
+    // 若当前正在流式/门控挂起/压缩中，暂缓出队
+    if (s.isStreaming || s.activeGate !== null || isCompacting) return;
+    const nextText = s.dequeueMessage();
+    if (nextText) {
+      if (import.meta.env.DEV) {
+        console.log(`[turn] dispatch queued message: "${nextText.slice(0, 30)}..."`);
+      }
+      void handleSendMessageRef.current(nextText);
+    }
+  }, [isCompacting]);
+
+  // 压缩结束后若有积压队列，自动尝试出队
+  const prevCompactingRef = useRef(isCompacting);
+  useEffect(() => {
+    if (prevCompactingRef.current && !isCompacting) {
+      setTimeout(() => {
+        checkAndDispatchQueue();
+      }, 0);
+    }
+    prevCompactingRef.current = isCompacting;
+  }, [isCompacting, checkAndDispatchQueue]);
 
   // 共享转录执行内核:runAgentTurn 流式循环、事件透出、in-flight 物化、非破坏落盘与异常清理。
   // handleSendMessage 与 handleEditResend 共用本逻辑，保证 turn 身份守卫与时序一致。
@@ -284,28 +313,44 @@ export function useChatTurn(params: {
           // setTimeout 0 = 完全脱离本链,handleCompact 的守卫与错误处理自洽
           if (autoCompactPending) {
             setTimeout(() => onAutoCompact(), 0);
+          } else {
+            // 出队时机: 轮次彻底结束后且无自动压缩，延迟一拍出队下一条排队消息
+            setTimeout(() => {
+              checkAndDispatchQueue();
+            }, 0);
           }
         }
       }
     },
-    [onAutoCompact, onAutoAiTitle, resetResolvedGateCount, setErrorMessage]
+    [onAutoCompact, onAutoAiTitle, resetResolvedGateCount, setErrorMessage, checkAndDispatchQueue]
   );
 
   // AI Chat & Agent Loop (新消息发送入口)
   const handleSendMessage = useCallback(
     async (userText: string) => {
+      const trimmed = userText.trim();
+      if (!trimmed) return;
+
+      const store = useAppStore.getState();
+
+      // 1. 流式期间或门控挂起时发送 = 入队(不再打断; 停止按钮 Square 仍是唯一打断入口)
+      if (store.isStreaming || store.activeGate !== null) {
+        if (import.meta.env.DEV) {
+          console.log(`[turn] enqueue message while busy: "${trimmed.slice(0, 30)}..."`);
+        }
+        store.enqueueMessage(trimmed);
+        return;
+      }
+
+      // 上下文压缩进行中拒绝发送(输入框已有 disabled 兜底)
+      if (isCompacting) {
+        return;
+      }
+
       if (import.meta.env.DEV) {
         console.log(
-          `[turn] handleSendMessage enter: streaming=${useAppStore.getState().isStreaming} inFlight=${JSON.stringify(useAppStore.getState().inFlight?.messages.length ?? null)} activeId=${useAppStore.getState().activeSessionId}`,
+          `[turn] handleSendMessage enter: inFlight=${JSON.stringify(store.inFlight?.messages.length ?? null)} activeId=${store.activeSessionId}`,
         );
-      }
-      const store = useAppStore.getState();
-      // 若当前正在流式/有 pending 门控/压缩中，按发送视为用户打断当前轮次
-      if (isStreaming || hasPendingGate || isCompacting) {
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-        }
-        dismissPendingGates();
       }
 
       const active = findActiveModel(store.settings);
@@ -318,7 +363,7 @@ export function useChatTurn(params: {
       let allSessions = [...store.sessions];
 
       if (!session) {
-        session = createSession(titleFromText(userText));
+        session = createSession(titleFromText(trimmed));
         allSessions = [session, ...allSessions];
         useAppStore.getState().setActiveSessionId(session.id);
         await activeSessionIdItem.setValue(session.id);
@@ -359,7 +404,7 @@ export function useChatTurn(params: {
         }));
         pageRefs = { tabs, elements };
       }
-      const userMessage = createUserMessage(userText, pageRefs);
+      const userMessage = createUserMessage(trimmed, pageRefs);
       const messagesWithUser: ChatMessage[] = [...session.messages, userMessage];
 
       // 先落盘用户消息,长对话中断也不丢;规则 4:发送即清空该会话草稿
@@ -369,7 +414,7 @@ export function useChatTurn(params: {
         session.customTitle
           ? session.title
           : isFirstMessage
-            ? titleFromText(userText)
+            ? titleFromText(trimmed)
             : session.title;
 
       const updatedSession: Session = {
@@ -399,14 +444,13 @@ export function useChatTurn(params: {
       });
     },
     [
-      isStreaming,
-      hasPendingGate,
       isCompacting,
-      dismissPendingGates,
       setErrorMessage,
       executeTurn,
     ]
   );
+
+  handleSendMessageRef.current = handleSendMessage;
 
   // 编辑历史用户消息并重发:截断目标消息后的全部内容,保留原引用,重新触发生成
   const handleEditResend = useCallback(
