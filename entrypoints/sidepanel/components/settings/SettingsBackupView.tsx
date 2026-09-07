@@ -181,7 +181,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
     visibleKey: 'webdav' | 'encrypt',
     value: string,
     onChange: (v: string) => void,
-    placeholderClass = 'bg-background',
+    placeholderClass = '',
   ) => {
     const visible = visiblePassword === visibleKey;
     return (
@@ -305,7 +305,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               value={dav.url}
               onChange={(e) => updateDav({ url: e.target.value })}
               placeholder={i18n.t('sync.urlPlaceholder')}
-              className="h-7 text-xs bg-background flex-1 max-w-[210px]"
+              className="h-7 text-xs flex-1 max-w-[210px]"
             />
           </div>
           <div className="flex items-center justify-between gap-2 p-2.5">
@@ -313,7 +313,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
             <Input
               value={dav.username}
               onChange={(e) => updateDav({ username: e.target.value })}
-              className="h-7 text-xs bg-background flex-1 max-w-[210px]"
+              className="h-7 text-xs flex-1 max-w-[210px]"
             />
           </div>
           <div className="flex items-center justify-between gap-2 p-2.5">
@@ -328,7 +328,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               <Input
                 value={dav.remotePath}
                 onChange={(e) => updateDav({ remotePath: e.target.value })}
-                className="h-7 text-xs font-mono bg-background flex-1 min-w-0"
+                className="h-7 text-xs font-mono flex-1 min-w-0"
               />
               <Button
                 type="button"

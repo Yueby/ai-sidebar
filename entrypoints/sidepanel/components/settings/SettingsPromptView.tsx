@@ -131,7 +131,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
             onChange={(e) => handlePromptChange(e.target.value)}
             maxLength={MAX_SYSTEM_PROMPT_LENGTH}
             placeholder={i18n.t('settings.systemPrompt.placeholder')}
-            className="text-xs bg-background min-h-[96px] leading-relaxed resize-y"
+            className="text-xs min-h-[96px] leading-relaxed resize-y"
             rows={4}
           />
           <div className="flex items-center justify-end text-[10px] text-muted-foreground">

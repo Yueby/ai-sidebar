@@ -156,7 +156,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                 value={webSearch.searxngBaseUrl}
                 onChange={(e) => update({ searxngBaseUrl: e.target.value })}
                 placeholder="https://searx.example.com"
-                className="h-7 text-xs font-mono max-w-[210px] flex-1 bg-background"
+                className="h-7 text-xs font-mono max-w-[210px] flex-1"
               />
             </div>
           )}
@@ -174,7 +174,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                     value={webSearch.apiKeys[currentProvider] ?? ''}
                     onChange={(e) => updateApiKey(currentProvider, e.target.value)}
                     placeholder={keyConfig.placeholder}
-                    className="h-7 text-xs pr-8 font-mono bg-background"
+                    className="h-7 text-xs pr-8 font-mono"
                   />
                   <Button
                     type="button"

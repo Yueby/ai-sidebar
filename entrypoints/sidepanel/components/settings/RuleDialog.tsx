@@ -115,7 +115,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
               }}
               maxLength={MAX_RULE_NAME_LENGTH}
               placeholder={i18n.t('settings.rules.namePlaceholder')}
-              className="h-7 text-xs bg-background"
+              className="h-7 text-xs"
               autoFocus
             />
           </div>
@@ -143,7 +143,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
               }}
               maxLength={MAX_RULE_CONTENT_LENGTH}
               placeholder={i18n.t('settings.rules.contentPlaceholder')}
-              className="text-xs bg-background min-h-[110px] leading-relaxed resize-y"
+              className="text-xs min-h-[110px] leading-relaxed resize-y"
               rows={4}
             />
           </div>

@@ -312,9 +312,9 @@ export function SettingsMainView({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background text-foreground overflow-hidden animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+    <div className="flex h-full min-h-0 flex-col text-foreground overflow-hidden animate-in fade-in-0 duration-150 motion-reduce:animate-none">
       {/* Top Header with Tab Switcher */}
-      <header className="flex h-11 shrink-0 items-center border-b bg-background px-2.5 select-none gap-2">
+      <header className="flex h-11 shrink-0 items-center border-b px-2.5 select-none gap-2">
         <Button
           type="button"
           variant="ghost"
