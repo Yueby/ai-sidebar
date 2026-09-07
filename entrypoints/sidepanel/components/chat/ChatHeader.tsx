@@ -14,6 +14,7 @@ import type { Session } from '@/lib/types';
 import { i18n } from '#i18n';
 import { downloadSessionMarkdown } from '@/lib/sessionExport';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import {
   DropdownMenu,
@@ -157,7 +158,7 @@ export function ChatHeader({
                         className="flex items-center gap-1 px-1.5 py-1 text-xs bg-accent/60 rounded-sm border border-border/40"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <input
+                        <Input
                           ref={editInputRef}
                           type="text"
                           value={editTitleValue}
@@ -174,7 +175,7 @@ export function ChatHeader({
                               handleCancelRename();
                             }
                           }}
-                          className="flex-1 min-w-0 bg-background/90 px-1.5 py-0.5 rounded text-xs border border-border outline-none focus:border-ring text-foreground font-normal"
+                          className="h-6 flex-1 min-w-0 bg-background/90 px-1.5 py-0.5 rounded text-xs border border-border outline-none focus:border-ring text-foreground font-normal"
                           maxLength={40}
                         />
                         <Tooltip>
