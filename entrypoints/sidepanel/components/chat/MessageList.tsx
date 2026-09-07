@@ -17,7 +17,8 @@ import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import type { QuickPromptsState } from '@/entrypoints/sidepanel/hooks/useQuickPrompts';
 import { EMPTY_USAGE } from '@/lib/storage';
 import { MessageItem } from './MessageItem';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -164,41 +165,48 @@ export function MessageList({
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="flex min-h-full flex-col justify-center px-3 py-6 text-center animate-in fade-in-0 duration-150 motion-reduce:animate-none">
             {/* Header & Logo */}
-            <div className="mb-6 flex flex-col items-center">
-              <div className="mb-3 flex size-10 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
-                <Bot className="size-5" />
-              </div>
-              <h2 className="text-sm font-semibold tracking-tight text-foreground">
-                {i18n.t('messages.welcomeTitle')}
-              </h2>
-              <p className="mt-1 text-xs text-muted-foreground max-w-[260px] leading-relaxed">
-                {hasModel && activeModelName ? (
-                  <span>{i18n.t('messages.currentModel')} <span className="font-medium text-foreground">{activeModelName}</span></span>
-                ) : (
-                  <span>{i18n.t('messages.welcomeSubtitle')}</span>
-                )}
-              </p>
-            </div>
+            <Empty className="border-0 p-0 gap-3 mb-6 flex-initial">
+              <EmptyHeader className="gap-1">
+                <EmptyMedia variant="icon" className="mb-1 size-10 rounded-lg border bg-muted text-muted-foreground">
+                  <Bot className="size-5" />
+                </EmptyMedia>
+                <EmptyTitle className="text-sm font-semibold tracking-tight text-foreground">
+                  {i18n.t('messages.welcomeTitle')}
+                </EmptyTitle>
+                <EmptyDescription className="text-xs text-muted-foreground max-w-[260px] leading-relaxed">
+                  {hasModel && activeModelName ? (
+                    <span>{i18n.t('messages.currentModel')} <span className="font-medium text-foreground">{activeModelName}</span></span>
+                  ) : (
+                    <span>{i18n.t('messages.welcomeSubtitle')}</span>
+                  )}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
 
             {/* If no provider / model configured */}
             {(!hasProvider || !hasModel) && (
-              <div className="mb-4 rounded-lg border p-3.5 text-left bg-muted/30">
-                <p className="text-xs font-semibold text-foreground">{i18n.t('messages.setupIncomplete')}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+              <Alert className="mb-4 text-left bg-muted/30">
+                <SettingsIcon className="size-4" />
+                <AlertTitle className="text-xs font-semibold text-foreground">
+                  {i18n.t('messages.setupIncomplete')}
+                </AlertTitle>
+                <AlertDescription className="text-xs text-muted-foreground leading-relaxed">
                   {!hasProvider
                     ? i18n.t('messages.setupNoProvider')
                     : i18n.t('messages.setupNoModel')}
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={onOpenSettings}
-                  className="mt-2.5 h-7 text-xs gap-1.5"
-                >
-                  <SettingsIcon className="size-3" />
-                  {i18n.t('messages.goSettings')}
-                </Button>
-              </div>
+                  <div className="mt-2.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onOpenSettings}
+                      className="h-7 text-xs gap-1.5 cursor-pointer"
+                    >
+                      <SettingsIcon className="size-3" />
+                      {i18n.t('messages.goSettings')}
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
             )}
 
             {/* Quick Prompt Cards */}
