@@ -369,12 +369,12 @@ export function ProviderDialog({
             <div className="space-y-1">
               <Label className="text-xs">{i18n.t('providerDialog.apiLabel')}</Label>
               <Select items={API_TYPE_OPTIONS} value={draft.api} onValueChange={(v) => handleApiChange(v as ApiType)}>
-                <SelectTrigger className="h-8 text-xs w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder={i18n.t('providerDialog.apiPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {API_TYPE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
                   ))}

@@ -173,7 +173,6 @@ export function SettingsMainView({
             <SelectItem
               key={`${p.id}::${m.id}`}
               value={`${p.id}::${m.id}`}
-              className="text-xs"
             >
               {m.displayName || m.id}
             </SelectItem>
@@ -510,7 +509,7 @@ export function SettingsMainView({
                     <InfoTip content={i18n.t('settings.pref.langDesc')} />
                   </div>
                   <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
-                    <div className={cn((langDraft !== null || settings.language) ? 'w-20 shrink-0' : 'w-28 shrink-0')}>
+                    <div className={cn((langDraft !== null || settings.language) ? 'w-24 shrink-0' : 'w-28 shrink-0')}>
                       <Select
                         items={langSelectItems}
                         value={settings.language || langDraft !== null ? 'custom' : 'auto'}
@@ -524,14 +523,14 @@ export function SettingsMainView({
                           }
                         }}
                       >
-                        <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder={i18n.t('settings.pref.langAuto')} />
                         </SelectTrigger>
                         <SelectContent align="end">
-                          <SelectItem value="auto" className="text-xs font-medium">
+                          <SelectItem value="auto" className="font-medium">
                             {i18n.t('settings.pref.langAuto')}
                           </SelectItem>
-                          <SelectItem value="custom" className="text-xs">
+                          <SelectItem value="custom">
                             {i18n.t('settings.pref.langCustom')}
                           </SelectItem>
                         </SelectContent>
@@ -546,7 +545,7 @@ export function SettingsMainView({
                           onUpdateSettings({ ...settings, language: v.trim() || null });
                         }}
                         placeholder={i18n.t('settings.pref.langCustomPlaceholder')}
-                        className="h-7 text-xs flex-1 min-w-0 bg-background"
+                        className="flex-1 min-w-0"
                       />
                     )}
                   </div>
@@ -591,7 +590,7 @@ export function SettingsMainView({
                         }}
                         disabled={allModelOptions.length === 0}
                       >
-                        <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder={allModelOptions.length === 0 ? i18n.t('settings.assignment.noModelsAvailable') : i18n.t('settings.assignment.notSelected')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
@@ -602,7 +601,7 @@ export function SettingsMainView({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="w-20 shrink-0">
+                    <div className="w-22 shrink-0">
                       <Select
                         items={chatReasoningSelectItems}
                         value={effectiveChatReasoningLevel}
@@ -615,17 +614,17 @@ export function SettingsMainView({
                         disabled={!chatModel}
                       >
                         <SelectTrigger
-                          className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                          className="w-full"
                           title={chatModel && chatModelSupportsReasoning ? i18n.t('settings.assignment.chatReasoningTitle') : i18n.t('settings.assignment.unsupportedReasoning')}
                         >
                           <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="w-28">
-                          <SelectItem value="off" className="text-xs">
+                          <SelectItem value="off">
                             {i18n.t('settings.assignment.thinkingOff')}
                           </SelectItem>
                           {chatSupportedLevels.map((lvl) => (
-                            <SelectItem key={lvl} value={lvl} className="text-xs">
+                            <SelectItem key={lvl} value={lvl}>
                               {REASONING_LEVEL_LABELS[lvl]?.full || lvl}
                             </SelectItem>
                           ))}
@@ -662,11 +661,11 @@ export function SettingsMainView({
                           }
                         }}
                       >
-                        <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder={i18n.t('settings.assignment.followChatModel')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
-                          <SelectItem value="follow" className="text-xs font-medium">
+                          <SelectItem value="follow" className="font-medium">
                             {i18n.t('settings.assignment.followChatModel')}
                           </SelectItem>
                           {providersWithModels.length > 0 && <SelectSeparator />}
@@ -674,7 +673,7 @@ export function SettingsMainView({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="w-20 shrink-0">
+                    <div className="w-22 shrink-0">
                       <Select
                         items={auxThinkingSelectItems}
                         value={settings.titleThinking}
@@ -686,14 +685,14 @@ export function SettingsMainView({
                         }}
                       >
                         <SelectTrigger
-                          className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                          className="w-full"
                           title={i18n.t('settings.assignment.titleReasoningTitle')}
                         >
                           <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="w-28">
                           {AUX_THINKING_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                            <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
                             </SelectItem>
                           ))}
@@ -730,11 +729,11 @@ export function SettingsMainView({
                           }
                         }}
                       >
-                        <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder={i18n.t('settings.assignment.followChatModel')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="max-w-[280px] max-h-72 overflow-y-auto">
-                          <SelectItem value="follow" className="text-xs font-medium">
+                          <SelectItem value="follow" className="font-medium">
                             {i18n.t('settings.assignment.followChatModel')}
                           </SelectItem>
                           {providersWithModels.length > 0 && <SelectSeparator />}
@@ -742,7 +741,7 @@ export function SettingsMainView({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="w-20 shrink-0">
+                    <div className="w-22 shrink-0">
                       <Select
                         items={auxThinkingSelectItems}
                         value={settings.quickPromptThinking}
@@ -754,14 +753,14 @@ export function SettingsMainView({
                         }}
                       >
                         <SelectTrigger
-                          className="h-7 text-xs w-full px-2 bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground"
+                          className="w-full"
                           title={i18n.t('settings.assignment.promptReasoningTitle')}
                         >
                           <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
                         </SelectTrigger>
                         <SelectContent align="end" className="w-28">
                           {AUX_THINKING_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                            <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
                             </SelectItem>
                           ))}

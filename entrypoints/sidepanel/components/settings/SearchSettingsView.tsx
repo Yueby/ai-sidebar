@@ -132,12 +132,12 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                 value={webSearch.provider}
                 onValueChange={(value) => update({ provider: value as WebSearchProvider })}
               >
-                <SelectTrigger className="h-7 text-xs w-full">
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent align="end">
                   {providerOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
                   ))}
