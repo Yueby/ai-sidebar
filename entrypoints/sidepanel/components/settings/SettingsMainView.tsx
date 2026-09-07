@@ -540,7 +540,7 @@ export function SettingsMainView({
                       <Select
                         value={chatModelValue}
                         onValueChange={(val) => {
-                          if (val === '__none__') return;
+                          if (!val || val === '__none__') return;
                           const [pId, mId] = val.split('::');
                           if (pId && mId) {
                             onUpdateSettings({
@@ -608,7 +608,7 @@ export function SettingsMainView({
                       <Select
                         value={titleModelValue}
                         onValueChange={(val) => {
-                          if (val === 'follow') {
+                          if (!val || val === 'follow') {
                             onUpdateSettings({ ...settings, titleModel: null });
                           } else {
                             const [pId, mId] = val.split('::');
@@ -674,7 +674,7 @@ export function SettingsMainView({
                       <Select
                         value={quickPromptModelValue}
                         onValueChange={(val) => {
-                          if (val === 'follow') {
+                          if (!val || val === 'follow') {
                             onUpdateSettings({ ...settings, quickPromptModel: null });
                           } else {
                             const [pId, mId] = val.split('::');
