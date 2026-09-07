@@ -33,6 +33,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { buttonVariants } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Card } from '@/components/ui/card';
 import {
   Empty,
@@ -404,87 +410,128 @@ export function SettingsMainView({
                 </EmptyContent>
               </Empty>
             ) : (
-              <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
-                {settings.providers.map((p) => {
-                  const isActive = p.id === settings.activeProviderId;
-                  const isTesting = testingId === p.id;
+              <TooltipProvider delay={200}>
+                <Card className="gap-0 py-0 divide-y divide-border/60 overflow-hidden">
+                  {settings.providers.map((p) => {
+                    const isActive = p.id === settings.activeProviderId;
+                    const isTesting = testingId === p.id;
 
-                  return (
-                    <div
-                      key={p.id}
-                      className={cn(
-                        'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
-                        isActive ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-muted/40',
-                      )}
-                      onClick={() => handleSetActiveProvider(p.id)}
-                      title={isActive ? undefined : i18n.t('settings.providers.clickToActivate')}
-                    >
-                      {/* ① 前置控件槽: w-6 flex items-center justify-center shrink-0 */}
-                      <div className="w-6 flex items-center justify-center shrink-0">
-                        <span
-                          className={cn(
-                            'size-2 rounded-full transition-colors',
-                            isActive ? 'bg-primary ring-2 ring-primary/20' : 'bg-muted-foreground/30 group-hover:bg-muted-foreground/60',
-                          )}
-                        />
-                      </div>
-
-                      {/* ② 文本块: flex-1 min-w-0 */}
-                      <div className="flex-1 min-w-0 space-y-0.5">
-                        <div className={cn('font-medium text-[11px] truncate', isActive ? 'text-foreground font-semibold' : 'text-foreground')}>
-                          {p.name || i18n.t('settings.providers.unnamed')}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground truncate leading-tight font-mono">
-                          {apiTypeLabel(p.api)} · {p.baseUrl || i18n.t('settings.providers.noBaseUrl')} · {i18n.t('settings.providers.modelsCount', { count: p.models.length })}
-                        </div>
-                      </div>
-
-                      {/* ③ 右侧操作钮: flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity */}
-                      <div
-                        className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={isTesting}
-                          onClick={() => handleTestProvider(p)}
-                          className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
-                          title={i18n.t('settings.providers.test')}
+                    return (
+                      <Tooltip key={p.id} disabled={isActive}>
+                        <TooltipTrigger
+                          render={
+                            <div
+                              className={cn(
+                                'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
+                                isActive ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-muted/40',
+                              )}
+                              onClick={() => handleSetActiveProvider(p.id)}
+                              aria-label={isActive ? undefined : i18n.t('settings.providers.clickToActivate')}
+                            />
+                          }
                         >
-                          {isTesting ? <Spinner className="size-3" /> : <Zap className="size-3" />}
-                          <span className="sr-only">{i18n.t('settings.providers.test')}</span>
-                        </Button>
+                          {/* ① 前置控件槽: w-6 flex items-center justify-center shrink-0 */}
+                          <div className="w-6 flex items-center justify-center shrink-0">
+                            <span
+                              className={cn(
+                                'size-2 rounded-full transition-colors',
+                                isActive ? 'bg-primary ring-2 ring-primary/20' : 'bg-muted-foreground/30 group-hover:bg-muted-foreground/60',
+                              )}
+                            />
+                          </div>
 
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onEditProvider(p)}
-                          className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
-                          title={i18n.t('settings.providers.editTitle')}
-                        >
-                          <Pencil className="size-3" />
-                          <span className="sr-only">{i18n.t('settings.providers.editTitle')}</span>
-                        </Button>
+                          {/* ② 文本块: flex-1 min-w-0 */}
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <div className={cn('font-medium text-[11px] truncate', isActive ? 'text-foreground font-semibold' : 'text-foreground')}>
+                              {p.name || i18n.t('settings.providers.unnamed')}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground truncate leading-tight font-mono">
+                              {apiTypeLabel(p.api)} · {p.baseUrl || i18n.t('settings.providers.noBaseUrl')} · {i18n.t('settings.providers.modelsCount', { count: p.models.length })}
+                            </div>
+                          </div>
 
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteProviderTarget(p)}
-                          className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
-                          title={i18n.t('settings.providers.deleteTitle')}
-                        >
-                          <Trash2 className="size-3" />
-                          <span className="sr-only">{i18n.t('settings.providers.deleteTitle')}</span>
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </Card>
+                          {/* ③ 右侧操作钮: flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity */}
+                          <div
+                            className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <span className="inline-flex">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      disabled={isTesting}
+                                      onClick={() => handleTestProvider(p)}
+                                      className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                                      aria-label={i18n.t('settings.providers.test')}
+                                    >
+                                      {isTesting ? <Spinner className="size-3" /> : <Zap className="size-3" />}
+                                      <span className="sr-only">{i18n.t('settings.providers.test')}</span>
+                                    </Button>
+                                  </span>
+                                }
+                              />
+                              <TooltipContent side="top">
+                                {i18n.t('settings.providers.test')}
+                              </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => onEditProvider(p)}
+                                    className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                                    aria-label={i18n.t('settings.providers.editTitle')}
+                                  >
+                                    <Pencil className="size-3" />
+                                    <span className="sr-only">{i18n.t('settings.providers.editTitle')}</span>
+                                  </Button>
+                                }
+                              />
+                              <TooltipContent side="top">
+                                {i18n.t('settings.providers.editTitle')}
+                              </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setDeleteProviderTarget(p)}
+                                    className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
+                                    aria-label={i18n.t('settings.providers.deleteTitle')}
+                                  >
+                                    <Trash2 className="size-3" />
+                                    <span className="sr-only">{i18n.t('settings.providers.deleteTitle')}</span>
+                                  </Button>
+                                }
+                              />
+                              <TooltipContent side="top">
+                                {i18n.t('settings.providers.deleteTitle')}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipTrigger>
+                        {!isActive && (
+                          <TooltipContent side="left">
+                            {i18n.t('settings.providers.clickToActivate')}
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    );
+                  })}
+                </Card>
+              </TooltipProvider>
             )}
           </div>
         )}
@@ -602,34 +649,45 @@ export function SettingsMainView({
                       </Select>
                     </div>
                     <div className="w-22 shrink-0">
-                      <Select
-                        items={chatReasoningSelectItems}
-                        value={effectiveChatReasoningLevel}
-                        onValueChange={(val) => {
-                          onUpdateSettings({
-                            ...settings,
-                            reasoningLevel: val as ReasoningLevel,
-                          });
-                        }}
-                        disabled={!chatModel}
-                      >
-                        <SelectTrigger
-                          className="w-full"
-                          title={chatModel && chatModelSupportsReasoning ? i18n.t('settings.assignment.chatReasoningTitle') : i18n.t('settings.assignment.unsupportedReasoning')}
+                      <TooltipProvider delay={200}>
+                        <Select
+                          items={chatReasoningSelectItems}
+                          value={effectiveChatReasoningLevel}
+                          onValueChange={(val) => {
+                            onUpdateSettings({
+                              ...settings,
+                              reasoningLevel: val as ReasoningLevel,
+                            });
+                          }}
+                          disabled={!chatModel}
                         >
-                          <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
-                        </SelectTrigger>
-                        <SelectContent align="end" className="w-28">
-                          <SelectItem value="off">
-                            {i18n.t('settings.assignment.thinkingOff')}
-                          </SelectItem>
-                          {chatSupportedLevels.map((lvl) => (
-                            <SelectItem key={lvl} value={lvl}>
-                              {REASONING_LEVEL_LABELS[lvl]?.full || lvl}
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <SelectTrigger
+                                  className="w-full"
+                                  aria-label={chatModel && chatModelSupportsReasoning ? i18n.t('settings.assignment.chatReasoningTitle') : i18n.t('settings.assignment.unsupportedReasoning')}
+                                />
+                              }
+                            >
+                              <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              {chatModel && chatModelSupportsReasoning ? i18n.t('settings.assignment.chatReasoningTitle') : i18n.t('settings.assignment.unsupportedReasoning')}
+                            </TooltipContent>
+                          </Tooltip>
+                          <SelectContent align="end" className="w-28">
+                            <SelectItem value="off">
+                              {i18n.t('settings.assignment.thinkingOff')}
                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                            {chatSupportedLevels.map((lvl) => (
+                              <SelectItem key={lvl} value={lvl}>
+                                {REASONING_LEVEL_LABELS[lvl]?.full || lvl}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TooltipProvider>
                     </div>
                   </div>
                 </div>
@@ -674,30 +732,41 @@ export function SettingsMainView({
                       </Select>
                     </div>
                     <div className="w-22 shrink-0">
-                      <Select
-                        items={auxThinkingSelectItems}
-                        value={settings.titleThinking}
-                        onValueChange={(val) => {
-                          onUpdateSettings({
-                            ...settings,
-                            titleThinking: val as AuxThinkingLevel,
-                          });
-                        }}
-                      >
-                        <SelectTrigger
-                          className="w-full"
-                          title={i18n.t('settings.assignment.titleReasoningTitle')}
+                      <TooltipProvider delay={200}>
+                        <Select
+                          items={auxThinkingSelectItems}
+                          value={settings.titleThinking}
+                          onValueChange={(val) => {
+                            onUpdateSettings({
+                              ...settings,
+                              titleThinking: val as AuxThinkingLevel,
+                            });
+                          }}
                         >
-                          <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
-                        </SelectTrigger>
-                        <SelectContent align="end" className="w-28">
-                          {AUX_THINKING_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <SelectTrigger
+                                  className="w-full"
+                                  aria-label={i18n.t('settings.assignment.titleReasoningTitle')}
+                                />
+                              }
+                            >
+                              <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              {i18n.t('settings.assignment.titleReasoningTitle')}
+                            </TooltipContent>
+                          </Tooltip>
+                          <SelectContent align="end" className="w-28">
+                            {AUX_THINKING_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TooltipProvider>
                     </div>
                   </div>
                 </div>
@@ -742,30 +811,41 @@ export function SettingsMainView({
                       </Select>
                     </div>
                     <div className="w-22 shrink-0">
-                      <Select
-                        items={auxThinkingSelectItems}
-                        value={settings.quickPromptThinking}
-                        onValueChange={(val) => {
-                          onUpdateSettings({
-                            ...settings,
-                            quickPromptThinking: val as AuxThinkingLevel,
-                          });
-                        }}
-                      >
-                        <SelectTrigger
-                          className="w-full"
-                          title={i18n.t('settings.assignment.promptReasoningTitle')}
+                      <TooltipProvider delay={200}>
+                        <Select
+                          items={auxThinkingSelectItems}
+                          value={settings.quickPromptThinking}
+                          onValueChange={(val) => {
+                            onUpdateSettings({
+                              ...settings,
+                              quickPromptThinking: val as AuxThinkingLevel,
+                            });
+                          }}
                         >
-                          <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
-                        </SelectTrigger>
-                        <SelectContent align="end" className="w-28">
-                          {AUX_THINKING_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <SelectTrigger
+                                  className="w-full"
+                                  aria-label={i18n.t('settings.assignment.promptReasoningTitle')}
+                                />
+                              }
+                            >
+                              <SelectValue placeholder={i18n.t('settings.assignment.thinkingOff')} />
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              {i18n.t('settings.assignment.promptReasoningTitle')}
+                            </TooltipContent>
+                          </Tooltip>
+                          <SelectContent align="end" className="w-28">
+                            {AUX_THINKING_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TooltipProvider>
                     </div>
                   </div>
                 </div>
