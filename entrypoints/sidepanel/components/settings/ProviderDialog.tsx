@@ -510,10 +510,10 @@ export function ProviderDialog({
                       const out = formatTokens(c.meta?.maxTokens);
 
                       return (
-                        <label
+                        <Label
                           key={c.id}
                           className={cn(
-                            'flex items-start gap-2 rounded border bg-card p-1.5 text-left select-none transition-colors',
+                            'flex items-start gap-2 rounded border bg-card p-1.5 text-left select-none transition-colors font-normal',
                             isExisting
                               ? 'opacity-50 border-border bg-muted/40 cursor-not-allowed'
                               : 'cursor-pointer hover:bg-accent/40'
@@ -565,7 +565,7 @@ export function ProviderDialog({
                               </div>
                             )}
                           </div>
-                        </label>
+                        </Label>
                       );
                     })
                   )}
