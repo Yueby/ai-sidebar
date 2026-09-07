@@ -396,7 +396,7 @@ export default function App() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-6 px-2 text-[11px] border-warning/40 hover:bg-warning/20 text-foreground cursor-pointer"
+                    className="h-6 px-2 text-[11px] border-warning/40 hover:bg-warning/20 text-foreground"
                     disabled={compact.isCompacting}
                     onClick={() => {
                       void compact.handleCompact();
@@ -411,7 +411,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => setDismissedOverflowSessionId(currentSession?.id ?? 'temp')}
-                            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                            className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
                             aria-label={i18n.t('app.ignoreSuggest')}
                           >
                             <X className="size-3" />
@@ -465,7 +465,7 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => setSlashHelpOpen(false)}
-                            className="text-muted-foreground transition-colors hover:text-foreground cursor-pointer rounded p-0.5"
+                            className="text-muted-foreground transition-colors hover:text-foreground rounded p-0.5"
                             aria-label={i18n.t('app.close')}
                           >
                             <X className="size-3.5" />

@@ -202,7 +202,7 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
             render={
               <button
                 type="button"
-                className="flex items-center gap-1 text-[10px] font-medium text-primary-foreground/75 hover:text-primary-foreground select-none transition-colors py-0.5 cursor-pointer"
+                className="flex items-center gap-1 text-[10px] font-medium text-primary-foreground/75 hover:text-primary-foreground select-none transition-colors py-0.5"
               />
             }
           >
@@ -248,7 +248,7 @@ function ThinkingBlock({
         render={
           <button
             type="button"
-            className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
+            className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5"
           />
         }
       >
@@ -268,7 +268,7 @@ function ThinkingBlock({
               render={
                 <div
                   onClick={() => setOpen(true)}
-                  className="group/preview relative mt-0.5 cursor-pointer border-l-2 border-border/60 pl-2.5 hover:border-border transition-colors select-none"
+                  className="group/preview relative mt-0.5 border-l-2 border-border/60 pl-2.5 hover:border-border transition-colors select-none"
                   aria-label={i18n.t('messages.thinkingExpand')}
                 />
               }
@@ -365,7 +365,7 @@ function ToolCallCard({
         render={
           <button
             type="button"
-            className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-80 transition-opacity cursor-pointer"
+            className="flex w-full items-center justify-between gap-2 text-left select-none outline-none hover:opacity-80 transition-opacity"
           />
         }
       >
@@ -623,7 +623,7 @@ export function MessageItem({
               variant="ghost"
               size="xs"
               onClick={handleCopy}
-              className="h-5 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer font-normal"
+              className="h-5 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 font-normal"
             >
               {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
               <span>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</span>

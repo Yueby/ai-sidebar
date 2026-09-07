@@ -206,7 +206,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
                 <button
                   type="button"
                   onClick={() => setVisiblePassword(visible ? null : visibleKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label={visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
                 >
                   {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -243,7 +243,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               variant="outline"
               disabled={busy !== null}
               onClick={handleExport}
-              className="gap-1.5 h-7 text-xs flex-1 cursor-pointer"
+              className="gap-1.5 h-7 text-xs flex-1"
             >
               <Download className="size-3.5" />
               <span>{i18n.t('backup.exportButton')}</span>
@@ -254,7 +254,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               variant="outline"
               disabled={busy !== null}
               onClick={() => fileInputRef.current?.click()}
-              className="gap-1.5 h-7 text-xs flex-1 cursor-pointer"
+              className="gap-1.5 h-7 text-xs flex-1"
             >
               <Upload className="size-3.5" />
               <span>{i18n.t('backup.importButton')}</span>
@@ -297,7 +297,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               variant="outline"
               disabled={davBusy !== null}
               onClick={handleUpload}
-              className="gap-1 h-7 text-xs px-2 cursor-pointer"
+              className="gap-1 h-7 text-xs px-2"
             >
               {davBusy === 'upload' ? <Spinner className="size-3" /> : <CloudUpload className="size-3" />}
               <span>{i18n.t('sync.upload')}</span>
@@ -308,7 +308,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               variant="outline"
               disabled={davBusy !== null}
               onClick={handleRestoreClick}
-              className="gap-1 h-7 text-xs px-2 cursor-pointer"
+              className="gap-1 h-7 text-xs px-2"
             >
               {davBusy === 'restore' ? <Spinner className="size-3" /> : <CloudDownload className="size-3" />}
               <span>{i18n.t('sync.restore')}</span>
@@ -354,7 +354,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
                 variant="outline"
                 disabled={davBusy !== null}
                 onClick={handleTest}
-                className="h-7 text-xs px-2 shrink-0 cursor-pointer"
+                className="h-7 text-xs px-2 shrink-0"
               >
                 {davBusy === 'test' && <Spinner className="size-3" />}
                 <span>{i18n.t('sync.testButton')}</span>
@@ -370,7 +370,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
             <Switch
               checked={dav.encrypt}
               onCheckedChange={(v) => updateDav({ encrypt: v === true })}
-              className="shrink-0 cursor-pointer"
+              className="shrink-0"
             />
           </div>
           {(dav.encrypt || needPassword) && (

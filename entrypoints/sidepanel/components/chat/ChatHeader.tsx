@@ -127,7 +127,7 @@ export function ChatHeader({
             <DropdownMenuContent align="end" className="w-64 max-h-80 overflow-y-auto">
               <DropdownMenuItem
                 onClick={onNewSession}
-                className="text-xs cursor-pointer gap-2"
+                className="text-xs gap-2"
               >
                 <Plus className="size-3.5" />
                 <span>{i18n.t('header.newSession')}</span>
@@ -184,7 +184,7 @@ export function ChatHeader({
                               <button
                                 type="button"
                                 onClick={() => handleSaveRename(s.id)}
-                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
                                 aria-label={i18n.t('header.saveTitle')}
                               >
                                 <Check className="size-3 text-foreground" />
@@ -201,7 +201,7 @@ export function ChatHeader({
                               <button
                                 type="button"
                                 onClick={handleCancelRename}
-                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors cursor-pointer"
+                                className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
                                 aria-label={i18n.t('header.cancelEdit')}
                               >
                                 <X className="size-3" />
@@ -220,7 +220,7 @@ export function ChatHeader({
                     <div
                       key={s.id}
                       className={cn(
-                        'group flex items-center justify-between rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors',
+                        'group flex items-center justify-between rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors',
                         isActive && 'bg-accent/70 font-medium'
                       )}
                       onClick={() => onSelectSession(s.id)}
@@ -265,7 +265,7 @@ export function ChatHeader({
                                         e.stopPropagation();
                                         onAiTitleSession(s.id);
                                       }}
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60"
                                       aria-label={i18n.t('header.aiTitle')}
                                     >
                                       <Sparkles className="size-3" />
@@ -289,7 +289,7 @@ export function ChatHeader({
                                         e.stopPropagation();
                                         downloadSessionMarkdown(s);
                                       }}
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60"
                                       aria-label={i18n.t('header.exportMd')}
                                     >
                                       <Download className="size-3" />
@@ -313,7 +313,7 @@ export function ChatHeader({
                                         e.stopPropagation();
                                         handleStartRename(s);
                                       }}
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-foreground text-muted-foreground rounded hover:bg-muted/60"
                                       aria-label={i18n.t('header.rename')}
                                     >
                                       <Pencil className="size-3" />
@@ -338,7 +338,7 @@ export function ChatHeader({
                                   e.stopPropagation();
                                   setDeleteTarget(s);
                                 }}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive text-muted-foreground rounded hover:bg-muted/60 cursor-pointer"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive text-muted-foreground rounded hover:bg-muted/60"
                                 aria-label={i18n.t('header.delete')}
                               >
                                 <Trash2 className="size-3" />

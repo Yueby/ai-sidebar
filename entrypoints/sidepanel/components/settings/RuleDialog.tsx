@@ -87,7 +87,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
             <Switch
               checked={enabled}
               onCheckedChange={setEnabled}
-              className="cursor-pointer"
+              className=""
             />
           </div>
         </DialogHeader>
@@ -159,7 +159,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
               variant="ghost"
               size="sm"
               onClick={() => onOpenChange(false)}
-              className="h-7 px-2.5 text-xs cursor-pointer"
+              className="h-7 px-2.5 text-xs"
             >
               {i18n.t('settings.rules.cancel')}
             </Button>
@@ -167,7 +167,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
               type="submit"
               size="sm"
               disabled={!name.trim() || !content.trim()}
-              className="h-7 px-3 text-xs cursor-pointer"
+              className="h-7 px-3 text-xs"
             >
               {i18n.t('settings.rules.save')}
             </Button>

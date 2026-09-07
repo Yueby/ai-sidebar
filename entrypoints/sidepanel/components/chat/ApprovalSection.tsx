@@ -126,7 +126,7 @@ export function ApprovalSection({
               render={
                 <button
                   type="button"
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground select-none transition-colors py-0.5 cursor-pointer"
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground select-none transition-colors py-0.5"
                 />
               }
             >
@@ -146,7 +146,7 @@ export function ApprovalSection({
           <div className="pl-9.5">
             <Label
               className={cn(
-                'group/grant flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors select-none cursor-pointer text-xs font-normal',
+                'group/grant flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors select-none text-xs font-normal',
                 pendingAction !== null && 'opacity-60 cursor-not-allowed pointer-events-none'
               )}
             >
@@ -162,7 +162,7 @@ export function ApprovalSection({
                   checked={grantChecked}
                   onCheckedChange={setGrantChecked}
                   disabled={pendingAction !== null}
-                  className="cursor-pointer"
+                  className=""
                 />
               </div>
             </Label>
@@ -178,7 +178,7 @@ export function ApprovalSection({
               variant="outline"
               disabled={pendingAction !== null}
               onClick={handleDenyClick}
-              className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
+              className="h-6.5 text-[11px] px-2.5 gap-1"
             >
               {pendingAction === 'deny' && <Spinner className="size-3 shrink-0" />}
               <span>{pendingAction === 'deny' ? i18n.t('approval.denying') : i18n.t('approval.deny')}</span>
@@ -189,7 +189,7 @@ export function ApprovalSection({
               variant={isDanger ? 'destructive' : 'default'}
               disabled={pendingAction !== null}
               onClick={handleApproveClick}
-              className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
+              className="h-6.5 text-[11px] px-2.5 gap-1"
             >
               {pendingAction === 'approve' && <Spinner className="size-3 shrink-0" />}
               <span>
@@ -278,7 +278,7 @@ export function ApprovalSection({
                       setIsCustomInput(true);
                       setSelectedChoice(null);
                     }}
-                    className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-dashed border-border/80 bg-background/50 hover:bg-background hover:border-border text-left text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-dashed border-border/80 bg-background/50 hover:bg-background hover:border-border text-left text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
                       <PenLine className="size-3 shrink-0 text-muted-foreground" />
@@ -325,7 +325,7 @@ export function ApprovalSection({
               variant="ghost"
               disabled={pendingAction !== null}
               onClick={handleCancelClick}
-              className="h-6.5 text-[11px] px-2 text-muted-foreground hover:text-foreground cursor-pointer gap-1"
+              className="h-6.5 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
             >
               {pendingAction === 'cancel' && <Spinner className="size-3 shrink-0" />}
               <span>{pendingAction === 'cancel' ? i18n.t('approval.skipping') : i18n.t('approval.skip')}</span>
@@ -338,7 +338,7 @@ export function ApprovalSection({
                 pendingAction !== null ||
                 (hasChoices ? !selectedChoice && !customText.trim() : !customText.trim())
               }
-              className="h-6.5 text-[11px] px-2.5 cursor-pointer gap-1"
+              className="h-6.5 text-[11px] px-2.5 gap-1"
             >
               {pendingAction === 'answer' && <Spinner className="size-3 shrink-0" />}
               <span>{i18n.t('approval.submit')}</span>

@@ -181,7 +181,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
                     variant="ghost"
                     size="icon"
                     onClick={() => setShowKey((v) => !v)}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 size-5 text-muted-foreground hover:text-foreground cursor-pointer"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 size-5 text-muted-foreground hover:text-foreground"
                   >
                     {showKey ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
                   </Button>

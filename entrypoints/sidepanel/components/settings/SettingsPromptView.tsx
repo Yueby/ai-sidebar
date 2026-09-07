@@ -167,7 +167,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
             size="sm"
             onClick={startCreating}
             disabled={rules.length >= MAX_RULES_COUNT}
-            className="gap-1 h-7 text-xs px-2.5 shrink-0 cursor-pointer"
+            className="gap-1 h-7 text-xs px-2.5 shrink-0"
           >
             <Plus className="size-3" />
             <span>{i18n.t('settings.rules.addRule')}</span>
@@ -190,7 +190,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
                 variant="outline"
                 size="sm"
                 onClick={startCreating}
-                className="h-7 text-xs gap-1.5 cursor-pointer"
+                className="h-7 text-xs gap-1.5"
               >
                 <Plus className="size-3" />
                 <span>{i18n.t('settings.rules.emptyAction')}</span>
@@ -203,7 +203,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
               <div
                 key={rule.id}
                 className={cn(
-                  'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
+                  'flex items-center justify-between gap-2.5 p-2.5 transition-colors group',
                   rule.enabled
                     ? 'hover:bg-muted/40'
                     : 'opacity-60 hover:opacity-100',
@@ -224,7 +224,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
                         ? i18n.t('settings.rules.disableHint')
                         : i18n.t('settings.rules.enableHint')
                     }
-                    className="cursor-pointer"
+                    className=""
                   />
                 </div>
 
@@ -253,7 +253,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
                             size="icon"
                             onClick={() => startEditing(rule)}
                             aria-label={i18n.t('settings.rules.edit')}
-                            className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                            className="size-6 text-muted-foreground hover:text-foreground"
                           >
                             <Pencil className="size-3" />
                             <span className="sr-only">{i18n.t('settings.rules.edit')}</span>
@@ -273,7 +273,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
                             size="icon"
                             onClick={() => setDeleteRuleTarget(rule)}
                             aria-label={i18n.t('settings.rules.delete')}
-                            className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
+                            className="size-6 text-muted-foreground hover:text-destructive"
                           >
                             <Trash2 className="size-3" />
                             <span className="sr-only">{i18n.t('settings.rules.delete')}</span>

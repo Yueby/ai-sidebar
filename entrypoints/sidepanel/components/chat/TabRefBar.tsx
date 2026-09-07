@@ -106,7 +106,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                       e.stopPropagation();
                       onRemoveRefTab(tab.id);
                     }}
-                    className="text-muted-foreground/70 hover:text-foreground rounded p-0.5 hover:bg-background/80 transition-colors shrink-0 cursor-pointer"
+                    className="text-muted-foreground/70 hover:text-foreground rounded p-0.5 hover:bg-background/80 transition-colors shrink-0"
                     aria-label={i18n.t('refBar.removeRefTitle')}
                   >
                     <X className="size-3" />
@@ -130,7 +130,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
         {/* 头部摘要栏 (点击可展开/收起) */}
         <div
           onClick={() => setExpanded((prev) => !prev)}
-          className={`flex items-center justify-between gap-2 px-2.5 pt-1.5 cursor-pointer hover:bg-muted/60 transition-colors ${
+          className={`flex items-center justify-between gap-2 px-2.5 pt-1.5  hover:bg-muted/60 transition-colors ${
             expanded ? 'pb-1.5' : 'pb-3'
           }`}
         >
@@ -166,7 +166,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                     e.stopPropagation();
                     setExpanded((prev) => !prev);
                   }}
-                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors shrink-0 cursor-pointer"
+                  className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors shrink-0"
                   aria-label={i18n.t(expanded ? 'refBar.collapseList' : 'refBar.expandList')}
                 >
                   {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
@@ -221,7 +221,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                         <button
                           type="button"
                           onClick={() => onRemoveRefTab(t.id)}
-                          className="opacity-60 group-hover/item:opacity-100 text-muted-foreground hover:text-foreground p-0.5 hover:bg-muted rounded transition-colors shrink-0 cursor-pointer"
+                          className="opacity-60 group-hover/item:opacity-100 text-muted-foreground hover:text-foreground p-0.5 hover:bg-muted rounded transition-colors shrink-0"
                           aria-label={i18n.t('refBar.removeRefTitle')}
                         >
                           <X className="size-3" />

@@ -417,7 +417,7 @@ export function ProviderDialog({
                         <button
                           type="button"
                           onClick={() => setShowApiKey((v) => !v)}
-                          className="absolute right-2 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                          className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
                           aria-label={showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
                         >
                           {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -516,7 +516,7 @@ export function ProviderDialog({
                             'flex items-start gap-2 rounded border bg-card p-1.5 text-left select-none transition-colors font-normal',
                             isExisting
                               ? 'opacity-50 border-border bg-muted/40 cursor-not-allowed'
-                              : 'cursor-pointer hover:bg-accent/40'
+                              : 'hover:bg-accent/40'
                           )}
                         >
                           <Checkbox

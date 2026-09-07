@@ -37,7 +37,7 @@ export function SlashMenu({ commands, activeIndex, onSelect, onHover }: SlashMen
             onSelect(i);
           }}
           onMouseEnter={() => onHover(i)}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors cursor-pointer ${
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors  ${
             i === activeIndex ? 'bg-accent text-accent-foreground font-medium' : 'hover:bg-accent/60 text-foreground'
           }`}
         >

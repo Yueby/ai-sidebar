@@ -60,7 +60,7 @@ export function ContextPanel({
         render={
           <button
             type="button"
-            className="flex items-center justify-center size-7 rounded-md outline-none transition-colors hover:bg-muted/70 text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+            className="flex items-center justify-center size-7 rounded-md outline-none transition-colors hover:bg-muted/70 text-muted-foreground hover:text-foreground shrink-0"
             aria-label={i18n.t('context.detailsTitle')}
           />
         }
@@ -165,7 +165,7 @@ export function ContextPanel({
           <Button
             type="button"
             size="sm"
-            className="h-7 w-full gap-1.5 text-[11px] cursor-pointer font-medium"
+            className="h-7 w-full gap-1.5 text-[11px] font-medium"
             disabled={isCompacting}
             onClick={submitCompact}
           >

@@ -159,7 +159,7 @@ export function MessageList({
                 variant="ghost"
                 size="icon"
                 onClick={onDismissError}
-                className="absolute right-2 top-2.5 size-5 p-0.5 text-destructive/70 hover:text-destructive hover:bg-destructive/10 rounded transition-colors shrink-0 cursor-pointer"
+                className="absolute right-2 top-2.5 size-5 p-0.5 text-destructive/70 hover:text-destructive hover:bg-destructive/10 rounded transition-colors shrink-0"
               >
                 <X className="size-3.5" />
                 <span className="sr-only">Close</span>
@@ -208,7 +208,7 @@ export function MessageList({
                       size="sm"
                       variant="outline"
                       onClick={onOpenSettings}
-                      className="h-7 text-xs gap-1.5 cursor-pointer"
+                      className="h-7 text-xs gap-1.5"
                     >
                       <SettingsIcon className="size-3" />
                       {i18n.t('messages.goSettings')}
@@ -232,7 +232,7 @@ export function MessageList({
                               type="button"
                               onClick={quickPrompts.regenerate}
                               disabled={quickPrompts.loading}
-                              className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/60 transition-colors disabled:opacity-40 cursor-pointer"
+                              className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted/60 transition-colors disabled:opacity-40"
                               aria-label={i18n.t('messages.refreshPrompts')}
                             >
                               <RefreshCw className={quickPrompts.loading ? 'size-3 animate-spin' : 'size-3'} />
@@ -272,7 +272,7 @@ export function MessageList({
                           variant="outline"
                           render={<button type="button" />}
                           onClick={() => onSelectPrompt(item.prompt)}
-                          className="w-full rounded-lg bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer items-start gap-2.5"
+                          className="w-full rounded-lg bg-card p-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground items-start gap-2.5"
                         >
                           <ItemMedia
                             variant="icon"

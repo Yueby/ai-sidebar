@@ -100,7 +100,7 @@ export function UserScriptsGateDialog() {
           <Button
             type="button"
             onClick={handleOpenDetails}
-            className="w-full justify-center gap-1.5 text-xs font-medium cursor-pointer"
+            className="w-full justify-center gap-1.5 text-xs font-medium"
           >
             <ExternalLink className="size-3.5" />
             <span>{i18n.t('gate.openDetails')}</span>
@@ -111,7 +111,7 @@ export function UserScriptsGateDialog() {
             variant="ghost"
             size="sm"
             onClick={handleSkip}
-            className="w-full text-xs text-muted-foreground hover:text-foreground cursor-pointer h-7"
+            className="w-full text-xs text-muted-foreground hover:text-foreground h-7"
           >
             {i18n.t('gate.skip')}
           </Button>

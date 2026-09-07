@@ -37,7 +37,7 @@ export function CompactionRow({ tokensBefore, summary }: CompactionRowProps) {
                     render={
                       <button
                         type="button"
-                        className="flex max-w-[85%] items-center gap-1.5 rounded-full border border-border bg-muted/60 hover:bg-accent px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground cursor-pointer select-none shadow-2xs"
+                        className="flex max-w-[85%] items-center gap-1.5 rounded-full border border-border bg-muted/60 hover:bg-accent px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground select-none shadow-2xs"
                         aria-label={i18n.t(open ? 'compaction.collapse' : 'compaction.expand')}
                       />
                     }

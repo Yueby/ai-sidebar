@@ -369,7 +369,7 @@ export function ChatInput({
       {/* 1. Pick Element Shortcut */}
       <DropdownMenuItem
         onClick={() => onStartPickElement()}
-        className="flex items-center gap-2 text-xs cursor-pointer py-1.5"
+        className="flex items-center gap-2 text-xs py-1.5"
       >
         <SquareMousePointer className="size-3.5 shrink-0 text-foreground" />
         <span className="font-medium text-foreground">{i18n.t('composer.pickElement')}</span>
@@ -381,7 +381,7 @@ export function ChatInput({
           onClick={() => {
             for (const p of pickedElements) onRemovePickedElement(p.id);
           }}
-          className="flex items-center gap-2 text-xs cursor-pointer py-1.5 text-muted-foreground hover:text-foreground"
+          className="flex items-center gap-2 text-xs py-1.5 text-muted-foreground hover:text-foreground"
         >
           <X className="size-3.5 shrink-0" />
           <span>{i18n.t('composer.clearPicked', { count: pickedElements.length })}</span>
@@ -405,7 +405,7 @@ export function ChatInput({
             <DropdownMenuItem
               onClick={() => !isCurrentAdded && onAddCurrentTab()}
               disabled={isCurrentAdded}
-              className="flex items-start justify-between gap-2 text-xs cursor-pointer py-1.5"
+              className="flex items-start justify-between gap-2 text-xs py-1.5"
             >
               <div className="flex items-start gap-2 min-w-0 pr-1 text-left flex-1">
                 <FaviconIcon
@@ -441,7 +441,7 @@ export function ChatInput({
             key={tab.id}
             onClick={() => !isAdded && onAddRefTab(tab)}
             disabled={isAdded}
-            className="flex items-start justify-between gap-2 text-xs cursor-pointer py-1.5"
+            className="flex items-start justify-between gap-2 text-xs py-1.5"
           >
             <div className="flex items-start gap-2 min-w-0 pr-1 text-left flex-1">
               <FaviconIcon
@@ -576,7 +576,7 @@ export function ChatInput({
                               <DropdownMenuItem
                                 key={m.id}
                                 onClick={() => onSelectModel(p.id, m.id)}
-                                className="flex items-center justify-between text-xs cursor-pointer"
+                                className="flex items-center justify-between text-xs"
                               >
                                 <div className="flex flex-col min-w-0 pr-2">
                                   <span className="truncate">{m.displayName || m.id}</span>
@@ -597,7 +597,7 @@ export function ChatInput({
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={onOpenSettings}
-                    className="text-xs cursor-pointer gap-2"
+                    className="text-xs gap-2"
                   >
                     <Sliders className="size-3.5" />
                     <span>{i18n.t('composer.manageProviders')}</span>
@@ -654,7 +654,7 @@ export function ChatInput({
                   {/* Off option */}
                   <DropdownMenuItem
                     onClick={() => onChangeReasoningLevel('off')}
-                    className="flex items-center justify-between text-xs cursor-pointer"
+                    className="flex items-center justify-between text-xs"
                   >
                     <span>{i18n.t('composer.thinkingOff')}</span>
                     {effectiveReasoningLevel === 'off' && <Check className="size-3.5 shrink-0" />}
@@ -668,7 +668,7 @@ export function ChatInput({
                       <DropdownMenuItem
                         key={lvl}
                         onClick={() => onChangeReasoningLevel(lvl)}
-                        className="flex items-center justify-between text-xs cursor-pointer"
+                        className="flex items-center justify-between text-xs"
                       >
                         <span>{label}</span>
                         {isSelected && <Check className="size-3.5 shrink-0" />}

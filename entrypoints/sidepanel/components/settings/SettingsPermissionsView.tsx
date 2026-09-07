@@ -135,7 +135,7 @@ export function SettingsPermissionsView() {
                 size="sm"
                 variant="outline"
                 onClick={openExtensionDetails}
-                className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer w-fit"
+                className="h-7 text-xs px-2.5 gap-1.5 w-fit"
               >
                 <ExternalLink className="size-3 shrink-0" />
                 <span>{i18n.t('permissions.openDetails')}</span>

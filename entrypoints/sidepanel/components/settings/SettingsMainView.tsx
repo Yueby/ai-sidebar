@@ -326,7 +326,7 @@ export function SettingsMainView({
           variant="ghost"
           size="icon"
           onClick={onBack}
-          className="size-7 shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+          className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
           <span className="sr-only">{i18n.t('settings.backToChat')}</span>
@@ -354,7 +354,7 @@ export function SettingsMainView({
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
-                className="h-7 px-1 text-[11px] sm:text-xs cursor-pointer min-w-0 truncate"
+                className="h-7 px-1 text-[11px] sm:text-xs min-w-0 truncate"
               >
                 {tab.label}
               </TabsTrigger>
@@ -379,7 +379,7 @@ export function SettingsMainView({
                 type="button"
                 size="sm"
                 onClick={onAddProvider}
-                className="gap-1 h-7 text-xs px-2.5 shrink-0 cursor-pointer"
+                className="gap-1 h-7 text-xs px-2.5 shrink-0"
               >
                 <Plus className="size-3" />
                 <span>{i18n.t('settings.providers.addProvider')}</span>
@@ -402,7 +402,7 @@ export function SettingsMainView({
                     variant="outline"
                     size="sm"
                     onClick={onAddProvider}
-                    className="h-7 text-xs gap-1.5 cursor-pointer"
+                    className="h-7 text-xs gap-1.5"
                   >
                     <Plus className="size-3" />
                     <span>{i18n.t('settings.providers.emptyAction')}</span>
@@ -422,7 +422,7 @@ export function SettingsMainView({
                           render={
                             <div
                               className={cn(
-                                'flex items-center justify-between gap-2.5 p-2.5 transition-colors cursor-pointer group',
+                                'flex items-center justify-between gap-2.5 p-2.5 transition-colors group',
                                 isActive ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-muted/40',
                               )}
                               onClick={() => handleSetActiveProvider(p.id)}
@@ -465,7 +465,7 @@ export function SettingsMainView({
                                       size="icon"
                                       disabled={isTesting}
                                       onClick={() => handleTestProvider(p)}
-                                      className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                                      className="size-6 text-muted-foreground hover:text-foreground"
                                       aria-label={i18n.t('settings.providers.test')}
                                     >
                                       {isTesting ? <Spinner className="size-3" /> : <Zap className="size-3" />}
@@ -487,7 +487,7 @@ export function SettingsMainView({
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => onEditProvider(p)}
-                                    className="size-6 text-muted-foreground hover:text-foreground cursor-pointer"
+                                    className="size-6 text-muted-foreground hover:text-foreground"
                                     aria-label={i18n.t('settings.providers.editTitle')}
                                   >
                                     <Pencil className="size-3" />
@@ -508,7 +508,7 @@ export function SettingsMainView({
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setDeleteProviderTarget(p)}
-                                    className="size-6 text-muted-foreground hover:text-destructive cursor-pointer"
+                                    className="size-6 text-muted-foreground hover:text-destructive"
                                     aria-label={i18n.t('settings.providers.deleteTitle')}
                                   >
                                     <Trash2 className="size-3" />
