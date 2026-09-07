@@ -38,8 +38,10 @@ export function useChatTurn(params: {
   onAutoCompact: () => void;
   /** 首轮对话结束后自动 AI 命名回调(若未手动命名) */
   onAutoAiTitle?: (sessionId: string) => void;
+  /** 轮次正常成功完成回调(非打断、非错误、无队列积压) */
+  onTurnSuccess?: (sessionId: string, session: Session) => void;
 }) {
-  const { isCompacting, onAutoCompact, onAutoAiTitle } = params;
+  const { isCompacting, onAutoCompact, onAutoAiTitle, onTurnSuccess } = params;
 
   // 门控/错误域:store 直读(一期收敛);isStreaming 参与守卫判定,需响应式订阅
   const isStreaming = useAppStore((s) => s.isStreaming);
@@ -276,6 +278,14 @@ export function useChatTurn(params: {
               onAutoAiTitle(finalizedSession.id);
             }, 100);
           }
+
+          // 轮次成功完成且无打断、无错误、无排队积压: 触发跟进建议生成
+          const hasQueue = useAppStore.getState().queuedMessages.length > 0;
+          if (!abortCtrl.signal.aborted && !result.errorMessage && !hasQueue && onTurnSuccess) {
+            setTimeout(() => {
+              onTurnSuccess(finalizedSession.id, finalizedSession);
+            }, 50);
+          }
         } else {
           useAppStore.getState().setInFlight(null);
         }
@@ -322,7 +332,7 @@ export function useChatTurn(params: {
         }
       }
     },
-    [onAutoCompact, onAutoAiTitle, resetResolvedGateCount, setErrorMessage, checkAndDispatchQueue]
+    [onAutoCompact, onAutoAiTitle, onTurnSuccess, resetResolvedGateCount, setErrorMessage, checkAndDispatchQueue]
   );
 
   // AI Chat & Agent Loop (新消息发送入口)
