@@ -318,11 +318,11 @@ function ToolCallCard({
   const isTruncated = resultText.length > 500;
   const displayResultText = isTruncated ? `${resultText.slice(0, 500)}...` : resultText;
 
-  // 边框和背景调优: {i18n.t('messages.waitingConfirm')}时用琥珀色/蓝色警示强调
+  // 边框和背景调优: 等待确认/回复时用主题 token 强调
   const cardBorderClass = isWaitingConfirmation
     ? gateKind === 'ask'
-      ? 'border-blue-500/40 bg-blue-500/5'
-      : 'border-amber-500/40 bg-amber-500/5'
+      ? 'border-primary/30 bg-primary/5'
+      : 'border-border/80 bg-muted/40'
     : 'border-border/60 bg-muted/20';
 
   const isAskGate = gateKind === 'ask';
@@ -345,9 +345,9 @@ function ToolCallCard({
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
             {isWaitingConfirmation ? (
               isAskGate ? (
-                <HelpCircle className="size-3.5 shrink-0 text-blue-500" />
+                <HelpCircle className="size-3.5 shrink-0 text-primary" />
               ) : (
-                <ShieldAlert className="size-3.5 shrink-0 text-amber-500" />
+                <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground" />
               )
             ) : isQueued ? (
               <ShieldAlert className="size-3.5 shrink-0 text-muted-foreground/70" />
@@ -370,11 +370,11 @@ function ToolCallCard({
           <div className="flex items-center gap-1.5 shrink-0">
             {isWaitingConfirmation ? (
               isAskGate ? (
-                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium animate-pulse">
+                <span className="text-[10px] text-primary font-medium animate-pulse">
                   {i18n.t('messages.waitingReply')}
                 </span>
               ) : (
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium animate-pulse">
+                <span className="text-[10px] text-muted-foreground font-medium animate-pulse">
                   {i18n.t('messages.waitingConfirm')}
                 </span>
               )
@@ -383,7 +383,7 @@ function ToolCallCard({
                 {i18n.t('messages.queued')}
               </span>
             ) : isExecuting ? (
-              <span className="text-[10px] text-muted-foreground">{i18n.t('messages.executing')}</span>
+              <span className="text-[10px] text-primary font-medium animate-pulse">{i18n.t('messages.executing')}</span>
             ) : isDenied ? (
               <span className="text-[10px] text-destructive font-medium">{i18n.t('messages.userDenied')}</span>
             ) : isError ? (
@@ -429,7 +429,7 @@ function ToolCallCard({
             </div>
 
             {isWaitingConfirmation ? (
-              <div className="text-[10px] text-amber-600 dark:text-amber-400 italic py-0.5">
+              <div className="text-[10px] text-muted-foreground italic py-0.5">
                 {i18n.t('messages.waitingUserConfirm')}
               </div>
             ) : isQueued ? (
