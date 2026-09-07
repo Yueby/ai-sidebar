@@ -506,7 +506,6 @@ export default function App() {
         onOpenChange={(open) => {
           if (!open) handleBackToChat();
         }}
-        shouldScaleBackground={false}
       >
         <DrawerContent className="mt-0 h-[93dvh] max-h-[93dvh] max-w-3xl mx-auto flex flex-col p-0 outline-none overflow-hidden">
           <DrawerTitle className="sr-only">{i18n.t('app.settingsSr')}</DrawerTitle>
