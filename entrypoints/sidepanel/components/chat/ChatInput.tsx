@@ -666,40 +666,44 @@ export function ChatInput({
           {/* Right: Send / Stop button */}
           <div className="flex items-center gap-1 shrink-0">
             {isStreaming ? (
-              <TooltipProvider delayDuration={200}>
+              <TooltipProvider delay={200}>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="destructive"
-                      onClick={handleStop}
-                      className="size-6"
-                    >
-                      <Square className="size-3 fill-current" />
-                      <span className="sr-only">{i18n.t('composer.stopSr')}</span>
-                    </Button>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="destructive"
+                        onClick={handleStop}
+                        className="size-6"
+                      >
+                        <Square className="size-3 fill-current" />
+                        <span className="sr-only">{i18n.t('composer.stopSr')}</span>
+                      </Button>
+                    }
+                  />
                   <TooltipContent side="top">
                     <p>{i18n.t('composer.stopHint')}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ) : (
-              <TooltipProvider delayDuration={300}>
+              <TooltipProvider delay={300}>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      size="icon"
-                      disabled={!text.trim() || disabled}
-                      onClick={handleSend}
-                      className="size-6"
-                    >
-                      <ArrowUp className="size-3.5" />
-                      <span className="sr-only">{i18n.t('composer.sendSr')}</span>
-                    </Button>
-                  </TooltipTrigger>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon"
+                        disabled={!text.trim() || disabled}
+                        onClick={handleSend}
+                        className="size-6"
+                      >
+                        <ArrowUp className="size-3.5" />
+                        <span className="sr-only">{i18n.t('composer.sendSr')}</span>
+                      </Button>
+                    }
+                  />
                   <TooltipContent side="top">
                     <p>{i18n.t('composer.sendHint')}</p>
                   </TooltipContent>

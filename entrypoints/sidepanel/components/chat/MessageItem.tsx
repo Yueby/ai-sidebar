@@ -832,19 +832,21 @@ export function MessageItem({
               </div>
 
               {hasVisibleTextOrThinking && (
-                <TooltipProvider delayDuration={200}>
+                <TooltipProvider delay={200}>
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleCopy}
-                        className="size-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
-                      >
-                        {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                        <span className="sr-only">{i18n.t('messages.copy')}</span>
-                      </Button>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleCopy}
+                          className="size-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                        />
+                      }
+                    >
+                      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                      <span className="sr-only">{i18n.t('messages.copy')}</span>
                     </TooltipTrigger>
                     <TooltipContent side="top">
                       <p>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</p>

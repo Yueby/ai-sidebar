@@ -66,11 +66,9 @@ export function ContextRing({ usage, isStreaming, modelName, showTooltip = true 
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delay={200}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          {ringNode}
-        </TooltipTrigger>
+        <TooltipTrigger render={ringNode} />
         <TooltipContent
           side="top"
           align="center"

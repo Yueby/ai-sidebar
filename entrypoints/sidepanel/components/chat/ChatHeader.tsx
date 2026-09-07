@@ -89,7 +89,7 @@ export function ChatHeader({
     <header className="flex h-10 shrink-0 items-center justify-end bg-background px-3 select-none">
       {/* Right: Action Buttons Group */}
       <div className="flex items-center gap-1 shrink-0">
-        <TooltipProvider delayDuration={300}>
+        <TooltipProvider delay={300}>
           {/* History Sessions Dropdown */}
           <DropdownMenu
             onOpenChange={(open) => {
@@ -100,19 +100,21 @@ export function ChatHeader({
             }}
           >
             <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                  >
-                    <History className="size-3.5" />
-                    <span className="sr-only">{i18n.t('header.history')}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-7"
+                    >
+                      <History className="size-3.5" />
+                      <span className="sr-only">{i18n.t('header.history')}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                }
+              />
               <TooltipContent side="bottom" className="text-xs">
                 <p>{i18n.t('header.history')}</p>
               </TooltipContent>
@@ -283,18 +285,20 @@ export function ChatHeader({
 
           {/* Settings */}
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onOpenSettings}
-                className="size-7"
-              >
-                <SettingsIcon className="size-3.5" />
-                <span className="sr-only">{i18n.t('header.settings')}</span>
-              </Button>
-            </TooltipTrigger>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onOpenSettings}
+                  className="size-7"
+                >
+                  <SettingsIcon className="size-3.5" />
+                  <span className="sr-only">{i18n.t('header.settings')}</span>
+                </Button>
+              }
+            />
             <TooltipContent side="bottom" className="text-xs">
               <p>{i18n.t('header.settings')}</p>
             </TooltipContent>

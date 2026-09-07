@@ -28,20 +28,22 @@ export function InfoTip({
   if (!content) return null;
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              'inline-flex size-4 items-center justify-center rounded text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors shrink-0',
-              className,
-            )}
-            onClick={(e) => e.stopPropagation()}
-            aria-label="Info"
-          >
-            <Info className={cn('size-3', iconClassName)} />
-          </button>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              className={cn(
+                'inline-flex size-4 items-center justify-center rounded text-muted-foreground/80 hover:text-foreground cursor-pointer transition-colors shrink-0',
+                className,
+              )}
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Info"
+            />
+          }
+        >
+          <Info className={cn('size-3', iconClassName)} />
         </TooltipTrigger>
         <TooltipContent
           side={side}
