@@ -500,19 +500,20 @@ export default function App() {
           />
         </div>
 
-      {/* VIEW: Settings Drawer (全高抽屉，顶部露出聊天头部条，支持下滑/遮罩/Escape/返回按钮关闭) */}
+      {/* VIEW: Settings Drawer */}
       <Drawer
         open={currentView === 'settings'}
         onOpenChange={(open) => {
           if (!open) handleBackToChat();
         }}
+        showSwipeHandle
       >
-        <DrawerContent className="mt-0 h-[93dvh] max-h-[93dvh] max-w-3xl mx-auto flex flex-col p-0 outline-none overflow-hidden">
+        <DrawerContent className="h-dvh">
           <DrawerTitle className="sr-only">{i18n.t('app.settingsSr')}</DrawerTitle>
           <DrawerDescription className="sr-only">
             {i18n.t('app.settingsDesc')}
           </DrawerDescription>
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden mt-2">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <SettingsMainView
               settings={settings}
               onUpdateSettings={updateSettings}
