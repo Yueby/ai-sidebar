@@ -128,6 +128,7 @@ export function SearchSettingsView({ settings, onUpdateSettings }: SearchSetting
             <Label className="text-[11px] font-medium text-foreground shrink-0">{i18n.t('search.providerLabel')}</Label>
             <div className="w-36 shrink-0">
               <Select
+                items={providerOptions}
                 value={webSearch.provider}
                 onValueChange={(value) => update({ provider: value as WebSearchProvider })}
               >

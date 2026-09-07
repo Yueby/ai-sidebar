@@ -5,21 +5,23 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
+const SelectItemsContext = React.createContext<Map<string, React.ReactNode>>(new Map())
+
 function extractItems(
   children: React.ReactNode,
   map: Map<string, React.ReactNode> = new Map()
 ): Map<string, React.ReactNode> {
   React.Children.forEach(children, (child) => {
-    if (!React.isValidElement(child)) return;
-    const props = child.props as Record<string, any>;
+    if (!React.isValidElement(child)) return
+    const props = child.props as Record<string, any>
     if (props && props.value !== undefined && props.children !== undefined) {
-      map.set(String(props.value), props.children);
+      map.set(String(props.value), props.children)
     }
     if (props?.children) {
-      extractItems(props.children, map);
+      extractItems(props.children, map)
     }
-  });
-  return map;
+  })
+  return map
 }
 
 function Select<Value = any, Multiple extends boolean | undefined = false>({
@@ -27,21 +29,41 @@ function Select<Value = any, Multiple extends boolean | undefined = false>({
   items: itemsProp,
   ...props
 }: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const itemsMap = React.useMemo(() => {
+    const map = new Map<string, React.ReactNode>()
+    if (itemsProp) {
+      if (Array.isArray(itemsProp)) {
+        for (const item of itemsProp) {
+          if (item && item.value !== undefined) {
+            map.set(String(item.value), item.label ?? item.value)
+          }
+        }
+      } else if (typeof itemsProp === "object" && itemsProp !== null) {
+        for (const [key, val] of Object.entries(itemsProp)) {
+          map.set(key, val as React.ReactNode)
+        }
+      }
+    }
+    extractItems(children, map)
+    return map
+  }, [itemsProp, children])
+
   const items = React.useMemo(() => {
-    if (itemsProp) return itemsProp;
-    const map = extractItems(children);
-    if (map.size === 0) return undefined;
-    return Array.from(map.entries()).map(([value, label]) => ({
+    if (itemsProp) return itemsProp
+    if (itemsMap.size === 0) return undefined
+    return Array.from(itemsMap.entries()).map(([value, label]) => ({
       value,
       label,
-    }));
-  }, [itemsProp, children]);
+    }))
+  }, [itemsProp, itemsMap])
 
   return (
-    <SelectPrimitive.Root data-slot="select" items={items} {...props}>
-      {children}
-    </SelectPrimitive.Root>
-  );
+    <SelectItemsContext.Provider value={itemsMap}>
+      <SelectPrimitive.Root data-slot="select" items={items} {...props}>
+        {children}
+      </SelectPrimitive.Root>
+    </SelectItemsContext.Provider>
+  )
 }
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
@@ -54,14 +76,37 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({ className, placeholder, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({
+  className,
+  placeholder,
+  children,
+  ...props
+}: SelectPrimitive.Value.Props) {
+  const itemsMap = React.useContext(SelectItemsContext)
+
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       placeholder={placeholder}
       {...props}
-    />
+    >
+      {typeof children === "function"
+        ? children
+        : (value: any) => {
+            if (value == null || value === "" || value === "__none__") {
+              return placeholder ?? ""
+            }
+            const key = String(value)
+            if (itemsMap.has(key)) {
+              return itemsMap.get(key)
+            }
+            if (children != null) {
+              return children
+            }
+            return placeholder ?? key
+          }}
+    </SelectPrimitive.Value>
   )
 }
 

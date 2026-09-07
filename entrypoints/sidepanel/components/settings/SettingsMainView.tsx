@@ -132,6 +132,34 @@ export function SettingsMainView({
     return settings.providers.filter((p) => p.models.length > 0);
   }, [settings.providers]);
 
+  // 语言选项 items
+  const langSelectItems = useMemo(() => [
+    { value: 'auto', label: i18n.t('settings.pref.langAuto') },
+    { value: 'custom', label: i18n.t('settings.pref.langCustom') },
+  ], []);
+
+  // 对话模型选项 items (Base UI 受控显示中文名)
+  const chatModelSelectItems = useMemo(() => [
+    {
+      value: '__none__',
+      label: allModelOptions.length === 0
+        ? i18n.t('settings.assignment.noModelsAvailable')
+        : i18n.t('settings.assignment.notSelected'),
+    },
+    ...allModelOptions.map((o) => ({ value: o.value, label: o.label })),
+  ], [allModelOptions]);
+
+  // 辅助模型（标题生成/快捷指令）选项 items
+  const auxModelSelectItems = useMemo(() => [
+    { value: 'follow', label: i18n.t('settings.assignment.followChatModel') },
+    ...allModelOptions.map((o) => ({ value: o.value, label: o.label })),
+  ], [allModelOptions]);
+
+  // 辅助思考等级 items
+  const auxThinkingSelectItems = useMemo(() => {
+    return AUX_THINKING_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }));
+  }, []);
+
   // 渲染按提供商分组的模型选项
   const renderModelGroups = () => {
     return providersWithModels.map((p, idx) => (
@@ -196,6 +224,15 @@ export function SettingsMainView({
     if (!chatModel || !chatModelSupportsReasoning) return [];
     return sortReasoningLevels(getModelReasoningLevels(chatModel));
   }, [chatModel, chatModelSupportsReasoning]);
+
+  // 对话模型思考等级 items
+  const chatReasoningSelectItems = useMemo(() => [
+    { value: 'off', label: i18n.t('settings.assignment.thinkingOff') },
+    ...chatSupportedLevels.map((lvl) => ({
+      value: lvl,
+      label: REASONING_LEVEL_LABELS[lvl]?.full || lvl,
+    })),
+  ], [chatSupportedLevels]);
 
   // 对话模型思考受控值（与输入框保持一致：不支持思考时回退 off）
   const effectiveChatReasoningLevel = useMemo(() => {
@@ -475,6 +512,7 @@ export function SettingsMainView({
                   <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
                     <div className={cn((langDraft !== null || settings.language) ? 'w-20 shrink-0' : 'w-28 shrink-0')}>
                       <Select
+                        items={langSelectItems}
                         value={settings.language || langDraft !== null ? 'custom' : 'auto'}
                         onValueChange={(val) => {
                           if (val === 'custom') {
@@ -538,6 +576,7 @@ export function SettingsMainView({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="w-28 shrink-0">
                       <Select
+                        items={chatModelSelectItems}
                         value={chatModelValue}
                         onValueChange={(val) => {
                           if (!val || val === '__none__') return;
@@ -565,6 +604,7 @@ export function SettingsMainView({
                     </div>
                     <div className="w-20 shrink-0">
                       <Select
+                        items={chatReasoningSelectItems}
                         value={effectiveChatReasoningLevel}
                         onValueChange={(val) => {
                           onUpdateSettings({
@@ -606,6 +646,7 @@ export function SettingsMainView({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="w-28 shrink-0">
                       <Select
+                        items={auxModelSelectItems}
                         value={titleModelValue}
                         onValueChange={(val) => {
                           if (!val || val === 'follow') {
@@ -635,6 +676,7 @@ export function SettingsMainView({
                     </div>
                     <div className="w-20 shrink-0">
                       <Select
+                        items={auxThinkingSelectItems}
                         value={settings.titleThinking}
                         onValueChange={(val) => {
                           onUpdateSettings({
@@ -672,6 +714,7 @@ export function SettingsMainView({
                   <div className="flex items-center gap-1.5 shrink-0">
                     <div className="w-28 shrink-0">
                       <Select
+                        items={auxModelSelectItems}
                         value={quickPromptModelValue}
                         onValueChange={(val) => {
                           if (!val || val === 'follow') {
@@ -701,6 +744,7 @@ export function SettingsMainView({
                     </div>
                     <div className="w-20 shrink-0">
                       <Select
+                        items={auxThinkingSelectItems}
                         value={settings.quickPromptThinking}
                         onValueChange={(val) => {
                           onUpdateSettings({

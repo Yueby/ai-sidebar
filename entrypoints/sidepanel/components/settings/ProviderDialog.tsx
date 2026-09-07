@@ -368,7 +368,7 @@ export function ProviderDialog({
             {/* Protocol */}
             <div className="space-y-1">
               <Label className="text-xs">{i18n.t('providerDialog.apiLabel')}</Label>
-              <Select value={draft.api} onValueChange={(v) => handleApiChange(v as ApiType)}>
+              <Select items={API_TYPE_OPTIONS} value={draft.api} onValueChange={(v) => handleApiChange(v as ApiType)}>
                 <SelectTrigger className="h-8 text-xs w-full">
                   <SelectValue placeholder={i18n.t('providerDialog.apiPlaceholder')} />
                 </SelectTrigger>
