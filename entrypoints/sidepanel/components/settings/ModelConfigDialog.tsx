@@ -186,16 +186,16 @@ export function ModelConfigDialog({
                     {CANDIDATE_REASONING_LEVELS.map((opt) => {
                       const isChecked = reasoningLevels.includes(opt.value);
                       return (
-                        <label
+                        <Label
                           key={opt.value}
-                          className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer select-none"
+                          className="flex items-center gap-1.5 text-xs font-normal text-foreground cursor-pointer select-none"
                         >
                           <Checkbox
                             checked={isChecked}
                             onCheckedChange={() => handleToggleLevel(opt.value)}
                           />
                           <span className="text-[11px]">{opt.label}</span>
-                        </label>
+                        </Label>
                       );
                     })}
                   </div>
