@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -143,9 +144,9 @@ export function ApprovalSection({
         {/* 会话级 grant 勾选 (Switch 保持决策 22 会话级契约) */}
         {request.grantable && (
           <div className="pl-9.5">
-            <label
+            <Label
               className={cn(
-                'group/grant flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors select-none cursor-pointer text-xs',
+                'group/grant flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md border border-border/60 bg-muted/30 hover:bg-muted/50 transition-colors select-none cursor-pointer text-xs font-normal',
                 pendingAction !== null && 'opacity-60 cursor-not-allowed pointer-events-none'
               )}
             >
@@ -164,7 +165,7 @@ export function ApprovalSection({
                   className="cursor-pointer"
                 />
               </div>
-            </label>
+            </Label>
           </div>
         )}
 
