@@ -618,14 +618,16 @@ export function MessageItem({
             </BubbleContent>
           </Bubble>
           <MessageFooter className="px-1 py-0 justify-end">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={handleCopy}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
+              className="h-5 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer font-normal"
             >
               {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
               <span>{copied ? i18n.t('messages.copied') : i18n.t('messages.copy')}</span>
-            </button>
+            </Button>
           </MessageFooter>
         </MessageContent>
       </Message>
