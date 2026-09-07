@@ -67,6 +67,8 @@ composer:
   stopHint: Stop generating (keep partial output)
   sendSr: Send
   sendHint: Send message (Enter)
+  queuedCount: "{count} queued"
+  queuedRemove: Remove from queue
   reasoningTitle: "Thinking depth: {level}"
 
 messages:

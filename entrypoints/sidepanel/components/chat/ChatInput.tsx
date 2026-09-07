@@ -43,6 +43,10 @@ interface ChatInputProps {
   onSend: (text: string) => void;
   onStop: () => void;
   isStreaming: boolean;
+  /** 消息队列:流式期间排队等待发送的消息列表 */
+  queuedMessages?: string[];
+  /** 移除某条排队消息 */
+  onRemoveQueuedMessage?: (index: number) => void;
   settings: Settings;
   onSelectModel: (providerId: string, modelId: string) => void;
   onChangeReasoningLevel: (level: ReasoningLevel) => void;
@@ -88,6 +92,8 @@ export function ChatInput({
   onSend,
   onStop,
   isStreaming,
+  queuedMessages,
+  onRemoveQueuedMessage,
   settings,
   onSelectModel,
   onChangeReasoningLevel,
@@ -162,14 +168,14 @@ export function ChatInput({
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
-    if (!trimmed || isStreaming || disabled) return;
+    if (!trimmed || disabled) return;
     if (dispatchSlashCommand(trimmed)) return;
     onSend(trimmed);
     // 规则 4:发送后草稿清空(编辑器清空 + 上报 App 清 draft)
     editorRef.current?.commands.clearContent();
     reportText('');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatchSlashCommand 为组件内纯函数
-  }, [text, isStreaming, disabled, onSend, reportText, onCommand, onInputChange]);
+  }, [text, disabled, onSend, reportText, onCommand, onInputChange]);
 
   // ── 编辑器回调经 ref 间接(useEditor options 只捕获稳定引用,回调取实时值)─────────
   const editorRef = useRef<Editor | null>(null);
@@ -476,10 +482,55 @@ export function ChatInput({
       {/* 标签页引用区 (独立小控件, 位于输入框卡片上方, 底部被输入框轻微压住层叠) */}
       <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
 
+      {/* 队列提示条: 流式期间且队列非空时展示 */}
+      {isStreaming && queuedMessages && queuedMessages.length > 0 && (
+        <div className="mb-1.5 flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] text-muted-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <div className="flex items-center justify-between font-medium text-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+              <span>{i18n.t('composer.queuedCount', { count: queuedMessages.length })}</span>
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {queuedMessages.map((msg, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between gap-2 rounded bg-background/60 px-1.5 py-0.5"
+              >
+                <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground/90">
+                  {msg}
+                </span>
+                <TooltipProvider delay={200}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-4 shrink-0 text-muted-foreground hover:text-foreground"
+                          onClick={() => onRemoveQueuedMessage?.(idx)}
+                          aria-label={i18n.t('composer.queuedRemove')}
+                        >
+                          <X className="size-2.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent side="top">
+                      {i18n.t('composer.queuedRemove')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input container (TipTap 编辑器 + 底部工具栏) */}
       <div
         className={`relative z-10 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs transition-[box-shadow,border-color] duration-200 ease-out focus-within:ring-1 focus-within:ring-ring ${
-          refTabs && refTabs.length > 0 ? '-mt-2' : ''
+          refTabs && refTabs.length > 0 && (!queuedMessages || queuedMessages.length === 0) ? '-mt-2' : ''
         }`}
       >
 
@@ -694,7 +745,7 @@ export function ChatInput({
 
           {/* Right: Send / Stop button */}
           <div className="flex items-center gap-1 shrink-0">
-            {isStreaming ? (
+            {isStreaming && (
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -714,27 +765,26 @@ export function ChatInput({
                   {i18n.t('composer.stopHint')}
                 </TooltipContent>
               </Tooltip>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon"
-                      disabled={!text.trim() || disabled}
-                      onClick={handleSend}
-                      className="size-6"
-                    >
-                      <ArrowUp className="size-3.5" />
-                      <span className="sr-only">{i18n.t('composer.sendSr')}</span>
-                    </Button>
-                  }
-                />
-                <TooltipContent side="top">
-                  {i18n.t('composer.sendHint')}
-                </TooltipContent>
-              </Tooltip>
             )}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon"
+                    disabled={!text.trim() || disabled}
+                    onClick={handleSend}
+                    className="size-6"
+                  >
+                    <ArrowUp className="size-3.5" />
+                    <span className="sr-only">{i18n.t('composer.sendSr')}</span>
+                  </Button>
+                }
+              />
+              <TooltipContent side="top">
+                {i18n.t('composer.sendHint')}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
         </TooltipProvider>

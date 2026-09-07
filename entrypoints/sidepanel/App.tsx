@@ -55,6 +55,8 @@ export default function App() {
   const activeToolNames = useAppStore((s) => s.activeToolNames);
   const isCancelled = useAppStore((s) => s.isCancelled);
   const inFlight = useAppStore((s) => s.inFlight);
+  const queuedMessages = useAppStore((s) => s.queuedMessages);
+  const removeQueuedMessage = useAppStore((s) => s.removeQueuedMessage);
 
   // ── View Routing(App 域)───────────────────────────────────────
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
@@ -511,6 +513,8 @@ export default function App() {
             onSend={chat.handleSendMessage}
             onStop={chat.handleStopGeneration}
             isStreaming={isStreaming}
+            queuedMessages={queuedMessages}
+            onRemoveQueuedMessage={removeQueuedMessage}
             settings={settings}
             onSelectModel={handleSelectModel}
             onChangeReasoningLevel={handleChangeReasoningLevel}
