@@ -289,7 +289,7 @@ export function SettingsPromptView({ settings, onUpdateSettings }: SettingsPromp
               {i18n.t('settings.rules.deleteConfirmDesc', { name: deleteRuleTarget?.name || '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-row justify-end gap-2">
             <AlertDialogCancel onClick={() => setDeleteRuleTarget(null)}>
               {i18n.t('settings.rules.deleteConfirmCancel')}
             </AlertDialogCancel>
