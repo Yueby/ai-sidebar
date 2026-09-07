@@ -880,7 +880,7 @@ export function SettingsMainView({
                 {i18n.t('settings.deleteConfirm.desc', { name: deleteProviderTarget?.name || i18n.t('settings.providers.unnamed'), count: deleteProviderTarget?.models.length ?? 0 })}
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="flex-row justify-end gap-2">
               <AlertDialogCancel onClick={() => setDeleteProviderTarget(null)}>
                 {i18n.t('settings.deleteConfirm.cancel')}
               </AlertDialogCancel>
