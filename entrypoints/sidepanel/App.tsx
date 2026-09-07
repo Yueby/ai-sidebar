@@ -32,7 +32,6 @@ import { SettingsMainView } from './components/settings/SettingsMainView';
 import { ProviderDialog } from './components/settings/ProviderDialog';
 import { UserScriptsGateDialog } from './components/UserScriptsGateDialog';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 import { toast } from 'sonner';
@@ -365,6 +364,21 @@ export default function App() {
     prevOverflowSuggestRef.current = overflowSuggest;
   }, [overflowSuggest, compact.handleCompact, currentSession?.id]);
 
+  // 压缩状态收敛至 toast: isCompacting true → toast.loading; false → toast.success
+  const prevCompactingRef = useRef(false);
+  useEffect(() => {
+    if (compact.isCompacting) {
+      toast.loading(i18n.t('app.compacting'), { id: 'compaction', duration: Infinity });
+    } else if (prevCompactingRef.current) {
+      if (useAppStore.getState().errorMessage) {
+        toast.dismiss('compaction');
+      } else {
+        toast.success(i18n.t('app.compactSuccess'), { id: 'compaction', duration: 3000 });
+      }
+    }
+    prevCompactingRef.current = compact.isCompacting;
+  }, [compact.isCompacting]);
+
   if (!loaded) {
     return (
       <div className="flex h-dvh items-center justify-center bg-background text-muted-foreground text-xs">
@@ -420,17 +434,7 @@ export default function App() {
             quickPrompts={quickPrompts}
           />
 
-          {/* 槽位区:压缩状态条 → 审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}
-
-          {/* 压缩状态条(轻量) */}
-          {compact.isCompacting && (
-            <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
-              <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/70 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-2xs">
-                <Spinner className="size-3.5 shrink-0 text-foreground" />
-                <span className="font-medium text-foreground">{i18n.t('app.compacting')}</span>
-              </div>
-            </div>
-          )}
+          {/* 槽位区:审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}
 
           {/* 审批槽位:交互审批 UI 的唯一渲染位(消息流内工具卡一律状态化,零交互控件)。
               in-flow flex 子节点,出现时挤压列表;卡片框架永不滚动,高度由内容决定。 */}

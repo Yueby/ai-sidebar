@@ -169,6 +169,7 @@ app:
   compact: Compact
   ignoreSuggest: Dismiss
   compacting: Compacting context…
+  compactSuccess: Context compacted successfully
   helpTitle: Available quick commands
   close: Close
   settingsSr: Settings

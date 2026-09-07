@@ -169,6 +169,7 @@ app:
   compact: 压缩
   ignoreSuggest: 忽略建议
   compacting: 正在压缩上下文…
+  compactSuccess: 上下文压缩完成
   helpTitle: 可用快捷命令
   close: 关闭
   settingsSr: 设置
