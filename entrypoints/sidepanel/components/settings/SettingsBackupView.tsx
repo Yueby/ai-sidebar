@@ -391,7 +391,7 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
               {remoteSize !== null ? `\n${i18n.t('sync.restoreConfirmSize', { size: formatBytes(remoteSize) })}` : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-row justify-end gap-2">
             <AlertDialogCancel onClick={() => setRemoteBundle(null)}>{i18n.t('sync.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               className={buttonVariants({ variant: 'destructive' })}
