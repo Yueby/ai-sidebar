@@ -100,7 +100,7 @@ export function ModelConfigDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-24px)] max-w-[380px]">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {isEditing ? i18n.t('modelConfig.editTitle') : i18n.t('modelConfig.addTitle')}
