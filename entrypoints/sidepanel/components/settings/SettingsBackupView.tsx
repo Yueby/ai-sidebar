@@ -5,6 +5,8 @@ import type { Settings, Session } from '@/lib/types';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Card } from '@/components/ui/card';
+import { InputGroup, InputGroupInput, InputGroupAddon } from '@/components/ui/input-group';
+import { cn } from '@/lib/utils';
 import { sanitizeSettings } from '@/lib/storage';
 import { i18n } from '#i18n';
 import { buildSyncBundle, serializeSyncBundle, parseSyncBlob, decryptSyncBlob, formatBytes, type SyncBundle } from '@/lib/syncPayload';
@@ -192,33 +194,37 @@ export function SettingsBackupView({ settings, onUpdateSettings, onRestoreAll, l
   ) => {
     const visible = visiblePassword === visibleKey;
     return (
-      <div className="relative">
-        <Input
+      <InputGroup className={cn('h-7', placeholderClass)}>
+        <InputGroupInput
           type={visible ? 'text' : 'password'}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={'h-7 text-xs pr-8 ' + placeholderClass}
+          className="text-xs"
         />
-        <TooltipProvider delay={200}>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  onClick={() => setVisiblePassword(visible ? null : visibleKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
-                >
-                  {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                </button>
-              }
-            />
-            <TooltipContent side="top">
-              {visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+        <InputGroupAddon align="inline-end">
+          <TooltipProvider delay={200}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => setVisiblePassword(visible ? null : visibleKey)}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
+                  >
+                    {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  </Button>
+                }
+              />
+              <TooltipContent side="top">
+                {visible ? i18n.t('sync.hidePassword') : i18n.t('sync.showPassword')}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </InputGroupAddon>
+      </InputGroup>
     );
   };
 
