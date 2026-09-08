@@ -29,16 +29,16 @@ const q = (id: string, sessionId: string, text = id): QueuedMessage => ({
   pickedElements: [],
 });
 
-test('enqueue/dequeue 保持 FIFO 且携带归属会话与冻结快照', () => {
+test('队列按会话 find 队首 + 按 id 移除:FIFO 且携带归属会话与冻结快照', () => {
   const { slice, getState } = createHarness();
   slice.enqueueMessage(q('a1', 'A'));
   slice.enqueueMessage(q('b1', 'B'));
-  const first = slice.dequeueMessage();
+  const first = getState().queuedMessages.find((x) => x.sessionId === 'A');
   assert.equal(first?.id, 'a1');
   assert.equal(first?.sessionId, 'A');
+  slice.removeQueuedMessage('a1');
   assert.equal(getState().queuedMessages.length, 1);
-  assert.equal(slice.dequeueMessage()?.id, 'b1');
-  assert.equal(slice.dequeueMessage(), undefined);
+  assert.equal(getState().queuedMessages[0]?.id, 'b1');
 });
 
 test('removeQueuedMessage 按稳定 id 删除(混排会话不误删)', () => {

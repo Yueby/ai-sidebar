@@ -40,8 +40,8 @@ export function useChatTurn(params: {
   isCompacting: boolean;
   /** 压缩目标会话(压缩期间该会话不可发送;其他会话不受影响) */
   compactingSessionId?: string | null;
-  /** 轮末自主压缩触发(按运行会话) */
-  onAutoCompact: (sessionId: string) => void;
+  /** 轮末自主压缩触发(按运行会话;返回 Promise 时队列在其结束后再调度) */
+  onAutoCompact: (sessionId: string) => Promise<unknown> | void;
   /** 首轮对话结束后自动 AI 命名回调(若未手动命名) */
   onAutoAiTitle?: (sessionId: string) => void;
   /** 轮次正常成功完成回调(非打断、非错误、无本会话队列积压) */
@@ -283,7 +283,8 @@ export function useChatTurn(params: {
         if (rt.endRun(seq)) {
           // 轮末自主压缩:清理完成后再触发(endRun 已复位,互斥守卫可通过)
           if (autoCompactPending) {
-            setTimeout(() => onAutoCompact(sid), 0);
+            // 压缩尝试结束后必调度:压缩被拒/早退(如另一会话压缩中)时队列不能停摆
+            void Promise.resolve(onAutoCompact(sid)).finally(() => dispatchQueueFor(sid));
           } else {
             // 出队时机:本会话轮次彻底结束后,尝试发送该会话排队中的下一条
             setTimeout(() => dispatchQueueFor(sid), 0);
@@ -358,7 +359,11 @@ export function useChatTurn(params: {
 
       useAppStore.getState().setPreparing(target.id, true);
       try {
-        await activeSessionIdItem.setValue(target.id);
+        // 仅当目标就是当前视图时才持久化 active id:storage watch 会广播回写入方自身,
+        // 后台出队(切到别的会话时)写它会把用户视图拽到目标会话
+        if (target.id === useAppStore.getState().activeSessionId) {
+          await activeSessionIdItem.setValue(target.id);
+        }
         if (import.meta.env.DEV) {
           console.log(
             `[turn] handleSendMessage enter: target=${target.id} activeId=${store.activeSessionId}`,
@@ -368,7 +373,7 @@ export function useChatTurn(params: {
         const active = findActiveModel(store.settings);
         if (!active) {
           setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
-          setTimeout(() => dispatchQueueFor(target!.id), 0);
+          // 保留该条(不逐条丢弃);模型配置恢复后由下一次轮末/手动发送重新触发调度
           return;
         }
 
@@ -542,7 +547,7 @@ export function useChatTurn(params: {
         delete updatedSession.compaction;
       }
 
-      runtimeFor(session.id).tryAcquireSendLock();
+      if (!runtimeFor(session.id).tryAcquireSendLock()) return;
       useAppStore.getState().setPreparing(session.id, true);
       try {
         const nextSessions = useAppStore

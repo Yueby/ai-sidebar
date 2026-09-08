@@ -1,10 +1,12 @@
 /**
- * 并发隔离最小回归:per-session runs 与队列归属。
+ * 并发隔离最小回归:store.runs 渲染镜像(syncRun)+ 队列归属。
  * 运行:pnpm dlx tsx --test tests/store-concurrency.test.ts
+ * 注:runs 的真源是 SessionRuntime(tests/session-runtime.test.ts 覆盖);
+ * 本文件验证镜像接缝 syncRun 的写入/清理语义。
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createChatSlice, type QueuedMessage } from '../entrypoints/sidepanel/store/chatSlice';
+import { createChatSlice, type QueuedMessage, type SessionRun } from '../entrypoints/sidepanel/store/chatSlice';
 import type { ChatMessage } from '../lib/types';
 
 function createHarness() {
@@ -29,50 +31,50 @@ const q = (id: string, sessionId: string, text = id): QueuedMessage => ({
   pickedElements: [],
 });
 
+const run = (content: string): SessionRun => ({
+  content,
+  thinking: '',
+  toolNames: [],
+  cancelled: false,
+  inFlight: [],
+});
+
 const assistantMsg = (text: string): ChatMessage =>
   ({ role: 'assistant', content: [{ type: 'text', text }], api: 'openai-completions', provider: 'p', model: 'm', stopReason: 'stop', usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, timestamp: Date.now() }) as ChatMessage;
 
-test('runs 按会话隔离:两个会话可同时运行,状态互不干扰', () => {
+test('syncRun(active=true) 按会话写入镜像,互不覆盖', () => {
   const { slice, getState } = createHarness();
-  slice.startRun('A');
-  slice.startRun('B');
-  slice.patchRun('A', { content: 'A-text' });
-  slice.patchRun('B', { content: 'B-text' });
-  slice.addRunTool('A', 'read_page');
+  slice.syncRun('A', run('A-text'), true);
+  slice.syncRun('B', run('B-text'), true);
   const st = getState();
   assert.equal(st.runs.A?.content, 'A-text');
   assert.equal(st.runs.B?.content, 'B-text');
-  assert.deepEqual(st.runs.A?.toolNames, ['read_page']);
-  assert.deepEqual(st.runs.B?.toolNames, []);
 });
 
-test('endRun 只结束目标会话,其他会话继续运行', () => {
+test('syncRun(active=false) 只移除目标会话', () => {
   const { slice, getState } = createHarness();
-  slice.startRun('A');
-  slice.startRun('B');
-  slice.endRun('A');
+  slice.syncRun('A', run('a'), true);
+  slice.syncRun('B', run('b'), true);
+  slice.syncRun('A', run('a'), false);
   const st = getState();
   assert.equal(st.runs.A, undefined);
   assert.ok(st.runs.B);
 });
 
-test('appendRunInFlight/patchRun 只写目标会话', () => {
+test('syncRun 快照按引用替换:后续更新覆盖旧值', () => {
   const { slice, getState } = createHarness();
-  slice.startRun('A');
-  slice.startRun('B');
-  slice.appendRunInFlight('A', assistantMsg('a1'));
-  slice.patchRun('B', { cancelled: true });
+  slice.syncRun('A', run('v1'), true);
+  const snapshot: SessionRun = { ...run('v2'), inFlight: [assistantMsg('m1')], toolNames: ['read_page'] };
+  slice.syncRun('A', snapshot, true);
   const st = getState();
+  assert.equal(st.runs.A?.content, 'v2');
   assert.equal(st.runs.A?.inFlight.length, 1);
-  assert.equal(st.runs.B?.inFlight.length, 0);
-  assert.equal(st.runs.B?.cancelled, true);
-  assert.equal(st.runs.A?.cancelled, false);
+  assert.deepEqual(st.runs.A?.toolNames, ['read_page']);
 });
 
-test('未 startRun 的会话:patch/append 不产生幽灵运行态', () => {
+test('未激活的会话不产生幽灵运行态', () => {
   const { slice, getState } = createHarness();
-  slice.patchRun('X', { content: 'ghost' });
-  slice.appendRunInFlight('X', assistantMsg('ghost'));
+  slice.syncRun('X', run('ghost'), false);
   assert.equal(getState().runs.X, undefined);
 });
 
@@ -81,14 +83,12 @@ test('队列按会话归属:FIFO 出队不阻塞其他会话', () => {
   slice.enqueueMessage(q('a1', 'A'));
   slice.enqueueMessage(q('b1', 'B'));
   slice.enqueueMessage(q('a2', 'A'));
-  // 模拟按会话出队:找 A 的第一条
+  // 生产出队 = 按会话 find 队首 + 按 id 移除
   const forA = getState().queuedMessages.find((x) => x.sessionId === 'A');
   assert.equal(forA?.id, 'a1');
   slice.removeQueuedMessage('a1');
-  // B 的条目不受影响,仍在队首
   assert.equal(getState().queuedMessages[0]?.id, 'b1');
-  const forA2 = getState().queuedMessages.find((x) => x.sessionId === 'A');
-  assert.equal(forA2?.id, 'a2');
+  assert.equal(getState().queuedMessages.find((x) => x.sessionId === 'A')?.id, 'a2');
 });
 
 test('preparingSessionIds 支持多会话并发准备', () => {

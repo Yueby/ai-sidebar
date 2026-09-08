@@ -25,6 +25,8 @@ import { i18n } from '#i18n';
  */
 export function useCompact() {
   const [isCompacting, setIsCompacting] = useState(false);
+  /** 同步互斥真值(React state 有闭包滞后:并发会话轮末可同时通过守卫) */
+  const compactingRef = useRef(false);
   /** 压缩目标会话(后台轮末压缩时不锁当前会话编辑器) */
   const [compactingSessionId, setCompactingSessionId] = useState<string | null>(null);
   const compactAbortRef = useRef<AbortController | null>(null);
@@ -36,9 +38,9 @@ export function useCompact() {
       customInstructions,
       targetSessionId,
     }: { customInstructions?: string; targetSessionId?: string } = {}): Promise<boolean> => {
-      // 互斥守卫:同一时刻至多一个压缩;目标会话自身在跑/挂门控时拒绝
+      // 互斥守卫(同步真值,非闭包态):同一时刻至多一个压缩;目标会话自身在跑/挂门控时拒绝
       const store = useAppStore.getState();
-      if (isCompacting) return false;
+      if (compactingRef.current) return false;
       // 压缩目标:后台轮末自动压缩 = 运行会话(targetSessionId);手动压缩 = 当前活跃会话。
       // 按 store 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
       const latestCurrent = selectCurrentSession(store);
@@ -59,6 +61,7 @@ export function useCompact() {
 
       const abortCtrl = new AbortController();
       compactAbortRef.current = abortCtrl;
+      compactingRef.current = true;
       setIsCompacting(true);
       setCompactingSessionId(session.id);
       try {
@@ -85,12 +88,12 @@ export function useCompact() {
         }`;
         const summaryMessage = createUserMessage(summaryText);
 
-        // 落盘基于最新内存副本的草稿(压缩窗口内引用 chip/框选回填不能被旧快照回滚)
-        const latestDraft = useAppStore.getState().sessions.find((s) => s.id === session.id)?.draft;
+        // 落盘基于最新内存副本(压缩窗口内用户消息/草稿写入不能被进入时快照回滚)
+        const latestSession = useAppStore.getState().sessions.find((s) => s.id === session.id);
+        if (!latestSession) return false;
         const updated: Session = {
-          ...session,
-          messages: [...session.messages, summaryMessage],
-          ...(latestDraft ? { draft: latestDraft } : {}),
+          ...latestSession,
+          messages: [...latestSession.messages, summaryMessage],
           updatedAt: Date.now(),
           compaction: {
             summaryTimestamp: summaryMessage.timestamp,
@@ -109,6 +112,7 @@ export function useCompact() {
         setErrorMessage(getErrorMessage(err) || i18n.t('compaction.toast.failed'));
         return false;
       } finally {
+        compactingRef.current = false;
         setIsCompacting(false);
         setCompactingSessionId(null);
         compactAbortRef.current = null;

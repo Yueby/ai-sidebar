@@ -3,7 +3,7 @@ import type { RefTab } from '@/lib/pageContext';
 
 /**
  * 单个会话的运行态(存在 key = 该会话有活动 run)。
- * 多会话可并发运行,各自独立——切换会话/别的会话运行都不影响本会话的流式、工具与取消状态。
+ * 由 SessionRuntime(lib/sessionRuntime.ts)通过状态出口同步而来,本 slice 仅作渲染镜像。
  */
 export interface SessionRun {
   /** 流式正文(节流冲刷) */
@@ -29,32 +29,21 @@ export interface QueuedMessage {
 }
 
 export interface ChatSlice {
-  /** 会话运行态(按 sessionId 隔离;多会话并发 run 互不干扰) */
+  /** 会话运行态渲染镜像(真源在 SessionRuntime;按 sessionId 隔离) */
   runs: Record<string, SessionRun>;
   /** 发送准备中会话(首个 await 到落盘之间;空会话回收需避让,否则刚发的话被回收) */
   preparingSessionIds: string[];
   /** 消息队列:目标会话忙时排队的消息(仅内存,FIFO;按归属会话出队) */
   queuedMessages: QueuedMessage[];
 
-  startRun: (sessionId: string) => void;
-  endRun: (sessionId: string) => void;
-  /** 更新流式正文/思考/取消标记(工具名用 addRunTool/removeRunTool) */
-  patchRun: (sessionId: string, patch: Partial<Pick<SessionRun, 'content' | 'thinking' | 'cancelled'>>) => void;
-  addRunTool: (sessionId: string, toolName: string) => void;
-  removeRunTool: (sessionId: string, toolName: string) => void;
-  appendRunInFlight: (sessionId: string, message: ChatMessage) => void;
-  clearRunInFlight: (sessionId: string) => void;
-  setPreparing: (sessionId: string, preparing: boolean) => void;
   /** 由 SessionRuntime 状态出口同步渲染镜像(active=false 时移除该会话运行态) */
   syncRun: (sessionId: string, snapshot: SessionRun, active: boolean) => void;
+  setPreparing: (sessionId: string, preparing: boolean) => void;
 
   enqueueMessage: (item: QueuedMessage) => void;
-  /** 取队首(全局 FIFO);出队方按 item.sessionId 调度 */
-  dequeueMessage: () => QueuedMessage | undefined;
   removeQueuedMessage: (id: string) => void;
   /** 删除指定会话的排队条目(会话删除时) */
   removeQueuedMessagesForSession: (sessionId: string) => void;
-  clearQueue: () => void;
 }
 
 type SliceSet = (
@@ -67,64 +56,6 @@ export function createChatSlice(set: SliceSet): ChatSlice {
     preparingSessionIds: [],
     queuedMessages: [],
 
-    startRun: (sessionId) =>
-      set((s) => ({
-        runs: {
-          ...s.runs,
-          [sessionId]: { content: '', thinking: '', toolNames: [], cancelled: false, inFlight: [] },
-        },
-      })),
-    endRun: (sessionId) =>
-      set((s) => {
-        if (!(sessionId in s.runs)) return s;
-        const next = { ...s.runs };
-        delete next[sessionId];
-        return { runs: next };
-      }),
-    patchRun: (sessionId, patch) =>
-      set((s) => {
-        const run = s.runs[sessionId];
-        if (!run) return s;
-        return { runs: { ...s.runs, [sessionId]: { ...run, ...patch } } };
-      }),
-    addRunTool: (sessionId, toolName) =>
-      set((s) => {
-        const run = s.runs[sessionId];
-        if (!run || run.toolNames.includes(toolName)) return s;
-        return { runs: { ...s.runs, [sessionId]: { ...run, toolNames: [...run.toolNames, toolName] } } };
-      }),
-    removeRunTool: (sessionId, toolName) =>
-      set((s) => {
-        const run = s.runs[sessionId];
-        if (!run) return s;
-        return {
-          runs: {
-            ...s.runs,
-            [sessionId]: { ...run, toolNames: run.toolNames.filter((n) => n !== toolName) },
-          },
-        };
-      }),
-    appendRunInFlight: (sessionId, message) =>
-      set((s) => {
-        const run = s.runs[sessionId];
-        if (!run) return s;
-        return { runs: { ...s.runs, [sessionId]: { ...run, inFlight: [...run.inFlight, message] } } };
-      }),
-    clearRunInFlight: (sessionId) =>
-      set((s) => {
-        const run = s.runs[sessionId];
-        if (!run) return s;
-        return { runs: { ...s.runs, [sessionId]: { ...run, inFlight: [] } } };
-      }),
-    setPreparing: (sessionId, preparing) =>
-      set((s) => ({
-        preparingSessionIds: preparing
-          ? s.preparingSessionIds.includes(sessionId)
-            ? s.preparingSessionIds
-            : [...s.preparingSessionIds, sessionId]
-          : s.preparingSessionIds.filter((id) => id !== sessionId),
-      })),
-
     syncRun: (sessionId, snapshot, active) =>
       set((s) => {
         if (!active) {
@@ -135,25 +66,21 @@ export function createChatSlice(set: SliceSet): ChatSlice {
         }
         return { runs: { ...s.runs, [sessionId]: snapshot } };
       }),
+    setPreparing: (sessionId, preparing) =>
+      set((s) => ({
+        preparingSessionIds: preparing
+          ? s.preparingSessionIds.includes(sessionId)
+            ? s.preparingSessionIds
+            : [...s.preparingSessionIds, sessionId]
+          : s.preparingSessionIds.filter((id) => id !== sessionId),
+      })),
 
     enqueueMessage: (item) => set((s) => ({ queuedMessages: [...(s.queuedMessages ?? []), item] })),
-    dequeueMessage: () => {
-      let item: QueuedMessage | undefined;
-      set((s) => {
-        const queue = s.queuedMessages ?? [];
-        if (queue.length === 0) return s;
-        const [first, ...rest] = queue;
-        item = first;
-        return { queuedMessages: rest };
-      });
-      return item;
-    },
     removeQueuedMessage: (id) =>
       set((s) => ({ queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id) })),
     removeQueuedMessagesForSession: (sessionId) =>
       set((s) => ({
         queuedMessages: (s.queuedMessages ?? []).filter((q) => q.sessionId !== sessionId),
       })),
-    clearQueue: () => set({ queuedMessages: [] }),
   };
 }

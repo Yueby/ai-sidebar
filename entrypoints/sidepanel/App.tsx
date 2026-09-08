@@ -77,9 +77,7 @@ export default function App() {
   // ── 上下文压缩域(先于对话轮次域:isCompacting 作为 boolean 传入发送互斥)─────────
   const compact = useCompact();
   const onAutoCompact = useCallback(
-    (sessionId: string) => {
-      void compact.handleCompact({ targetSessionId: sessionId });
-    },
+    (sessionId: string) => compact.handleCompact({ targetSessionId: sessionId }),
     [compact.handleCompact],
   );
 

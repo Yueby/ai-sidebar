@@ -291,4 +291,6 @@ export function disposeRuntime(sessionId: string): void {
   rt.abort();
   rt.clearPending();
   runtimes.delete(sessionId);
+  // 同步清理渲染镜像:被中止的续体可能在 markCancelled 后短暂回写已删会话的 run
+  runtimeStateSink?.(sessionId, { ...EMPTY_SNAPSHOT }, false);
 }
