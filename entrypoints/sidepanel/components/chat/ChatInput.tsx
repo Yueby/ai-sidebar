@@ -494,7 +494,7 @@ export function ChatInput({
       className={cn(
         'relative z-10 shrink-0 px-2.5 pb-2.5 transition-[margin,padding] duration-150 ease-out',
         overlap
-          ? '-mt-9 pt-9 bg-gradient-to-b from-transparent via-background/80 via-20% to-background pointer-events-none'
+          ? '-mt-9 pt-9 pointer-events-none before:absolute before:inset-0 before:right-3.5 before:-z-10 before:bg-gradient-to-b before:from-transparent before:via-background/80 before:via-20% before:to-background before:pointer-events-none'
           : 'pt-2.5 bg-background',
       )}
     >

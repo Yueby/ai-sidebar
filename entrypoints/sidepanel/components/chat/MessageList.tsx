@@ -283,7 +283,7 @@ export function MessageList({
         >
           <GatePinner gateRequest={gateRequest ?? null} />
           <MessageScroller className="flex-1 min-h-0">
-            <MessageScrollerViewport aria-label="Messages" preserveScrollOnPrepend className="scroll-fade-t px-2 pt-2.5 pb-2.5">
+            <MessageScrollerViewport aria-label="Messages" preserveScrollOnPrepend className="message-scroll-fade-mask px-2 pt-2.5 pb-2.5">
               {/* 位置键隐式契约:键依赖 pi agent-loop 的 message_end 与 newMessages 推送
                   同一消息对象引用(pi agent-loop.ts:355/368),React 才能跨 live→in-flight→落盘
                   复用同一 MessageItem 实例(live 槽键 = 未来物化位置);若 pi 升级改变此行为
