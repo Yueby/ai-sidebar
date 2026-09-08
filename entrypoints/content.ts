@@ -1125,12 +1125,58 @@ export default defineContentScript({
       return { fail: { reason: 'unsupported_element' } };
     }
 
-    /** 滚动:无定位 = 视口 scrollBy(默认 0.8 视口高/宽);有定位 = scrollIntoView 居中(+高亮) */
+    /** 在目标上 scrollBy 并返回实际移动量(像素,横纵合计);不可滚目标无副作用 */
+    function applyScroll(target: Element, dx: number, dy: number): number {
+      const beforeX = target.scrollLeft;
+      const beforeY = target.scrollTop;
+      target.scrollBy({ left: dx, top: dy, behavior: 'instant' });
+      return Math.abs(target.scrollLeft - beforeX) + Math.abs(target.scrollTop - beforeY);
+    }
+
+    /** 最近的可滚动祖先(含自身):overflow 可滚且确有滚动态。html/body 主滚动不归此(由 scrollingElement 路径处理) */
+    function findScrollableAncestor(start: Element | null, vertical: boolean): Element | null {
+      let node: Element | null = start;
+      while (node && node !== document.documentElement && node !== document.body) {
+        if (node instanceof HTMLElement) {
+          const style = getComputedStyle(node);
+          const ov = vertical ? style.overflowY : style.overflowX;
+          const scrollSize = vertical ? node.scrollHeight : node.scrollWidth;
+          const clientSize = vertical ? node.clientHeight : node.clientWidth;
+          if ((ov === 'auto' || ov === 'scroll' || ov === 'overlay') && scrollSize > clientSize + 4) {
+            return node;
+          }
+        }
+        node = node.parentElement;
+      }
+      return null;
+    }
+
+    /** 全页兜底:试滚所有几何上可滚的容器(前 N 个,scrollBy 在不可滚目标无副作用),返回实际移动的容器 */
+    function tryScrollAnyContainer(vertical: boolean, dx: number, dy: number, budget = 400): Element | null {
+      const all = document.querySelectorAll<HTMLElement>('*');
+      let tries = 0;
+      for (const candidate of all) {
+        if (tries >= budget) break;
+        const scrollSize = vertical ? candidate.scrollHeight : candidate.scrollWidth;
+        const clientSize = vertical ? candidate.clientHeight : candidate.clientWidth;
+        if (scrollSize <= clientSize + 4) continue;
+        tries++;
+        if (applyScroll(candidate, dx, dy) > 2) return candidate;
+      }
+      return null;
+    }
+
+    /** 滚动:无定位 = 主视口滚,失败降级内嵌滚动容器(SPA/面板页);有定位 = scrollIntoView 居中(+高亮,验证可见) */
     function performScroll(el: Element | null, direction: string, amount: number | undefined): string[] {
       if (el) {
         el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
         highlightElement(el);
-        return [`Scrolled the target element into view.`];
+        const rect = el.getBoundingClientRect();
+        const inView =
+          rect.bottom > 0 && rect.top < window.innerHeight && rect.right > 0 && rect.left < window.innerWidth;
+        return inView
+          ? [`Scrolled the target element into view.`]
+          : [`Scrolled toward the target element, but it may still be out of view.`];
       }
       const vertical = direction === 'up' || direction === 'down';
       const viewport = vertical
@@ -1138,8 +1184,29 @@ export default defineContentScript({
         : document.documentElement.clientWidth || window.innerWidth;
       const delta = typeof amount === 'number' && amount > 0 ? Math.min(Math.round(amount), 10000) : Math.round(viewport * 0.8);
       const signed = direction === 'up' || direction === 'left' ? -delta : delta;
-      window.scrollBy({ left: vertical ? 0 : signed, top: vertical ? signed : 0, behavior: 'instant' });
-      return [`Scrolled ${direction} by ${delta}px.`];
+      const dx = vertical ? 0 : signed;
+      const dy = vertical ? signed : 0;
+
+      // 1) 主滚动视口(document.scrollingElement 兼容 quirks/标准模式)
+      const scroller = document.scrollingElement || document.documentElement;
+      if (applyScroll(scroller, dx, dy) > 2) {
+        return [`Scrolled ${direction} by ${delta}px.`];
+      }
+      // 2) 视口中心元素的最近可滚容器(覆盖 main/面板/聊天窗等内嵌滚动)
+      const center = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+      const container = findScrollableAncestor(center instanceof Element ? center : null, vertical);
+      if (container) {
+        if (applyScroll(container, dx, dy) > 2) {
+          return [`Scrolled ${direction} by ${delta}px inside a scrollable container.`];
+        }
+        return [`Viewport is not scrollable in this direction; the scrollable container is at its edge.`];
+      }
+      // 3) 全页兜底(页首 off-screen 容器等边缘情况)
+      const anyContainer = tryScrollAnyContainer(vertical, dx, dy);
+      if (anyContainer) {
+        return [`Scrolled ${direction} by ${delta}px inside a scrollable container.`];
+      }
+      return [`Viewport is not scrollable in this direction; no scrollable content found in the page.`];
     }
 
     async function runPageAction(message: {
