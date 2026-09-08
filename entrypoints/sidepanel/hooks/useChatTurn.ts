@@ -571,8 +571,8 @@ export function useChatTurn(params: {
         // 8. 触发重发链路
         await executeTurn({
           session: updatedSession,
-          // 编辑重发:截断后的转录覆盖 Agent 自持转录(丢弃被截断部分)
-          replaceHistory: truncatedMessages,
+          // 覆盖前缀(不含新 userMessage):prompt 会追加它,避免重复;旧回复已丢弃
+          replaceHistory: historyBeforeUser,
           userMessage,
           refTabs: refreshedTabs,
           pickedElements,

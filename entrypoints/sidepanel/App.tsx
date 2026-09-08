@@ -56,6 +56,7 @@ export default function App() {
   const currentSession = useAppStore(selectCurrentSession);
   // 按会话隔离的运行态(多会话并发):当前视图只消费自己会话的 run/gate
   const runs = useAppStore((s) => s.runs);
+  const preparingSessionIds = useAppStore((s) => s.preparingSessionIds);
   const gates = useAppStore((s) => s.gates);
   const queuedMessages = useAppStore((s) => s.queuedMessages);
   const removeQueuedMessage = useAppStore((s) => s.removeQueuedMessage);
@@ -333,8 +334,13 @@ export default function App() {
   // 流式进行中拒绝恢复(在途写入会与全量替换互相覆盖)。
   const handleSyncRestore = useCallback(
     async (bundle: SyncBundle) => {
-      // 运行中/在途消息/后台压缩进行中:恢复会与进行中的写入竞态(同 id 覆盖)
-      if (Object.keys(runs).length > 0 || compact.isCompacting) {
+      // 运行中/在途消息/后台压缩/发送准备中:恢复会与进行中的写入竞态(同 id 覆盖)
+      if (
+        Object.keys(runs).length > 0 ||
+        compact.isCompacting ||
+        preparingSessionIds.length > 0 ||
+        queuedMessages.length > 0
+      ) {
         throw new Error(i18n.t('sync.error.streaming'));
       }
       // 防 400ms 防抖窗口内的旧会话对象在恢复后落盘回滚(major-4)

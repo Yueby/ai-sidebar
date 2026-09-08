@@ -202,7 +202,14 @@ export interface RunAgentResult {
  * 阶段①:每轮仍以调用方传入的 history 覆盖转录(与重建 Agent 等价,行为零变化);
  * 阶段②将改为 Agent 自持转录,调用方不再传 history。
  */
-const sessionAgents = new Map<string, Agent>();
+/** 会话 Agent 注册项:实例 + 连接代次(恢复/替换后旧实例的迟到事件必须丢弃) */
+interface SessionAgentEntry {
+  agent: Agent;
+  epoch: number;
+}
+
+const sessionAgents = new Map<string, SessionAgentEntry>();
+let agentEpoch = 0;
 
 /**
  * Agent 生命周期事件出口(依赖注入):entrypoints 层注入后,每个会话 Agent 在创建时
@@ -300,7 +307,7 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
   const sid = options.sessionId;
   const existing = sid ? sessionAgents.get(sid) : undefined;
   // 白名单/初始化的转录来源:显式覆盖 > Agent 自持
-  const transcript = (options.history ?? existing?.state.messages ?? []) as ChatMessage[];
+  const transcript = (options.history ?? existing?.agent.state.messages ?? []) as ChatMessage[];
   const { models, model, tools, systemPrompt } = buildAgentInputs(options, transcript);
   const streamFn = (
     m: Parameters<typeof models.streamSimple>[0],
@@ -316,15 +323,20 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     msgs.map((m) => toLlmMessage(m as ChatMessage)) as never;
 
   if (existing) {
-    existing.streamFunction = streamFn;
-    existing.transformContext = transformContext;
-    existing.state.tools = tools;
-    existing.state.systemPrompt = systemPrompt;
-    existing.state.model = model;
-    existing.state.thinkingLevel = options.thinkingLevel;
+    const agent = existing.agent;
+    // 修改配置前必须确认 idle:活动 run 期间改写 model/tools/transcript 会污染在途请求
+    if (agent.state.isStreaming) {
+      throw new Error(`session ${sid} agent is streaming; refuse to mutate its configuration`);
+    }
+    agent.streamFunction = streamFn;
+    agent.transformContext = transformContext;
+    agent.state.tools = tools;
+    agent.state.systemPrompt = systemPrompt;
+    agent.state.model = model;
+    agent.state.thinkingLevel = options.thinkingLevel;
     // 显式覆盖转录(编辑重发截断 / 恢复导入后重同步)
-    if (options.history) existing.state.messages = options.history;
-    return existing;
+    if (options.history) agent.state.messages = options.history;
+    return agent;
   }
   const agent = new Agent({
     initialState: {
@@ -342,22 +354,32 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     toolExecution: 'sequential',
   });
   if (sid) {
-    sessionAgents.set(sid, agent);
+    const entry: SessionAgentEntry = { agent, epoch: ++agentEpoch };
+    sessionAgents.set(sid, entry);
     // 常驻订阅(构造时一次):事件路由到该会话 runtime——队列自动消费/外部触发的
-    // run 同样能驱动 UI(与 pi 的 AgentSession._handleAgentEvent 同构)
-    agent.subscribe((event) => agentEventSink?.(sid, event));
+    // run 同样能驱动 UI(与 pi 的 AgentSession._handleAgentEvent 同构)。
+    // epoch 校验:实例被替换/释放后,旧实例的迟到事件直接丢弃。
+    agent.subscribe((event) => {
+      if (sessionAgents.get(sid) !== entry) return;
+      agentEventSink?.(sid, event);
+    });
   }
   return agent;
 }
 
-/** 会话删除时释放 Agent 实例 */
+/** 会话删除/数据替换时释放 Agent 实例:先失效(epoch 校验丢弃迟到事件)再中止 */
 export function disposeSessionAgent(sessionId: string): void {
+  const entry = sessionAgents.get(sessionId);
+  if (!entry) return;
   sessionAgents.delete(sessionId);
+  entry.agent.abort();
 }
 
 /** 全量释放(恢复/导入替换全部会话数据时调用,防陈旧转录残留) */
 export function disposeAllSessionAgents(): void {
+  const entries = [...sessionAgents.values()];
   sessionAgents.clear();
+  for (const entry of entries) entry.agent.abort();
 }
 
 /**
