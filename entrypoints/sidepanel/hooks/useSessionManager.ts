@@ -279,7 +279,15 @@ export function useSessionManager() {
     const cur = activeSessionId
       ? sessions.find((s) => s.id === activeSessionId) ?? null
       : null;
-    if (cur && cur.messages.length === 0) {
+    // 复用仅当空会话且无后台遗留(排队/运行/门控);否则新建,不把用户留在有任务的会话
+    const st0 = useAppStore.getState();
+    const idleEmpty =
+      !!cur &&
+      cur.messages.length === 0 &&
+      !st0.queuedMessages.some((q) => q.sessionId === cur.id) &&
+      !(st0.isStreaming && st0.inFlight?.sessionId === cur.id) &&
+      st0.activeGate?.sessionId !== cur.id;
+    if (idleEmpty) {
       setErrorMessage(null);
       return;
     }

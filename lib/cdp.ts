@@ -10,21 +10,31 @@
  * 附加失败(chrome:// 页、已有调试器、DevTools 占用)返回 not_dispatched,由上层
  * 降级合成/JS 路径。
  *
- * 三态契约:原语区分「未派发任何输入」与「已派发但后续失败」。仅前者允许调用方
- * 降级到合成路径(重发安全);后者必须停止追加动作并如实报告执行状态未确认。
+ * 三态契约:not_dispatched = 确认未调用任何输入命令(可安全换路径重试);
+ *  dispatched = 全部命令返回成功;partial_or_unknown = 已调用过输入命令但结果
+ *  未确认(含 attach 后命令 reject、序列中途断开),禁止换路径重发。
+ *  只有 attach 前置阶段失败才是 not_dispatched——命令一旦发出,失败一律按未确认。
+ *
+ * 序列一致性:每个多命令序列捕获 detach 代次;用户在序列执行中主动解除调试后,
+ * 后续命令直接失败而不自动重新附加。
  */
 import { browser } from 'wxt/browser';
 
-/** 输入派发状态:not_dispatched = 确认未派发任何输入(可安全换路径重试);
- *  dispatched = 全部派发成功;partial_or_unknown = 已派发部分输入,后续失败,禁止重发。 */
+/** 输入派发状态(见文件头三态契约) */
 export type InputDispatchState = 'not_dispatched' | 'dispatched' | 'partial_or_unknown';
+
+/** 单命令发送结果:not_attached = 附加前置失败(未发命令);sent = 成功;failed = 已尝试发送但未确认 */
+type SendResult = 'not_attached' | 'sent' | 'failed';
 
 let attachedTabId: number | null = null;
 let detachTimer: ReturnType<typeof setTimeout> | null = null;
 let listenersInstalled = false;
+/** detach 代次:每次连接断开(用户解除调试/DevTools/tab 关闭)+1;序列中途断开则后续命令失败 */
+let detachEpoch = 0;
 
 function clearAttachState(): void {
   attachedTabId = null;
+  detachEpoch++;
   if (detachTimer) {
     clearTimeout(detachTimer);
     detachTimer = null;
@@ -64,29 +74,33 @@ function scheduleDetach(idleMs: number): void {
   detachTimer = setTimeout(() => {
     detachTimer = null;
     const tabId = attachedTabId;
-    attachedTabId = null;
-    if (tabId !== null) void browser.debugger.detach({ tabId }).catch(() => {});
+    if (tabId !== null) {
+      attachedTabId = null;
+      detachEpoch++;
+      void browser.debugger.detach({ tabId }).catch(() => {});
+    }
   }, idleMs);
 }
 
 /**
- * 发送单条白名单 CDP 命令。
- * 失败仅表示本条命令未确认成功——连接可能仍然存活(超时/参数错等),因此不清除
- * 附加状态;空闲 60s 后统一 detach。返回 false 时调用方按「本条未确认」处理。
+ * 发送单条白名单 CDP 命令(不自动重附加:epoch 不匹配直接失败)。
+ * 失败仅表示本条未确认成功——连接可能仍存活,因此不清附加状态,由 60s 闲置统一 detach。
  */
 async function sendCommand(
   tabId: number,
   method: 'Input.dispatchMouseEvent' | 'Input.synthesizeScrollGesture' | 'Input.insertText' | 'Input.dispatchKeyEvent',
   params: Record<string, unknown>,
-): Promise<boolean> {
+  epoch?: number,
+): Promise<SendResult> {
+  if (epoch !== undefined && epoch !== detachEpoch) return 'failed';
   const attached = await ensureAttached(tabId);
-  if (!attached) return false;
+  if (!attached) return 'not_attached';
   try {
     await browser.debugger.sendCommand({ tabId }, method, params);
     scheduleDetach(60_000);
-    return true;
+    return 'sent';
   } catch {
-    return false;
+    return 'failed';
   }
 }
 
@@ -104,54 +118,61 @@ export async function synthesizeTrustedScrollGesture(
   yDistance: number,
   speed = 800,
 ): Promise<InputDispatchState> {
-  const ok = await sendCommand(tabId, 'Input.synthesizeScrollGesture', {
-    x: Math.round(x),
-    y: Math.round(y),
-    xDistance: Math.round(xDistance),
-    yDistance: Math.round(yDistance),
-    speed,
-    gestureSourceType: 'mouse',
-  });
-  return ok ? 'dispatched' : 'not_dispatched';
+  const epoch = detachEpoch;
+  const result = await sendCommand(
+    tabId,
+    'Input.synthesizeScrollGesture',
+    {
+      x: Math.round(x),
+      y: Math.round(y),
+      xDistance: Math.round(xDistance),
+      yDistance: Math.round(yDistance),
+      speed,
+      gestureSourceType: 'mouse',
+    },
+    epoch,
+  );
+  if (result === 'not_attached') return 'not_dispatched';
+  return result === 'sent' ? 'dispatched' : 'partial_or_unknown';
 }
 
 /**
  * 可信点击:CDP Input.dispatchMouseEvent(mouseMoved + mousePressed + mouseReleased),
  * 坐标 = viewport CSS 像素。与真实鼠标等价(含页面校验 isTrusted 的监听器)。
- * mouseMoved 失败 = 未开始(可重试);按下/抬起任一失败 = 已派发部分输入,禁止重发。
+ * 仅附加前置失败视为未派发;任何命令发出后的失败按未确认(mouseMoved 也可能触发 hover 副作用)。
  */
 export async function dispatchTrustedMouseClick(tabId: number, x: number, y: number): Promise<InputDispatchState> {
+  const epoch = detachEpoch;
   const cx = Math.round(x);
   const cy = Math.round(y);
-  const moved = await sendCommand(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy });
-  if (!moved) return 'not_dispatched';
-  const pressed = await sendCommand(tabId, 'Input.dispatchMouseEvent', {
-    type: 'mousePressed',
-    x: cx,
-    y: cy,
-    button: 'left',
-    buttons: 1,
-    clickCount: 1,
-  });
-  if (!pressed) return 'partial_or_unknown';
-  const released = await sendCommand(tabId, 'Input.dispatchMouseEvent', {
-    type: 'mouseReleased',
-    x: cx,
-    y: cy,
-    button: 'left',
-    buttons: 0,
-    clickCount: 1,
-  });
-  return released ? 'dispatched' : 'partial_or_unknown';
+  const moved = await sendCommand(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy }, epoch);
+  if (moved === 'not_attached') return 'not_dispatched';
+  if (moved !== 'sent') return 'partial_or_unknown';
+  const pressed = await sendCommand(
+    tabId,
+    'Input.dispatchMouseEvent',
+    { type: 'mousePressed', x: cx, y: cy, button: 'left', buttons: 1, clickCount: 1 },
+    epoch,
+  );
+  if (pressed !== 'sent') return 'partial_or_unknown';
+  const released = await sendCommand(
+    tabId,
+    'Input.dispatchMouseEvent',
+    { type: 'mouseReleased', x: cx, y: cy, button: 'left', buttons: 0, clickCount: 1 },
+    epoch,
+  );
+  return released === 'sent' ? 'dispatched' : 'partial_or_unknown';
 }
 
 /** 可信文本插入:CDP Input.insertText(需先聚焦,由调用方以可信点击完成)。生成可信 beforeinput/input。 */
 export async function insertTrustedText(tabId: number, text: string): Promise<InputDispatchState> {
-  const ok = await sendCommand(tabId, 'Input.insertText', { text });
-  return ok ? 'dispatched' : 'partial_or_unknown';
+  const epoch = detachEpoch;
+  const result = await sendCommand(tabId, 'Input.insertText', { text }, epoch);
+  if (result === 'not_attached') return 'not_dispatched';
+  return result === 'sent' ? 'dispatched' : 'partial_or_unknown';
 }
 
-/** 可信按键:CDP Input.dispatchKeyEvent(rawKeyDown + keyUp)。keyDown 失败 = 未派发;keyUp 失败 = 部分派发。 */
+/** 可信按键:CDP Input.dispatchKeyEvent(rawKeyDown + keyUp)。命令发出后的失败一律按未确认。 */
 export async function dispatchTrustedKey(
   tabId: number,
   key: string,
@@ -159,10 +180,11 @@ export async function dispatchTrustedKey(
   virtualKeyCode: number,
   modifiers: 0 | 1 | 2 | 4 | 8 = 0,
 ): Promise<InputDispatchState> {
+  const epoch = detachEpoch;
   const base = { key, code, modifiers, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode };
-  const down = await sendCommand(tabId, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base });
-  if (!down) return 'not_dispatched';
-  return (await sendCommand(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', ...base }))
-    ? 'dispatched'
-    : 'partial_or_unknown';
+  const down = await sendCommand(tabId, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base }, epoch);
+  if (down === 'not_attached') return 'not_dispatched';
+  if (down !== 'sent') return 'partial_or_unknown';
+  const up = await sendCommand(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', ...base }, epoch);
+  return up === 'sent' ? 'dispatched' : 'partial_or_unknown';
 }

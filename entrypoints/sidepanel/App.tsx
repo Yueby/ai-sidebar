@@ -189,10 +189,9 @@ export default function App() {
 
   // ── Navigation & Provider Dialog Handlers ──────────────────────
   const handleOpenSettings = useCallback(() => {
-    // 仅当前视图的门控随离开冲销;后台会话的门控保留(提醒仍在,切回后应答)
-    if (isGateHere) gate.dismissPendingGates();
+    // 视图切换不冲销门控:门控归属会话,离开聊天视图后仍挂起(后台全部继续)
     setCurrentView('settings');
-  }, [gate.dismissPendingGates]);
+  }, []);
 
   const handleBackToChat = useCallback(() => {
     setCurrentView('chat');
@@ -479,6 +478,7 @@ export default function App() {
             sessions={sessions}
             activeSessionId={activeSessionId}
             titlingSessionIds={session.titlingSessionIds}
+            runningSessionId={runningSessionId}
             onSelectSession={session.handleSelectSession}
             onDeleteSession={session.handleDeleteSession}
             onRenameSession={session.handleRenameSession}
@@ -495,7 +495,7 @@ export default function App() {
             streamingThinking={streamingThinking}
             activeToolLabels={activeToolNames}
             gateRequest={isGateHere ? (gate.activeGate?.request ?? null) : null}
-            pendingGateTotal={gatePagination.total}
+            pendingGateTotal={isGateHere ? gatePagination.total : 0}
             quietTailCount={quietTailCount}
             sessionKey={currentSession?.id ?? 'empty'}
             compaction={

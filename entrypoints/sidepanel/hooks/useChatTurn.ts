@@ -365,12 +365,23 @@ export function useChatTurn(params: {
         if (!owner) return;
         const ownerSession = store.sessions.find((s) => s.id === owner);
         const draftAtEnqueue = ownerSession?.draft ?? EMPTY_DRAFT;
+        // 冻结副本:frozen(出队重入)优先,否则快照入队时刻的草稿引用;此后用户编辑不影响该条目
+        const frozenTabs = frozen
+          ? [...frozen.refTabs]
+          : store.settings.includePageContext
+            ? [...draftAtEnqueue.refTabs]
+            : [];
+        const frozenElements = frozen
+          ? [...frozen.pickedElements]
+          : store.settings.includePageContext
+            ? [...draftAtEnqueue.pickedElements]
+            : [];
         store.enqueueMessage({
           id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           sessionId: owner,
           text: trimmed,
-          refTabs: store.settings.includePageContext ? draftAtEnqueue.refTabs : [],
-          pickedElements: store.settings.includePageContext ? draftAtEnqueue.pickedElements : [],
+          refTabs: frozenTabs,
+          pickedElements: frozenElements,
         });
         if (import.meta.env.DEV) {
           console.log(`[turn] enqueue message -> session ${owner}: "${trimmed.slice(0, 30)}..."`);
@@ -465,23 +476,29 @@ export function useChatTurn(params: {
             ? titleFromText(trimmed)
             : session.title;
 
+      // 提交基于「最新」目标会话(await 期间用户可能已切回编辑草稿):只覆盖消息与必要字段
+      const base = useAppStore.getState().sessions.find((s) => s.id === session!.id) ?? session;
       const updatedSession: Session = {
-        ...session,
+        ...base,
         title: nextTitle,
         messages: messagesWithUser,
         // 发送后保留 refTabs:会话的引用上下文跨消息存活(决策 13 修订;参考 google/llm-sidebar-with-context 的 pin 模型);
-        // 输入与框选元素照常清空(元素是一次性指代,持续重发是噪音)
+        // 输入与框选元素照常清空(元素是一次性指代,持续重发是噪音)。
+        // frozen(队列出队)= 用户后来编辑的草稿必须原样保留
         draft: frozen
-          ? (session.draft ?? EMPTY_DRAFT)
-          : { input: '', refTabs: session.draft?.refTabs ?? [], pickedElements: [] },
+          ? (base.draft ?? EMPTY_DRAFT)
+          : { input: '', refTabs: base.draft?.refTabs ?? [], pickedElements: [] },
         updatedAt: Date.now(),
       };
-      const nextSessions = useAppStore
-        .getState()
-        .sessions.map((s) => (s.id === session!.id ? updatedSession : s));
+      // 原子 upsert:新建会话不在列表时插入(只 map 会丢掉刚创建的首轮会话)
+      const currentSessions = useAppStore.getState().sessions;
+      const nextSessions = currentSessions.some((s) => s.id === session!.id)
+        ? currentSessions.map((s) => (s.id === session!.id ? updatedSession : s))
+        : [updatedSession, ...currentSessions];
       useAppStore.getState().setSessions(nextSessions);
-      // 该会话未落盘的草稿编辑已被「清空草稿」取代,丢弃待发项避免旧对象复活引用
-      dropPendingDraftSave(session.id);
+      // 非 frozen:草稿已被发送语义取代,丢弃待发项避免旧对象复活引用;
+      // frozen(队列出队):用户后续草稿必须保留,不得冲销
+      if (!frozen) dropPendingDraftSave(session.id);
       await saveSession(updatedSession);
 
       await executeTurn({

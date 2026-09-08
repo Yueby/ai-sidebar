@@ -840,6 +840,11 @@ export async function performPageAction(
         baseNotes.push(
           'cdp_trusted_scroll_gesture: dispatched a smooth scroll gesture via CDP (like a real trackpad swipe); the page should glide naturally.',
         );
+      } else if (gestureState === 'partial_or_unknown') {
+        // 命令已发出但结果未确认:禁止换路径重发(避免双滚)
+        baseNotes.push(
+          'cdp_scroll_unconfirmed: the scroll gesture command was sent but not confirmed; do NOT retry immediately — check the page state first.',
+        );
       } else {
         baseNotes.push(
           'cdp_fallback_unavailable: could not attach the debugger (browser-internal page or already inspected by DevTools/another extension).',
