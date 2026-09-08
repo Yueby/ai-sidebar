@@ -5,7 +5,10 @@ import {
   READ_PAGE_MESSAGE,
   SEARCH_ELEMENT_MESSAGE,
 } from './types';
-import { dispatchTrustedMouseClick, dispatchTrustedMouseWheel, dispatchTrustedKey, insertTrustedText } from './cdp';
+import { dispatchTrustedMouseClick, synthesizeTrustedScrollGesture, dispatchTrustedKey, insertTrustedText } from './cdp';
+
+/** macOS 上全选用 Cmd(CDP modifiers 4),其余平台 Ctrl(2) */
+const IS_MAC = /Mac|iPhone|iPad/i.test(typeof navigator !== 'undefined' ? navigator.platform : '');
 
 /**
  * content 侧提取应答:PageContext + 截断标记。
@@ -559,6 +562,11 @@ export type PageActionResult =
       centerPoint?: { x: number; y: number };
       /** CDP 前置解析:中心点被其他元素遮挡(命中测试;遮挡时不走可信点击,避免点到遮挡物上) */
       occluded?: boolean;
+      /** CDP 前置解析:文本型元素(input/textarea/contenteditable;fill 的 insertText 仅此类) */
+      canTextInput?: boolean;
+      /** CDP 前置解析:元素状态旗标(供注记;合成路径在 content 内部产生同样注记) */
+      disabled?: boolean;
+      hidden?: boolean;
     }
   | {
       ok: false;
@@ -639,7 +647,7 @@ export async function performPageAction(
   });
 
   // click/fill:CDP 可信输入优先(默认 = 模拟真实鼠标);resolve 拿坐标 → CDP 执行 → after 注记;
-  // 任何一步失败(attach 不可用/遮挡/无坐标)降级回原合成路径(单消息,现行为不变)
+  // 任何一步失败(attach 不可用/遮挡/无坐标/非文本型元素)降级回原合成路径(单消息,现行为不变)
   let cdpActed = false;
   let cdpFirstResult: PageActionResult | null = null;
   if (action === 'click' || action === 'fill') {
@@ -652,7 +660,9 @@ export async function performPageAction(
       rRes?.ok === true &&
       typeof rRes.centerPoint?.x === 'number' &&
       typeof rRes.centerPoint?.y === 'number' &&
-      rRes.occluded !== true
+      rRes.occluded !== true &&
+      // fill 仅文本型元素可走 CDP(insertText);select/toggle 走合成(它们有自己的分支语义)
+      (action === 'click' || rRes.canTextInput === true)
     ) {
       const cx = rRes.centerPoint.x;
       const cy = rRes.centerPoint.y;
@@ -660,11 +670,11 @@ export async function performPageAction(
       if (action === 'click') {
         cdpActed = await dispatchTrustedMouseClick(tabId, cx, cy);
       } else {
-        // fill:可信点击聚焦 → Ctrl+A 全选 → Backspace 清空 → insertText → (Enter 提交)
+        // fill:可信点击聚焦 → Ctrl+A 全选(Mac=Cmd) → Backspace 清空 → insertText(非空时) → (Enter 提交)
         cdpActed = await dispatchTrustedMouseClick(tabId, cx, cy);
-        if (cdpActed) cdpActed = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, 2);
+        if (cdpActed) cdpActed = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, IS_MAC ? 4 : 2);
         if (cdpActed) cdpActed = await dispatchTrustedKey(tabId, 'Backspace', 'Backspace', 8);
-        if (cdpActed) cdpActed = await insertTrustedText(tabId, fillValue);
+        if (cdpActed && fillValue !== '') cdpActed = await insertTrustedText(tabId, fillValue);
         if (cdpActed && params.submit === 'enter') cdpActed = await dispatchTrustedKey(tabId, 'Enter', 'Enter', 13);
       }
       if (cdpActed) {
@@ -675,6 +685,13 @@ export async function performPageAction(
         requestAction = savedAction;
         const aRes = aOutcome.kind === 'response' ? aOutcome.res : undefined;
         const aNotes = aRes?.ok === true && Array.isArray(aRes.notes) ? aRes.notes.filter((n): n is string => typeof n === 'string') : [];
+        const stateNotes =
+          rRes.disabled === true || rRes.hidden === true
+            ? [
+                ...(rRes.disabled === true ? ['Note: the target element is disabled; the browser may ignore the interaction.'] : []),
+                ...(rRes.hidden === true ? ['Note: the target element is currently not visible.'] : []),
+              ]
+            : [];
         const actNote =
           action === 'click'
             ? 'cdp_trusted_click: dispatched trusted mouse click via CDP (like a real mouse).'
@@ -684,7 +701,7 @@ export async function performPageAction(
           url: aRes?.ok === true && typeof aRes.url === 'string' ? aRes.url : url,
           title: aRes?.ok === true && typeof aRes.title === 'string' ? aRes.title : '',
           element: normalizeActionElement(rRes.element),
-          notes: [actNote, ...aNotes],
+          notes: [...stateNotes, actNote, ...aNotes],
         };
       }
     }
@@ -772,29 +789,20 @@ export async function performPageAction(
           ? Math.min(Math.round(params.amount), 10000)
           : Math.min(120, Math.max(40, Math.round(viewportPx * 0.12)));
       const signed = params.direction === 'up' || params.direction === 'left' ? -delta : delta;
-      const tickSign = Math.sign(signed) || 1;
-      const ticks =
-        typeof params.amount === 'number' && params.amount > 0
-          ? Math.min(12, Math.max(1, Math.round(params.amount / 120)))
-          : 3;
       const cx = Math.max(1, Math.round(vw / 2));
       const cy = Math.max(1, Math.round(vh / 2));
-      for (let i = 0; i < ticks; i++) {
-        const ok = await dispatchTrustedMouseWheel(
-          tabId,
-          cx,
-          cy,
-          vertical ? 0 : tickSign * 120,
-          vertical ? tickSign * 120 : 0,
-        );
-        if (ok) dispatched = true;
-        if (!ok) break;
-        await new Promise<void>((resolve) => setTimeout(resolve, 60));
-      }
+      // 连续平滑滚动手势(浏览器插值出 tick 流,与真实触控板/触摸一致)——比手动 ticks 循环丝滑
+      dispatched = await synthesizeTrustedScrollGesture(
+        tabId,
+        cx,
+        cy,
+        vertical ? 0 : signed,
+        vertical ? signed : 0,
+      );
       if (dispatched) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 400));
+        await new Promise<void>((resolve) => setTimeout(resolve, 600));
         baseNotes.push(
-          'cdp_trusted_wheel: dispatched trusted wheel ticks via CDP (like real mouse input); the page should scroll or switch views naturally.',
+          'cdp_trusted_scroll_gesture: dispatched a smooth scroll gesture via CDP (like a real trackpad swipe); the page should glide naturally.',
         );
       } else {
         baseNotes.push(

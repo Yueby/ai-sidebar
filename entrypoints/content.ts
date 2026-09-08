@@ -1201,7 +1201,7 @@ export default defineContentScript({
             composed: true,
           }),
         );
-        await new Promise<void>((resolve) => setTimeout(resolve, 60));
+        await new Promise<void>((resolve) => setTimeout(resolve, 30));
       }
       await new Promise<void>((resolve) => setTimeout(resolve, 400));
       return contentFingerprintAtCenter() !== before;
@@ -1230,6 +1230,26 @@ export default defineContentScript({
         };
       }
       const vertical = direction === 'up' || direction === 'down';
+
+      // 0) 模拟鼠标滚轮:合成 wheel ticks(页面自己的监听/默认滚动/snap 决定行为)
+      if (mode === 'wheel') {
+        const center = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+        const dirSign = direction === 'up' || direction === 'left' ? -1 : 1;
+        const moved = await dispatchWheelTicks(
+          center instanceof Element ? center : null,
+          vertical,
+          dirSign * WHEEL_TICK_PX,
+          wheelTickCount(amount),
+        );
+        return {
+          moved,
+          notes: moved
+            ? [`Dispatched wheel ticks; the page responded (content changed).`]
+            : [`Dispatched wheel ticks to the page; content did not change measurably.`],
+        };
+      }
+
+      // js 模式:滚动条快路径(CDP 不可用时)
       const viewport = vertical
         ? document.documentElement.clientHeight || window.innerHeight
         : document.documentElement.clientWidth || window.innerWidth;
@@ -1240,23 +1260,6 @@ export default defineContentScript({
       const signed = direction === 'up' || direction === 'left' ? -delta : delta;
       const dx = vertical ? 0 : signed;
       const dy = vertical ? signed : 0;
-
-      // 0) 模拟鼠标滚轮:合成 wheel ticks(页面自己的监听/默认滚动/snap 决定行为)
-      if (mode === 'wheel') {
-        const center = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
-        const moved = await dispatchWheelTicks(
-          center instanceof Element ? center : null,
-          vertical,
-          Math.sign(signed) * WHEEL_TICK_PX,
-          wheelTickCount(amount),
-        );
-        return {
-          moved,
-          notes: moved
-            ? [`Dispatched wheel ticks; the page responded (content changed).`]
-            : [`Dispatched wheel ticks to the page; content did not change measurably.`],
-        };
-      }
 
       // 1) 主滚动视口(document.scrollingElement 兼容 quirks/标准模式)
       const scroller = document.scrollingElement || document.documentElement;
@@ -1344,7 +1347,7 @@ export default defineContentScript({
         }
         const summary = elementSummary(res.hit);
         if (action === 'resolve') {
-          // CDP 可信执行前置:元素中心视口坐标 + 遮挡旗标(命中测试与 occluded fallback 同源判定)
+          // CDP 可信执行前置:元素中心视口坐标 + 遮挡旗标(命中测试与 occluded fallback 同源判定) + 状态旗标
           const rect = res.hit.el.getBoundingClientRect();
           const hasRect = rect.width > 0 && rect.height > 0;
           const cx = Math.round(rect.left + rect.width / 2);
@@ -1358,6 +1361,9 @@ export default defineContentScript({
             element: summary,
             notes: [],
             ...(hasRect ? { centerPoint: { x: cx, y: cy }, occluded } : {}),
+            canTextInput: isTextLikeElement(res.hit.el),
+            disabled: res.hit.disabled === true,
+            hidden: res.hit.visible === false,
           };
         }
 
