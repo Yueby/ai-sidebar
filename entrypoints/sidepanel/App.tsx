@@ -46,6 +46,7 @@ export default function App() {
   const errorMessage = useAppStore((s) => s.errorMessage);
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
   const errorSessionId = useAppStore((s) => s.errorSessionId);
+  const sessionErrors = useAppStore((s) => s.sessionErrors);
   const sessions = useAppStore((s) => s.sessions);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
   const loaded = useAppStore((s) => s.loaded);
@@ -239,7 +240,13 @@ export default function App() {
       for (const m of inFlight.messages) {
         if (m.role === 'assistant' && Array.isArray(m.content)) {
           for (const block of m.content) {
-            if (block.type === 'toolCall' && block.name === 'execute_js') {
+            // confirm 型工具集合(与 lib/tools 里 requestGate/createGatedTool 的用法对齐)
+            if (
+              block.type === 'toolCall' &&
+              ['execute_js', 'open_page', 'screenshot_page', 'click_element', 'fill_element'].includes(
+                block.name,
+              )
+            ) {
               confirmCallCount++;
             }
           }
@@ -247,7 +254,12 @@ export default function App() {
       }
     }
     // 包含当前活跃工具调用列表中待确认的工具
-    if (activeToolNames.includes('execute_js') && confirmCallCount === 0) {
+    if (
+      activeToolNames.some((n) =>
+        ['execute_js', 'open_page', 'screenshot_page', 'click_element', 'fill_element'].includes(n),
+      ) &&
+      confirmCallCount === 0
+    ) {
       confirmCallCount = 1;
     }
     const currentStep = gate.resolvedGateCount + 1;
@@ -382,8 +394,21 @@ export default function App() {
     }
   }, [pendingElsewhereGate, gate.activeGate, sessions, currentSession?.id, session.handleSelectSession]);
 
-  // 错误状态收敛至 toast: 按归属分流——当前会话错误 = error 横幅;后台会话错误 = 提醒切回(不关闭)
+  // 删除会话:若目标是后台运行会话,先中止其轮次(转录已无处可落,继续跑只是白烧 token)
+  const handleDeleteSession = useCallback(
+    async (id: string) => {
+      if (useAppStore.getState().runningSessionId === id) {
+        chat.handleStopGeneration();
+      }
+      await session.handleDeleteSession(id);
+    },
+    [chat.handleStopGeneration, session.handleDeleteSession],
+  );
+
+  // 错误状态收敛至 toast: 按归属分流——当前会话错误 = error 横幅;后台会话错误 = 提醒切回(不关闭)。
+  // 最近槽被别的会话错误覆盖后,切回本会话仍可从 sessionErrors 回看自己的错误
   const isErrorHere = errorSessionId === null || errorSessionId === currentSession?.id;
+  const sessionStoredError = currentSession ? (sessionErrors[currentSession.id] ?? null) : null;
   useEffect(() => {
     if (errorMessage && isErrorHere) {
       toast.add({
@@ -391,7 +416,15 @@ export default function App() {
         type: 'error',
         description: errorMessage,
         timeout: 0,
-        onClose: () => setErrorMessage(null),
+        onClose: () => setErrorMessage(null, currentSession?.id ?? undefined),
+      });
+    } else if (!errorMessage && sessionStoredError) {
+      toast.add({
+        id: 'chat-error',
+        type: 'error',
+        description: sessionStoredError,
+        timeout: 0,
+        onClose: () => setErrorMessage(null, currentSession?.id ?? undefined),
       });
     } else if (errorMessage && !isErrorHere) {
       const target = sessions.find((x) => x.id === errorSessionId);
@@ -410,7 +443,7 @@ export default function App() {
         },
       });
     }
-  }, [errorMessage, isErrorHere, errorSessionId, sessions, session.handleSelectSession, setErrorMessage]);
+  }, [errorMessage, isErrorHere, errorSessionId, sessionStoredError, sessions, currentSession?.id, session.handleSelectSession, setErrorMessage]);
 
   // 溢出建议收敛至 toast: 条件 false → true 跳变时触发一次常驻警告(带压缩动作与关闭忽略)
   const prevOverflowSuggestRef = useRef(false);
@@ -484,7 +517,7 @@ export default function App() {
             titlingSessionIds={session.titlingSessionIds}
             runningSessionId={runningSessionId}
             onSelectSession={session.handleSelectSession}
-            onDeleteSession={session.handleDeleteSession}
+            onDeleteSession={handleDeleteSession}
             onRenameSession={session.handleRenameSession}
             onAiTitleSession={session.handleAiTitleSession}
             onNewSession={session.handleNewSession}

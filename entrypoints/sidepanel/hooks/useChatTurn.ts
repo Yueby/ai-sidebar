@@ -409,6 +409,10 @@ export function useChatTurn(params: {
           refTabs: frozenTabs,
           pickedElements: frozenElements,
         });
+        if (!frozen && owner === useAppStore.getState().activeSessionId) {
+          // 元素引用随该条消息消费(与直发路径一致);refTabs 保留为会话上下文
+          useAppStore.getState().patchActiveDraft((d) => ({ ...d, pickedElements: [] }));
+        }
         if (import.meta.env.DEV) {
           console.log(`[turn] enqueue message -> session ${owner}: "${trimmed.slice(0, 30)}..."`);
         }
