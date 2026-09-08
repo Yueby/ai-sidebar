@@ -19,7 +19,7 @@ export interface GateSlice {
   denyGate: () => void;
   answerGate: (answer: string) => void;
   cancelGate: () => void;
-  /** 冲销挂起门控(安全拒绝),不重置计数:停止生成/打断重发/进设置视图用 */
+  /** 冲销挂起门控(安全拒绝),不重置计数:停止生成/打断重发/删除归属会话用 */
   dismissPendingGates: () => void;
   /** 冲销 + 重置计数:会话切换/新建/删除用 */
   resetGates: () => void;

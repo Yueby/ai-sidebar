@@ -302,7 +302,8 @@ export default function App() {
   // 流式进行中拒绝恢复(在途写入会与全量替换互相覆盖)。
   const handleSyncRestore = useCallback(
     async (bundle: SyncBundle) => {
-      if (isStreaming || (inFlight && inFlight.messages.length > 0)) {
+      // 运行中/在途消息/后台压缩进行中:恢复会与进行中的写入竞态(同 id 覆盖)
+      if (isStreaming || (inFlight && inFlight.messages.length > 0) || compact.isCompacting) {
         throw new Error(i18n.t('sync.error.streaming'));
       }
       // 防 400ms 防抖窗口内的旧会话对象在恢复后落盘回滚(major-4)
