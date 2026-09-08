@@ -593,10 +593,13 @@ export async function performPageAction(
   } catch {
     return null;
   }
+  // scroll 模式轮次:wheel = 合成滚轮优先(模拟鼠标);CDP 附加失败才切 js = 滚动条快路径
+  let currentMode: 'wheel' | 'js' = 'wheel';
   const request = async (): Promise<PageActionResult | undefined> => {
     const res = (await browser.tabs.sendMessage(tabId, {
       type: PAGE_ACTION_MESSAGE,
       action,
+      mode: currentMode,
       ...params,
     })) as PageActionResult | undefined;
     return res;
@@ -694,7 +697,8 @@ export async function performPageAction(
   }
   if (res.ok) {
     const baseNotes = Array.isArray(res.notes) ? res.notes.filter((n): n is string => typeof n === 'string') : [];
-    // scroll 专用:JS 路径未观察到位移 → CDP 可信滚轮兜底(劫持页/合成事件被 isTrusted 拒绝)
+    // scroll 专用:合成 wheel 未观察到位移 → CDP 可信滚轮兜底(含原生默认滚动;合成被 isTrusted 拒时唯一真鼠标等价路径)
+    let dispatched = false;
     if (action === 'scroll' && res.moved === false) {
       const vw = res.viewport?.width ?? 800;
       const vh = res.viewport?.height ?? 600;
@@ -712,7 +716,6 @@ export async function performPageAction(
           : 3;
       const cx = Math.max(1, Math.round(vw / 2));
       const cy = Math.max(1, Math.round(vh / 2));
-      let dispatched = false;
       for (let i = 0; i < ticks; i++) {
         const ok = await dispatchTrustedMouseWheel(
           tabId,
@@ -734,6 +737,23 @@ export async function performPageAction(
         baseNotes.push(
           'cdp_fallback_unavailable: could not attach the debugger (browser-internal page or already inspected by DevTools/another extension).',
         );
+        // CDP 不可用 → JS 滚动条快路径(最后承底:chrome:// 页/DevTools 占用;行为与真实鼠标不一致)
+        currentMode = 'js';
+        const jsOutcome = await requestWithTimeout();
+        const jsRes = jsOutcome.kind === 'response' ? jsOutcome.res : undefined;
+        if (jsRes?.ok === true) {
+          const jsNotes = Array.isArray(jsRes.notes)
+            ? jsRes.notes.filter((n): n is string => typeof n === 'string')
+            : [];
+          return {
+            ok: true,
+            url: jsRes.url,
+            title: typeof jsRes.title === 'string' ? jsRes.title : '',
+            element: normalizeActionElement(jsRes.element),
+            notes: [...baseNotes, ...jsNotes],
+            moved: jsRes.moved,
+          };
+        }
       }
     }
     return {
@@ -742,7 +762,7 @@ export async function performPageAction(
       title: typeof res.title === 'string' ? res.title : '',
       element: normalizeActionElement(res.element),
       notes: baseNotes,
-      moved: res.moved,
+      moved: dispatched ? undefined : res.moved,
     };
   }
   const reasons = ['not_found', 'ambiguous', 'option_not_found', 'unsupported_element', 'invalid_value'];

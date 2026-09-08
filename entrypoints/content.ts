@@ -1207,8 +1207,15 @@ export default defineContentScript({
       return contentFingerprintAtCenter() !== before;
     }
 
-    /** 滚动:无定位 = 主视口滚,失败依次降级内嵌滚动容器(SPA/面板页)与 wheel 事件(劫持翻页页)。moved 供 sidepanel 侧 CDP 兜底判定 */
-    async function performScroll(el: Element | null, direction: string, amount: number | undefined): Promise<{ notes: string[]; moved: boolean }> {
+    /** 滚动:mode='wheel' = 模拟鼠标滚轮(合成 wheel ticks,页面自行响应——原生滚动/snap/劫持切卡/画廊全部一致;
+     *  合成不触发浏览器默认滚动,原生滚动页返回 moved:false,由 sidepanel 侧 CDP 可信滚轮接管);
+     *  mode='js' = CDP 不可用时的滚动条快路径(不经过页面监听,行为与真实鼠标不一致,仅兜底)。 */
+    async function performScroll(
+      el: Element | null,
+      direction: string,
+      amount: number | undefined,
+      mode: 'wheel' | 'js',
+    ): Promise<{ notes: string[]; moved: boolean }> {
       if (el) {
         el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
         highlightElement(el);
@@ -1234,6 +1241,23 @@ export default defineContentScript({
       const dx = vertical ? 0 : signed;
       const dy = vertical ? signed : 0;
 
+      // 0) 模拟鼠标滚轮:合成 wheel ticks(页面自己的监听/默认滚动/snap 决定行为)
+      if (mode === 'wheel') {
+        const center = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+        const moved = await dispatchWheelTicks(
+          center instanceof Element ? center : null,
+          vertical,
+          Math.sign(signed) * WHEEL_TICK_PX,
+          wheelTickCount(amount),
+        );
+        return {
+          moved,
+          notes: moved
+            ? [`Dispatched wheel ticks; the page responded (content changed).`]
+            : [`Dispatched wheel ticks to the page; content did not change measurably.`],
+        };
+      }
+
       // 1) 主滚动视口(document.scrollingElement 兼容 quirks/标准模式)
       const scroller = document.scrollingElement || document.documentElement;
       if (applyScroll(scroller, dx, dy) > 50) {
@@ -1254,22 +1278,13 @@ export default defineContentScript({
       if (anyContainer) {
         return { moved: true, notes: [`Scrolled ${direction} by ${delta}px inside a scrollable container.`] };
       }
-      // 4) 劫持/画廊页兜底:合成 wheel 多 tick(真实滚轮惯性;翻页/切卡页面鼠标滚动即切换,原生 scrollTop 不动)
-      const wheelMoved = await dispatchWheelTicks(
-        center instanceof Element ? center : null,
-        vertical,
-        Math.sign(signed) * WHEEL_TICK_PX,
-        wheelTickCount(amount),
-      );
-      const wheelNote =
-        'Dispatched wheel ticks to the page; content did not change measurably.';
       if (containerEdge) {
         return {
-          moved: wheelMoved,
-          notes: [`Viewport is not scrollable in this direction; the scrollable container is at its edge.`, wheelNote],
+          moved: false,
+          notes: [`Viewport is not scrollable in this direction; the scrollable container is at its edge.`],
         };
       }
-      return { moved: wheelMoved, notes: [wheelNote] };
+      return { moved: false, notes: [`Viewport is not scrollable in this direction; no scrollable content found in the page.`] };
     }
 
     async function runPageAction(message: {
@@ -1279,6 +1294,7 @@ export default defineContentScript({
       direction?: unknown;
       amount?: unknown;
       submit?: unknown;
+      mode?: unknown;
     }): Promise<PageActionResult> {
       const libs = await loadAccessibilityLibs();
       if (!libs) return { ok: false, url: location.href, reason: 'not_found' };
@@ -1301,7 +1317,8 @@ export default defineContentScript({
           target = res.hit.el;
           summary = elementSummary(res.hit);
         }
-        const { notes, moved } = await performScroll(target, direction, amount);
+        const mode = message.mode === 'js' ? 'js' : 'wheel';
+        const { notes, moved } = await performScroll(target, direction, amount, mode);
         notes.push(...(await waitForSettle(1500)));
         return {
           ok: true,
