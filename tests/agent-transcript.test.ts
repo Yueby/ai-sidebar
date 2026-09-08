@@ -47,16 +47,10 @@ const baseOptions = (sessionId: string, userMessage: ReturnType<typeof createUse
   sessionId,
 });
 
-test.afterEach(async () => {
+test.afterEach(() => {
   setAgentOverrides(null);
   setAgentEventSink(null);
   disposeAllSessionAgents();
-});
-
-// 文件级收尾:faux/pi-ai 在 run 结束后仍会异步推送收尾事件,
-// 等它们全部落地再让 test runner 结束,避免“asynchronous activity”误报。
-test.after(async () => {
-  await new Promise<void>((resolve) => setTimeout(resolve, 250));
 });
 
 test('两轮普通 prompt:Agent 自持转录,第二轮不传 history 也不丢不重', async () => {

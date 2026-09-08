@@ -319,6 +319,11 @@ export function hasSessionAgent(sessionId: string): boolean {
   return sessionAgents.has(sessionId);
 }
 
+/** 只读读取会话 Agent(不创建;诊断与集成测试用) */
+export function sessionAgentFor(sessionId: string): Agent | undefined {
+  return sessionAgents.get(sessionId)?.agent;
+}
+
 /**
  * 获取或创建会话 Agent(pi 设计:每会话一个实例,**自持转录**)。
  * - 转录真源 = agent.state.messages(原始格式,含 refs 块;请求经 convertToLlm 展开);
