@@ -249,7 +249,14 @@ export function useSessionManager() {
       const leaving = leavingId
         ? sessions.find((s) => s.id === leavingId) ?? null
         : null;
-      const recycle = !!leaving && leaving.messages.length === 0;
+      // 回收空会话仅当它没有任何后台遗留(队列/运行/门控);否则切走会杀掉其排队消息
+      const st = useAppStore.getState();
+      const recycle =
+        !!leaving &&
+        leaving.messages.length === 0 &&
+        !st.queuedMessages.some((q) => q.sessionId === leaving.id) &&
+        !(st.isStreaming && st.inFlight?.sessionId === leaving.id) &&
+        st.activeGate?.sessionId !== leaving.id;
       // 回收前先摘除离开会话的待发草稿,避免 flush 把它写回后与 deleteSession 竞态复活
       if (recycle) dropPendingDraftSave(leaving!.id);
       // 其余会话的待落盘草稿立即写入(切换是自然 flush 边界)
@@ -261,7 +268,7 @@ export function useSessionManager() {
       }
       setActiveSessionId(id);
       await activeSessionIdItem.setValue(id);
-      setErrorMessage(null);
+      // 不再清空错误:错误按归属分流(App),后台错误需在切回时仍可见
     },
     [resetGates, setErrorMessage, setActiveSessionId, setSessions]
   );
@@ -285,8 +292,7 @@ export function useSessionManager() {
     setActiveSessionId(newSess.id);
     await saveSession(newSess);
     await activeSessionIdItem.setValue(newSess.id);
-    setErrorMessage(null);
-  }, [resetGates, setErrorMessage, setActiveSessionId, setSessions]);
+  }, [setActiveSessionId, setSessions]);
 
   const handleDeleteSession = useCallback(
     async (id: string) => {

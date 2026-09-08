@@ -78,9 +78,12 @@ export default function App() {
 
   // ── 上下文压缩域(先于对话轮次域:isCompacting 作为 boolean 传入发送互斥)─────────
   const compact = useCompact();
-  const onAutoCompact = useCallback(() => {
-    void compact.handleCompact();
-  }, [compact.handleCompact]);
+  const onAutoCompact = useCallback(
+    (sessionId: string) => {
+      void compact.handleCompact({ targetSessionId: sessionId });
+    },
+    [compact.handleCompact],
+  );
 
   // ── Composer 草稿(提升至此以供建议域感知输入) ──────────────────
   const draft = currentSession?.draft ?? EMPTY_DRAFT;
@@ -186,8 +189,8 @@ export default function App() {
 
   // ── Navigation & Provider Dialog Handlers ──────────────────────
   const handleOpenSettings = useCallback(() => {
-    // 离开聊天视图时冲销挂起门控(与停止生成同款处理;deny 后模型收到拒绝文本收尾,无需恢复)
-    gate.dismissPendingGates();
+    // 仅当前视图的门控随离开冲销;后台会话的门控保留(提醒仍在,切回后应答)
+    if (isGateHere) gate.dismissPendingGates();
     setCurrentView('settings');
   }, [gate.dismissPendingGates]);
 
@@ -324,7 +327,7 @@ export default function App() {
 
   // 会话隔离派生:运行/门控归属 = in-flight 声明的会话;仅当与当前视图一致才在视图内呈现
   // (live 流式气泡/停止按钮/队列条/门控卡),否则后台运行——当前会话完全不受影响
-  const runningSessionId = isStreaming ? (inFlight?.sessionId ?? null) : null;
+  const runningSessionId = useAppStore((s) => s.runningSessionId);
   const isStreamingHere = runningSessionId !== null && runningSessionId === currentSession?.id;
   const isGateHere = gate.activeGate != null && gate.activeGate.sessionId === currentSession?.id;
 
@@ -341,7 +344,8 @@ export default function App() {
       ? inFlight.messages.filter((m) => m.role !== 'toolResult').length
       : 0;
   // 编辑重发使能:非流式、非门控、非压缩时允许用户编辑已发送消息
-  const canEditMessage = !isStreamingHere && !isGateHere && !compact.isCompacting;
+  // 编辑重发走全局单 run(handleEditResend 的 busy 守卫):与按钮使能保持一致,避免可点但无效
+  const canEditMessage = !isStreaming && !gate.activeGate && !compact.isCompacting;
 
   // 新会话快捷指令:空会话展示时异步生成(模型失败静默回退静态四条)
   const quickPrompts = useQuickPrompts(
@@ -585,10 +589,8 @@ export default function App() {
             }}
             onStop={chat.handleStopGeneration}
             isStreaming={isStreamingHere}
-            queuedMessages={queuedMessages
-              .filter((q) => q.sessionId === currentSession?.id)
-              .map((q) => q.text)}
-            onRemoveQueuedMessage={(index) => removeQueuedMessage(currentSession?.id ?? '', index)}
+            queuedMessages={queuedMessages.filter((q) => q.sessionId === currentSession?.id)}
+            onRemoveQueuedMessage={(id) => removeQueuedMessage(id)}
             followUpSuggestions={followUps.suggestions}
             onSelectFollowUp={handleSelectPrompt}
             settings={settings}

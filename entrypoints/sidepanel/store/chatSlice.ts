@@ -1,4 +1,5 @@
-import type { ChatMessage } from '@/lib/types';
+import type { ChatMessage, PickedElement } from '@/lib/types';
+import type { RefTab } from '@/lib/pageContext';
 
 /** 多 turn agent 循环的 in-flight 运行:已 message_end 但尚未进转录(finalize 才落)的消息 */
 export interface InFlightRun {
@@ -6,10 +7,14 @@ export interface InFlightRun {
   messages: ChatMessage[];
 }
 
-/** 排队消息:归属目标会话(切换会话不影响,轮末自动发往归属会话) */
+/** 排队消息:归属目标会话(切换会话不影响,轮末自动发往归属会话);
+ *  id 供 UI 稳定删除;refs/elements 为入队时刻快照(出队不读后续被改动的草稿) */
 export interface QueuedMessage {
+  id: string;
   sessionId: string;
   text: string;
+  refTabs: RefTab[];
+  pickedElements: PickedElement[];
 }
 
 export interface ChatSlice {
@@ -19,6 +24,8 @@ export interface ChatSlice {
   activeToolNames: string[];
   isCancelled: boolean;
   inFlight: InFlightRun | null;
+  /** 运行中会话 id(整个 run 生命周期保持;finalize 落盘期间不闪断,供后台指示/隔离派生) */
+  runningSessionId: string | null;
   /** 消息队列:繁忙期间用户排队发送的消息(仅内存,FIFO;按目标会话归属,跨会话隔离) */
   queuedMessages: QueuedMessage[];
 
@@ -27,12 +34,13 @@ export interface ChatSlice {
   setStreamingThinking: (value: string) => void;
   setActiveToolNames: (value: string[] | ((prev: string[]) => string[])) => void;
   setIsCancelled: (value: boolean) => void;
+  setRunningSessionId: (value: string | null) => void;
   setInFlight: (
     value: InFlightRun | null | ((prev: InFlightRun | null) => InFlightRun | null),
   ) => void;
   enqueueMessage: (item: QueuedMessage) => void;
   dequeueMessage: () => QueuedMessage | undefined;
-  removeQueuedMessage: (sessionId: string, index: number) => void;
+  removeQueuedMessage: (id: string) => void;
   /** 删除指定会话的排队条目(会话删除时) */
   removeQueuedMessagesForSession: (sessionId: string) => void;
   clearQueue: () => void;
@@ -50,6 +58,7 @@ export function createChatSlice(set: SliceSet): ChatSlice {
     activeToolNames: [],
     isCancelled: false,
     inFlight: null,
+    runningSessionId: null,
     queuedMessages: [],
 
     setIsStreaming: (isStreaming) => set({ isStreaming }),
@@ -58,6 +67,7 @@ export function createChatSlice(set: SliceSet): ChatSlice {
     setActiveToolNames: (value) =>
       set((s) => ({ activeToolNames: typeof value === 'function' ? value(s.activeToolNames) : value })),
     setIsCancelled: (isCancelled) => set({ isCancelled }),
+    setRunningSessionId: (runningSessionId) => set({ runningSessionId }),
     setInFlight: (value) =>
       set((s) => ({ inFlight: typeof value === 'function' ? value(s.inFlight) : value })),
     enqueueMessage: (item) =>
@@ -73,11 +83,9 @@ export function createChatSlice(set: SliceSet): ChatSlice {
       });
       return item;
     },
-    removeQueuedMessage: (sessionId, index) =>
+    removeQueuedMessage: (id) =>
       set((s) => ({
-        queuedMessages: (s.queuedMessages ?? []).filter(
-          (q, i) => !(q.sessionId === sessionId && i === index),
-        ),
+        queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id),
       })),
     removeQueuedMessagesForSession: (sessionId) =>
       set((s) => ({

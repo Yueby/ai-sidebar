@@ -38,8 +38,9 @@ export const useAppStore = create<AppStore>()(
  */
 setGateHandler((req: GateRequest) => {
   return new Promise<GateResponse>((resolve) => {
-    // 门控归属运行会话(inFlight 在 turn 开始时声明):后台会话的门控不弹当前视图,仅提醒
+    // 门控归属运行会话(inFlight 在 turn 开始时声明):后台会话的门控不弹当前视图,仅提醒。
+    // 无 inFlight = 非 turn 内调用(异常路径):归属缺失,安全起见归 null(仅提醒,不弹卡)
     const st = useAppStore.getState();
-    st.pushGate(req, resolve, st.inFlight?.sessionId ?? st.activeSessionId ?? null);
+    st.pushGate(req, resolve, st.inFlight?.sessionId ?? null);
   });
 });

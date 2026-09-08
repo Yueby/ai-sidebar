@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { FollowUpSuggestion } from '@/lib/followUpSuggestions';
+import type { QueuedMessage } from '../../store/chatSlice';
 import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
 import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
@@ -46,10 +47,10 @@ interface ChatInputProps {
   onSend: (text: string) => void;
   onStop: () => void;
   isStreaming: boolean;
-  /** 消息队列:流式期间排队等待发送的消息列表 */
-  queuedMessages?: string[];
-  /** 移除某条排队消息 */
-  onRemoveQueuedMessage?: (index: number) => void;
+  /** 消息队列(已按当前会话过滤):繁忙期间排队等待发送的消息 */
+  queuedMessages?: QueuedMessage[];
+  /** 移除某条排队消息(按稳定 id) */
+  onRemoveQueuedMessage?: (id: string) => void;
   /** 推荐跟进建议:AI 回复完成后显示在输入框上方 */
   followUpSuggestions?: FollowUpSuggestion[];
   /** 点击跟进建议填入输入框 */
@@ -530,8 +531,8 @@ export function ChatInput({
         <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
       </div>
 
-      {/* 队列提示条: 流式期间且队列非空时展示 */}
-      {isStreaming && queuedMessages && queuedMessages.length > 0 && (
+      {/* 队列提示条: 本会话有排队即展示(不依赖当前是否正在生成——后台运行时自己的队列也要可见) */}
+      {queuedMessages && queuedMessages.length > 0 && (
         <div className="pointer-events-auto mb-1.5 flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] text-muted-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
           <div className="flex items-center justify-between font-medium text-foreground">
             <span className="flex items-center gap-1.5">
@@ -540,13 +541,13 @@ export function ChatInput({
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            {queuedMessages.map((msg, idx) => (
+            {queuedMessages.map((queued) => (
               <div
-                key={idx}
+                key={queued.id}
                 className="flex items-center justify-between gap-2 rounded bg-background/60 px-1.5 py-0.5"
               >
                 <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground/90">
-                  {msg}
+                  {queued.text}
                 </span>
                 <TooltipProvider delay={200}>
                   <Tooltip>
@@ -557,7 +558,7 @@ export function ChatInput({
                           variant="ghost"
                           size="icon"
                           className="size-4 shrink-0 text-muted-foreground hover:text-foreground"
-                          onClick={() => onRemoveQueuedMessage?.(idx)}
+                          onClick={() => onRemoveQueuedMessage?.(queued.id)}
                           aria-label={i18n.t('composer.queuedRemove')}
                         >
                           <X className="size-2.5" />

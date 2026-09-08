@@ -42,7 +42,7 @@ export function useCompact() {
       // 按 store 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
       const latestCurrent = selectCurrentSession(store);
       const session: Session | undefined = targetSessionId
-        ? (store.sessions.find((s) => s.id === targetSessionId) ?? latestCurrent ?? undefined)
+        ? store.sessions.find((s) => s.id === targetSessionId)
         : (store.sessions.find((s) => s.id === latestCurrent?.id) ?? latestCurrent ?? undefined);
       if (!session || session.messages.length === 0) return false;
       const active = findActiveModel(store.settings);

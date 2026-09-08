@@ -670,32 +670,38 @@ export async function performPageAction(
       const fillValue = typeof params.value === 'string' ? params.value : '';
       // fill 序列状态:任一步派发成功后失败 → partial_or_unknown(禁止重发)
       let fillState: 'not_dispatched' | 'dispatched' | 'partial_or_unknown' = 'not_dispatched';
+      let clickPartial = false;
       if (action === 'click') {
-        cdpActed = (await dispatchTrustedMouseClick(tabId, cx, cy)) === 'dispatched';
+        const clickState = await dispatchTrustedMouseClick(tabId, cx, cy);
+        // not_dispatched = 点击尚未发生,可安全降级合成;partial = 按下已派发,禁止重发
+        if (clickState === 'dispatched') cdpActed = true;
+        else if (clickState === 'partial_or_unknown') {
+          cdpActed = true;
+          clickPartial = true;
+        }
       } else {
-        // fill:可信点击聚焦 → Ctrl+A 全选(Mac=Cmd) → Backspace 清空 → insertText(非空时) → (Enter 提交)
+        // fill:可信点击聚焦 → Ctrl+A 全选(Mac=Cmd) → Backspace 清空 → insertText(非空时) → (Enter 提交)。
+        // 点击派发后序列中任何一步未达 → partial_or_unknown(整体未完成,禁止降级重发)
         const clickState = await dispatchTrustedMouseClick(tabId, cx, cy);
         if (clickState === 'not_dispatched') {
           fillState = 'not_dispatched';
-        } else if (clickState === 'partial_or_unknown') {
-          fillState = 'partial_or_unknown';
         } else {
-          fillState = 'dispatched';
-          const selectAll = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, IS_MAC ? 4 : 2);
-          if (selectAll !== 'dispatched') {
-            fillState = selectAll === 'partial_or_unknown' ? 'partial_or_unknown' : fillState;
-          } else {
-            const clear = await dispatchTrustedKey(tabId, 'Backspace', 'Backspace', 8);
-            if (clear !== 'dispatched') {
-              fillState = clear === 'partial_or_unknown' ? 'partial_or_unknown' : fillState;
-            } else if (fillValue !== '') {
-              const insert = await insertTrustedText(tabId, fillValue);
-              if (insert !== 'dispatched') fillState = 'partial_or_unknown';
-            }
-            if (fillState === 'dispatched' && params.submit === 'enter') {
-              const enter = await dispatchTrustedKey(tabId, 'Enter', 'Enter', 13);
-              if (enter !== 'dispatched') fillState = 'partial_or_unknown';
-            }
+          fillState = clickState === 'dispatched' ? 'dispatched' : 'partial_or_unknown';
+          if (clickState === 'dispatched') {
+            const selectAll = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, IS_MAC ? 4 : 2);
+            if (selectAll === 'dispatched') {
+              const clear = await dispatchTrustedKey(tabId, 'Backspace', 'Backspace', 8);
+              if (clear === 'dispatched') {
+                if (fillValue !== '') {
+                  const insert = await insertTrustedText(tabId, fillValue);
+                  if (insert !== 'dispatched') fillState = 'partial_or_unknown';
+                }
+                if (fillState === 'dispatched' && params.submit === 'enter') {
+                  const enter = await dispatchTrustedKey(tabId, 'Enter', 'Enter', 13);
+                  if (enter !== 'dispatched') fillState = 'partial_or_unknown';
+                }
+              } else fillState = 'partial_or_unknown';
+            } else fillState = 'partial_or_unknown';
           }
         }
         cdpActed = fillState !== 'not_dispatched';
@@ -722,7 +728,9 @@ export async function performPageAction(
         const partialNote =
           action === 'fill' && fillState === 'partial_or_unknown'
             ? 'cdp_partial_dispatch: the input sequence was partially dispatched (value may be partially applied); do NOT retry the same fill — verify the field state first.'
-            : null;
+            : clickPartial
+              ? 'cdp_partial_dispatch: the mouse press was dispatched but the release was not confirmed; do NOT retry the same click — verify the page state first.'
+              : null;
         cdpFirstResult = {
           ok: true,
           url: aRes?.ok === true && typeof aRes.url === 'string' ? aRes.url : url,
