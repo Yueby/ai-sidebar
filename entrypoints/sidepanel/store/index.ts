@@ -6,7 +6,8 @@ import { createErrorSlice, type ErrorSlice } from './errorSlice';
 import { createSessionSlice, selectCurrentSession, type SessionSlice } from './sessionSlice';
 import { createSettingsSlice, type SettingsSlice } from './settingsSlice';
 import { createChatSlice, type ChatSlice } from './chatSlice';
-import { setRuntimeStateSink } from '@/lib/sessionRuntime';
+import { setRuntimeStateSink, bridgeAgentEvent } from '@/lib/sessionRuntime';
+import { setAgentEventSink } from '@/lib/agent';
 
 export type AppStore = GateSlice & ErrorSlice & SessionSlice & SettingsSlice & ChatSlice;
 export { selectCurrentSession };
@@ -40,6 +41,11 @@ export const useAppStore = create<AppStore>()(
 // SessionRuntime 状态出口:runtime 是会话运行态唯一源,store.runs 为渲染镜像
 setRuntimeStateSink((sessionId, snapshot, active) => {
   useAppStore.getState().syncRun(sessionId, snapshot, active);
+});
+
+// Agent 事件出口:每个会话 Agent 常驻订阅一次,事件写入该会话 runtime(pi 设计)
+setAgentEventSink((sessionId, event) => {
+  bridgeAgentEvent(sessionId, event);
 });
 
 setGateHandler((req: GateRequest, sessionId: string) => {

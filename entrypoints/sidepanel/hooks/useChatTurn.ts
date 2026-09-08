@@ -53,8 +53,7 @@ export function useChatTurn(params: {
 
   // per-session 运行状态全部移入 SessionRuntime(lib/sessionRuntime.ts,pi AgentSession 对齐):
   // turn 序号/在途请求/流式节流/压缩标记/发送锁/队列 由 runtime 按会话持有。
-  // 流式增量节流间隔(token 级增量直推 store 会让长对话全列表重绘卡顿)
-  const STREAM_FLUSH_INTERVAL_MS = 50;
+  // Agent 事件经常驻订阅(agent.ts setAgentEventSink)直接写入 runtime,本 hook 不再逐轮桥接。
 
   // 引用稳定的 handleSendMessage 指针(避免循环依赖,供出队延后调用;可指定目标会话后台发送)
   const handleSendMessageRef = useRef<
@@ -192,36 +191,6 @@ export function useChatTurn(params: {
           onCompactContext: () => {
             // 同会话旧 run 无权置位新 run 的压缩请求(runtime.isOwner 校验)
             rt.requestCompaction(seq);
-          },
-          onEvent: (event) => {
-            if (event.type === 'message_update' && event.message.role === 'assistant') {
-              // 同会话旧 turn(打断重发)的 aborted partial 事件流必须静默
-              if (!rt.isOwner(seq)) return;
-              const text = event.message.content
-                .filter((b) => b.type === 'text')
-                .map((b) => b.text)
-                .join('');
-              const thinking = event.message.content
-                .filter((b) => b.type === 'thinking')
-                .map((b) => b.thinking)
-                .join('');
-              rt.pushStreamDelta(seq, text, thinking, STREAM_FLUSH_INTERVAL_MS);
-            } else if (event.type === 'message_end' && event.message.role === 'assistant') {
-              if (!rt.isOwner(seq)) return;
-              if (import.meta.env.DEV) {
-                const prevLen = useAppStore.getState().runs[sid]?.inFlight.length ?? -1;
-                console.log(`[turn:${sid}] msg_end assistant: inFlight ${prevLen}->+1 (seq ${seq})`);
-              }
-              // 一条 assistant 完成:整体进 in-flight,同批重置 live 流式态(交接无闪烁)
-              rt.pushInFlight(seq, event.message as ChatMessage);
-            } else if (event.type === 'message_end' && event.message.role === 'toolResult') {
-              // 工具结果即时入 in-flight:工具卡立刻显示返回结果,不等整轮结束
-              rt.pushInFlight(seq, event.message as ChatMessage);
-            } else if (event.type === 'tool_execution_start') {
-              rt.addTool(seq, event.toolName);
-            } else if (event.type === 'tool_execution_end') {
-              rt.removeTool(seq, event.toolName);
-            }
           },
         });
 

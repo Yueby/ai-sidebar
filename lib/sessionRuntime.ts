@@ -26,6 +26,8 @@ export interface SessionRunSnapshot {
   inFlight: ChatMessage[];
 }
 
+import type { AgentEvent } from '@earendil-works/pi-agent-core';
+
 export type SessionRunListener = (snapshot: SessionRunSnapshot) => void;
 
 const EMPTY_SNAPSHOT: SessionRunSnapshot = {
@@ -90,6 +92,11 @@ export class SessionRuntime {
   }
 
   // ── pi 对齐的公开状态 ──────────────────────────────────────────────────
+
+  /** 当前 run 的序号(事件桥接用:常驻订阅时需要知道事件属于哪一轮) */
+  get currentSeq(): number {
+    return this.seq;
+  }
 
   get isStreaming(): boolean {
     return !this.disposed && this.abortCtrl !== null;
@@ -332,4 +339,44 @@ export function disposeAllRuntimes(): void {
     runtimeStateSink?.(id, { ...EMPTY_SNAPSHOT }, false);
   }
   runtimes.clear();
+}
+
+// ── Agent 事件桥接(常驻订阅;pi 的 AgentSession 同款做法)──────────────────
+
+/** 流式冲刷间隔:token 级增量直推 store 会让长对话全列表重绘卡顿 */
+const STREAM_FLUSH_INTERVAL_MS = 50;
+
+/**
+ * 把 pi Agent 的生命周期事件写入对应会话的 runtime。
+ * 由 entrypoints 层经 agent.ts 的 setAgentEventSink 注入;
+ * runtime 不存在(非面板会话)或事件属于已被接管的旧 run 时丢弃。
+ */
+export function bridgeAgentEvent(sessionId: string, event: AgentEvent): void {
+  const rt = runtimes.get(sessionId);
+  if (!rt) return;
+  const seq = rt.currentSeq;
+  if (event.type === 'message_update' && event.message.role === 'assistant') {
+    if (!rt.isOwner(seq)) return;
+    const text = event.message.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    const thinking = event.message.content
+      .filter((b) => b.type === 'thinking')
+      .map((b) => b.thinking)
+      .join('');
+    rt.pushStreamDelta(seq, text, thinking, STREAM_FLUSH_INTERVAL_MS);
+  } else if (event.type === 'message_end' && event.message.role === 'assistant') {
+    if (!rt.isOwner(seq)) return;
+    rt.pushInFlight(seq, event.message as ChatMessage);
+  } else if (event.type === 'message_end' && event.message.role === 'toolResult') {
+    if (!rt.isOwner(seq)) return;
+    rt.pushInFlight(seq, event.message as ChatMessage);
+  } else if (event.type === 'tool_execution_start') {
+    if (!rt.isOwner(seq)) return;
+    rt.addTool(seq, event.toolName);
+  } else if (event.type === 'tool_execution_end') {
+    if (!rt.isOwner(seq)) return;
+    rt.removeTool(seq, event.toolName);
+  }
 }

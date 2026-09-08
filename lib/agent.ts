@@ -198,12 +198,22 @@ export interface RunAgentResult {
  * 失败经 Agent 协议事件编码(stopReason='error'),取消经 signal 注入;
  * 中止时已生成的部分保留在转录中。
  */
-/**
- * 会话 Agent 注册表(pi 设计:每会话一个 Agent 实例,持有转录与运行状态)。
+/** 会话 Agent 注册表(pi 设计:每会话一个 Agent 实例,持有转录与运行状态)。
  * 阶段①:每轮仍以调用方传入的 history 覆盖转录(与重建 Agent 等价,行为零变化);
  * 阶段②将改为 Agent 自持转录,调用方不再传 history。
  */
 const sessionAgents = new Map<string, Agent>();
+
+/**
+ * Agent 生命周期事件出口(依赖注入):entrypoints 层注入后,每个会话 Agent 在创建时
+ * 常驻订阅一次,把事件路由到该会话的运行时/UI(pi 的 AgentSession 同款做法)。
+ */
+export type AgentEventSink = (sessionId: string, event: AgentEvent) => void;
+let agentEventSink: AgentEventSink | null = null;
+
+export function setAgentEventSink(sink: AgentEventSink | null): void {
+  agentEventSink = sink;
+}
 
 /** 构造每轮可变的 Agent 输入(provider/模型/工具白名单/系统提示词;并发 run 各自独立) */
 function buildAgentInputs(options: RunAgentOptions, transcript: ChatMessage[]): {
@@ -331,7 +341,12 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     sessionId: sid,
     toolExecution: 'sequential',
   });
-  if (sid) sessionAgents.set(sid, agent);
+  if (sid) {
+    sessionAgents.set(sid, agent);
+    // 常驻订阅(构造时一次):事件路由到该会话 runtime——队列自动消费/外部触发的
+    // run 同样能驱动 UI(与 pi 的 AgentSession._handleAgentEvent 同构)
+    agent.subscribe((event) => agentEventSink?.(sid, event));
+  }
   return agent;
 }
 
