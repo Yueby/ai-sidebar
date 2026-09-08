@@ -13,6 +13,7 @@ import {
   SquareMousePointer,
   ShieldAlert,
   HelpCircle,
+  Link2,
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, PageRefs, RefElementMeta, ToolResultMessage } from '@/lib/types';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
@@ -32,6 +33,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Spinner } from '@/components/ui/spinner';
 import { Item, ItemMedia, ItemContent, ItemTitle, ItemDescription, ItemActions } from '@/components/ui/item';
 import { Badge } from '@/components/ui/badge';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 
 interface MessageItemProps {
@@ -729,15 +731,82 @@ export function MessageItem({
                 placeholder={i18n.t('composer.placeholder')}
                 autoFocus
               />
-              {pageRefs && (pageRefs.tabs.length > 0 || pageRefs.elements.length > 0) && (
-                <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 px-0.5 select-none">
-                  <Globe className="size-3 shrink-0" />
-                  <span className="truncate">
-                    {i18n.t('messages.refCount', { total: pageRefs.tabs.length + pageRefs.elements.length })}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-end gap-1.5 pt-0.5">
+              <div className="flex items-center gap-1.5 pt-0.5">
+                {pageRefs && (pageRefs.tabs.length > 0 || pageRefs.elements.length > 0) && (
+                  <HoverCard>
+                    <HoverCardTrigger
+                      delay={200}
+                      closeDelay={150}
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground gap-1 font-normal select-none"
+                        />
+                      }
+                    >
+                      <Link2 className="size-3 shrink-0" />
+                      <span>
+                        {i18n.t('messages.refCount', {
+                          total: pageRefs.tabs.length + pageRefs.elements.length,
+                        })}
+                      </span>
+                    </HoverCardTrigger>
+                    <HoverCardContent side="top" align="start" className="w-64 p-2 text-xs">
+                      <div className="space-y-1 max-h-48 overflow-y-auto">
+                        <TooltipProvider delay={200}>
+                          {pageRefs.tabs.map((tab, idx) => (
+                            <Tooltip key={`edit-tab-${idx}`}>
+                              <TooltipTrigger
+                                render={
+                                  <div className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[11px] hover:bg-muted transition-colors cursor-default select-none min-w-0" />
+                                }
+                              >
+                                <Globe className="size-3 shrink-0 text-muted-foreground" />
+                                <span className="truncate flex-1 text-foreground">
+                                  {tab.title || tab.url}
+                                </span>
+                                {tab.focused && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="h-auto shrink-0 rounded px-1 py-0 text-[9px] leading-[14px] font-medium"
+                                  >
+                                    {i18n.t('messages.current')}
+                                  </Badge>
+                                )}
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                {`${tab.url} · #${tab.tabId}`}
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                          {pageRefs.elements.map((elem) => (
+                            <Tooltip key={`elem-${elem.id}`}>
+                              <TooltipTrigger
+                                render={
+                                  <div className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[11px] hover:bg-muted transition-colors cursor-default select-none min-w-0" />
+                                }
+                              >
+                                <span className="font-mono text-muted-foreground shrink-0">
+                                  {elem.id}.
+                                </span>
+                                <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
+                                <span className="truncate flex-1 text-foreground">
+                                  {elementListLabel(elem)}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                {`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </TooltipProvider>
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
+                )}
+                <div className="flex-1" />
                 <Button
                   type="button"
                   variant="ghost"
