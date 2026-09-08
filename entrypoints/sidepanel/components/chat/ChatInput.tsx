@@ -24,7 +24,6 @@ import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { listCandidateTabs, getActiveTabMeta, type RefTab } from '@/lib/pageContext';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -499,7 +498,34 @@ export function ChatInput({
           : 'pt-2.5 bg-background',
       )}
     >
-      {/* 标签页引用区 (独立小控件, 位于输入框卡片上方, 底部被输入框轻微压住层叠) */}
+      {/* 推荐跟进建议 (空闲时展示, 位于 composer 最顶端, 纯文本轻量无背景无边框) */}
+      {!isStreaming && followUpSuggestions && followUpSuggestions.length > 0 && (
+        <div className="pointer-events-auto mb-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1 py-0.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <Sparkles className="size-3 text-muted-foreground shrink-0" />
+          <TooltipProvider delay={200}>
+            {followUpSuggestions.map((item, idx) => (
+              <Tooltip key={idx}>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={() => onSelectFollowUp?.(item.prompt)}
+                      className="bg-transparent border-0 p-0 text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors text-left select-none max-w-[240px] truncate"
+                    />
+                  }
+                >
+                  <span className="truncate max-w-[240px]">{item.title}</span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {item.prompt}
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </TooltipProvider>
+        </div>
+      )}
+
+      {/* 标签页引用区 (独立小控件, 紧贴位于输入框卡片上方, 底部被输入框轻微压住层叠) */}
       <div className="pointer-events-auto">
         <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
       </div>
@@ -549,41 +575,12 @@ export function ChatInput({
         </div>
       )}
 
-      {/* 推荐跟进建议 chips: 空闲时展示 (与流式队列提示条同槽位互斥) */}
-      {!isStreaming && followUpSuggestions && followUpSuggestions.length > 0 && (
-        <div className="pointer-events-auto mb-1.5 flex flex-wrap items-center gap-1.5 px-0.5 py-0.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-          <Sparkles className="size-3 text-muted-foreground shrink-0 ml-0.5" />
-          <TooltipProvider delay={200}>
-            {followUpSuggestions.map((item, idx) => (
-              <Tooltip key={idx}>
-                <TooltipTrigger
-                  render={
-                    <Badge
-                      variant="outline"
-                      render={<button type="button" />}
-                      onClick={() => onSelectFollowUp?.(item.prompt)}
-                      className="h-auto py-1 px-2.5 text-xs font-normal rounded-full text-foreground hover:bg-muted transition-colors text-left select-none cursor-default"
-                    />
-                  }
-                >
-                  <span className="truncate max-w-[240px]">{item.title}</span>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {item.prompt}
-                </TooltipContent>
-              </Tooltip>
-            ))}
-          </TooltipProvider>
-        </div>
-      )}
-
       {/* Input container (TipTap 编辑器 + 底部工具栏) */}
       <div
         className={`pointer-events-auto relative z-10 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs transition-[box-shadow,border-color] duration-200 ease-out focus-within:ring-1 focus-within:ring-ring ${
           refTabs &&
           refTabs.length > 0 &&
-          (!queuedMessages || queuedMessages.length === 0) &&
-          (!followUpSuggestions || followUpSuggestions.length === 0)
+          (!queuedMessages || queuedMessages.length === 0)
             ? '-mt-2'
             : ''
         }`}
