@@ -84,6 +84,14 @@ export function useChatTurn(params: {
       const s = useAppStore.getState();
       const item = s.queuedMessages.find((q) => q.sessionId === sessionId);
       if (!item) return;
+      // 先验证执行条件再原子领取:目标会话已删 → 丢弃该条并继续调度;
+      // 无可用模型 → 保留条目并暂停(不逐条弹出后丢弃)
+      if (!s.sessions.some((x) => x.id === sessionId)) {
+        s.removeQueuedMessage(item.id);
+        setTimeout(() => dispatchQueueFor(sessionId), 0);
+        return;
+      }
+      if (!findActiveModel(s.settings)) return;
       s.removeQueuedMessage(item.id);
       if (import.meta.env.DEV) {
         console.log(`[turn] dispatch queued message -> session ${sessionId}: "${item.text.slice(0, 30)}..."`);
@@ -139,7 +147,14 @@ export function useChatTurn(params: {
 
       // turn 身份守卫(按会话,由 SessionRuntime 持有):自此新 turn 接管,同会话旧 turn 的拆卸链全部失效
       const rt = runtimeFor(sid);
-      const { seq, signal } = rt.beginRun();
+      let seq: number;
+      let signal: AbortSignal;
+      try {
+        ({ seq, signal } = rt.beginRun());
+      } catch {
+        // 同会话已有活动 run(调用方均有 busy 守卫,理论不可达):放弃本轮,不动他人状态
+        return;
+      }
       const st = useAppStore.getState();
       st.resetResolvedGateCount(sid);
       // 只清归属本会话或全局的错误;别的会话的错误保留(分流提醒仍在)
@@ -284,8 +299,11 @@ export function useChatTurn(params: {
         if (rt.endRun(seq)) {
           // 轮末自主压缩:清理完成后再触发(endRun 已复位,互斥守卫可通过)
           if (autoCompactPending) {
-            // 压缩尝试结束后必调度:压缩被拒/早退(如另一会话压缩中)时队列不能停摆
-            void Promise.resolve(onAutoCompact(sid)).finally(() => dispatchQueueFor(sid));
+            // 压缩尝试结束后必调度(宏任务:此时 handleSendMessage 的 send lock 已释放,
+            // 否则补调度会被自己的锁挡住而永久停摆)
+            void Promise.resolve(onAutoCompact(sid)).finally(() => {
+              setTimeout(() => dispatchQueueFor(sid), 0);
+            });
           } else {
             // 出队时机:本会话轮次彻底结束后,尝试发送该会话排队中的下一条
             setTimeout(() => dispatchQueueFor(sid), 0);

@@ -23,18 +23,33 @@ test('beginRun 进入运行态;endRun 仅所有者可拆卸', () => {
   assert.equal(rt.isStreaming, false);
 });
 
-test('同会话新一轮 beginRun 推进 seq,旧 seq 失去所有权(打断重发守卫)', () => {
+test('同会话已流式时 beginRun 抛错(不得静默覆盖);结束后可再开', () => {
   const rt = new SessionRuntime('s2');
   const first = rt.beginRun();
+  assert.throws(() => rt.beginRun(), /already streaming/);
+  assert.equal(rt.isOwner(first.seq), true, '拒绝覆盖后原 run 仍持有所有权');
+  assert.equal(rt.endRun(first.seq), true);
   const second = rt.beginRun();
-  assert.equal(rt.isOwner(first.seq), false);
   assert.equal(rt.isOwner(second.seq), true);
-  // 旧 run 的迟到写入被丢弃
-  rt.pushStreamDelta(first.seq, 'stale', '', 0);
-  rt.pushInFlight(first.seq, assistantMsg('stale'));
+  assert.equal(rt.isOwner(first.seq), false, '旧 seq 不再持有所有权');
+});
+
+test('dispose 后所有写入/重启失效(迟到续体无法回写镜像)', () => {
+  const rt = new SessionRuntime('s2b');
+  const { seq, signal } = rt.beginRun();
+  rt.dispose();
+  assert.equal(signal.aborted, true, 'dispose 会中止在途请求');
+  assert.equal(rt.isStreaming, false);
+  assert.equal(rt.isOwner(seq), false);
+  rt.pushInFlight(seq, assistantMsg('late'));
+  rt.pushStreamDelta(seq, 'late', '', 0);
+  rt.addTool(seq, 'read_page');
+  rt.markCancelled(seq);
   assert.equal(rt.getSnapshot().inFlight.length, 0);
-  assert.equal(rt.endRun(first.seq), false);
-  assert.equal(rt.isStreaming, true);
+  assert.equal(rt.getSnapshot().content, '');
+  assert.deepEqual(rt.getSnapshot().toolNames, []);
+  assert.equal(rt.getSnapshot().cancelled, false);
+  assert.throws(() => rt.beginRun(), /disposed/);
 });
 
 test('pushInFlight 与 tool 状态按 run 所有权写入', () => {

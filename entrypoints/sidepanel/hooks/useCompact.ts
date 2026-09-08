@@ -8,6 +8,7 @@ import { effectiveMessages } from '@/lib/contextTokens';
 import { findCutIndex, runCompact } from '@/lib/compaction';
 import { buildProvider } from '@/lib/agent';
 import { collectPageRefs, renderPageRefsBlock } from '@/lib/pageRefs';
+import { existingRuntime } from '@/lib/sessionRuntime';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave } from '../store/sessionSlice';
 import { i18n } from '#i18n';
@@ -48,8 +49,11 @@ export function useCompact() {
         ? store.sessions.find((s) => s.id === targetSessionId)
         : (store.sessions.find((s) => s.id === latestCurrent?.id) ?? latestCurrent ?? undefined);
       if (!session || session.messages.length === 0) return false;
-      // 目标会话自身在跑或挂门控时拒绝(其他会话的运行不影响压缩)
+      // 目标会话自身在跑/挂门控/发送准备中时拒绝(压缩与发送竞争同一会话)
       if (store.runs[session.id] || store.gates[session.id]) return false;
+      if (store.preparingSessionIds.includes(session.id) || existingRuntime(session.id)?.isSending) {
+        return false;
+      }
       const active = findActiveModel(store.settings);
       if (!active) {
         setErrorMessage(i18n.t('compaction.toast.noModel'), session.id);

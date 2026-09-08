@@ -56,8 +56,10 @@ export class SessionRuntime {
   private sending = false;
   /** followUp 队列(排队等当前轮结束;pi 语义) */
   private followUps: string[] = [];
-  /** steering 队列(打断当前轮后立即注入;pi 语义) */
+  /** steering 队列(pi 语义:当前 assistant turn 结束后注入,不 abort 在途请求) */
   private steering: string[] = [];
+  /** 已释放:删除会话后迟到的续体不得再写入/重启本实例 */
+  private disposed = false;
 
   constructor(sessionId: string) {
     this.sessionId = sessionId;
@@ -82,6 +84,7 @@ export class SessionRuntime {
   }
 
   private patch(patch: Partial<SessionRunSnapshot>): void {
+    if (this.disposed) return;
     this.snapshot = { ...this.snapshot, ...patch };
     this.emit();
   }
@@ -89,7 +92,7 @@ export class SessionRuntime {
   // ── pi 对齐的公开状态 ──────────────────────────────────────────────────
 
   get isStreaming(): boolean {
-    return this.abortCtrl !== null;
+    return !this.disposed && this.abortCtrl !== null;
   }
 
   get pendingMessageCount(): number {
@@ -106,8 +109,13 @@ export class SessionRuntime {
 
   // ── 运行生命周期(useChatTurn 内核调用)────────────────────────────────
 
-  /** 开始一轮 run:领取 turn 序号与 AbortSignal(同会话重复调用前必须确认 isStreaming 为 false) */
+  /** 开始一轮 run:领取 turn 序号与 AbortSignal。
+   *  已运行/已释放时抛错(对齐 pi 的并发 prompt guard:调用方必须先 abort+等 idle,不得静默覆盖) */
   beginRun(): { seq: number; signal: AbortSignal } {
+    if (this.disposed) throw new Error(`session runtime ${this.sessionId} was disposed`);
+    if (this.abortCtrl !== null) {
+      throw new Error(`session ${this.sessionId} is already streaming; abort and wait for idle first`);
+    }
     const seq = ++this.seq;
     this.abortCtrl = new AbortController();
     this.pendingContent = '';
@@ -124,7 +132,7 @@ export class SessionRuntime {
 
   /** 当前 run 是否仍持有所有权(旧 run 的所有异步回调必须先校验) */
   isOwner(seq: number): boolean {
-    return seq === this.seq && this.abortCtrl !== null;
+    return !this.disposed && seq === this.seq && this.abortCtrl !== null;
   }
 
   /** 结束一轮 run(仅所有者可拆卸);返回是否为本轮所有者 */
@@ -145,6 +153,24 @@ export class SessionRuntime {
   /** 中止在途请求(停止按钮) */
   abort(): void {
     this.abortCtrl?.abort();
+  }
+
+  /** 释放实例:置失效、中止、清队列与定时器;此后所有写入/重启被拒 */
+  dispose(): void {
+    this.disposed = true;
+    this.abortCtrl?.abort();
+    this.abortCtrl = null;
+    if (this.throttleTimer) {
+      clearTimeout(this.throttleTimer);
+      this.throttleTimer = null;
+    }
+    this.followUps = [];
+    this.steering = [];
+    this.listeners.clear();
+  }
+
+  get isDisposed(): boolean {
+    return this.disposed;
   }
 
   // ── 流式写入(节流)────────────────────────────────────────────────────
@@ -288,9 +314,13 @@ export function activeRuntimeSessionIds(): string[] {
 export function disposeRuntime(sessionId: string): void {
   const rt = runtimes.get(sessionId);
   if (!rt) return;
-  rt.abort();
-  rt.clearPending();
+  // 置失效后再清理:迟到的续体(isOwner=false / patch 被拒)无法再回写镜像或重启实例
+  rt.dispose();
   runtimes.delete(sessionId);
-  // 同步清理渲染镜像:被中止的续体可能在 markCancelled 后短暂回写已删会话的 run
   runtimeStateSink?.(sessionId, { ...EMPTY_SNAPSHOT }, false);
+}
+
+/** 只读查找:不重建实例(清理续体用,避免 dispose 后 runtimeFor 复活) */
+export function existingRuntime(sessionId: string): SessionRuntime | undefined {
+  return runtimes.get(sessionId);
 }

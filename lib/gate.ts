@@ -86,8 +86,8 @@ export function requestGate(req: GateRequest, sessionId: string): Promise<GateRe
   if (!sessionId) return Promise.resolve(denyResponse(req));
   if (req.kind === 'confirm') {
     const scope = req.grantScope;
-    // grant 按会话绑定(并发 run 下同一 tab 的授权不跨会话泄漏)
-    if (scope && grantedScopes.has(`${sessionId}|${scope}`)) {
+    // grant = 工具+tab 粒度、面板生命周期(决策 22;不按会话细分)
+    if (scope && grantedScopes.has(scope)) {
       return Promise.resolve({ kind: 'confirm', approved: true });
     }
   }
@@ -99,7 +99,7 @@ export function requestGate(req: GateRequest, sessionId: string): Promise<GateRe
     h(req, sessionId)
       .then((res) => {
         const scope = req.kind === 'confirm' ? req.grantScope : undefined;
-        if (res.kind === 'confirm' && res.grant && scope) grantedScopes.add(`${sessionId}|${scope}`);
+        if (res.kind === 'confirm' && res.grant && scope) grantedScopes.add(scope);
         resolve(res);
       })
       .catch(() => resolve(denyResponse(req)))
