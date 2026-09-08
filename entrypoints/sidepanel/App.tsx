@@ -491,9 +491,9 @@ export default function App() {
           <MessageList
             messages={displayedMessages}
             isStreaming={isStreamingHere}
-            streamingContent={streamingContent}
-            streamingThinking={streamingThinking}
-            activeToolLabels={activeToolNames}
+            streamingContent={isStreamingHere ? streamingContent : ''}
+            streamingThinking={isStreamingHere ? streamingThinking : ''}
+            activeToolLabels={isStreamingHere ? activeToolNames : []}
             gateRequest={isGateHere ? (gate.activeGate?.request ?? null) : null}
             pendingGateTotal={isGateHere ? gatePagination.total : 0}
             quietTailCount={quietTailCount}
@@ -506,7 +506,7 @@ export default function App() {
                   }
                 : null
             }
-            isCancelled={isCancelled}
+            isCancelled={isStreamingHere ? isCancelled : false}
             onSelectPrompt={handleSelectPrompt}
             hasProvider={settings.providers.length > 0}
             hasModel={Boolean(activeModelInfo)}

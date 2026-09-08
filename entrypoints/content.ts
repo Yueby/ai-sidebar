@@ -1291,6 +1291,7 @@ export default defineContentScript({
       submit?: unknown;
       mode?: unknown;
       beforeSummary?: unknown;
+      beforeUrl?: unknown;
     }): Promise<PageActionResult> {
       const libs = await loadAccessibilityLibs();
       if (!libs) return { ok: false, url: location.href, reason: 'not_found' };
@@ -1333,9 +1334,10 @@ export default defineContentScript({
         const locator = parseLocator(message.locator);
         if (!locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
         const notes: string[] = [];
-        const urlAfterAct = location.href;
+        // 导航检测:与「动作前」URL 比对(后置请求到达时页面可能已是新文档)
+        const beforeUrl = typeof message.beforeUrl === 'string' ? message.beforeUrl : location.href;
         notes.push(...(await waitForSettle()));
-        if (location.href !== urlAfterAct) {
+        if (location.href !== beforeUrl) {
           notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
         } else {
           try {

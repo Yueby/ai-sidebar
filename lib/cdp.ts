@@ -20,6 +20,11 @@
  */
 import { browser } from 'wxt/browser';
 
+/** 领取连接租约(当前 detach 代次):多命令序列共享同一租约,中途断开则后续命令全部失败 */
+export function cdpLease(): number {
+  return detachEpoch;
+}
+
 /** 输入派发状态(见文件头三态契约) */
 export type InputDispatchState = 'not_dispatched' | 'dispatched' | 'partial_or_unknown';
 
@@ -117,8 +122,9 @@ export async function synthesizeTrustedScrollGesture(
   xDistance: number,
   yDistance: number,
   speed = 800,
+  lease?: number,
 ): Promise<InputDispatchState> {
-  const epoch = detachEpoch;
+  const epoch = lease ?? detachEpoch;
   const result = await sendCommand(
     tabId,
     'Input.synthesizeScrollGesture',
@@ -141,8 +147,13 @@ export async function synthesizeTrustedScrollGesture(
  * 坐标 = viewport CSS 像素。与真实鼠标等价(含页面校验 isTrusted 的监听器)。
  * 仅附加前置失败视为未派发;任何命令发出后的失败按未确认(mouseMoved 也可能触发 hover 副作用)。
  */
-export async function dispatchTrustedMouseClick(tabId: number, x: number, y: number): Promise<InputDispatchState> {
-  const epoch = detachEpoch;
+export async function dispatchTrustedMouseClick(
+  tabId: number,
+  x: number,
+  y: number,
+  lease?: number,
+): Promise<InputDispatchState> {
+  const epoch = lease ?? detachEpoch;
   const cx = Math.round(x);
   const cy = Math.round(y);
   const moved = await sendCommand(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy }, epoch);
@@ -165,8 +176,12 @@ export async function dispatchTrustedMouseClick(tabId: number, x: number, y: num
 }
 
 /** 可信文本插入:CDP Input.insertText(需先聚焦,由调用方以可信点击完成)。生成可信 beforeinput/input。 */
-export async function insertTrustedText(tabId: number, text: string): Promise<InputDispatchState> {
-  const epoch = detachEpoch;
+export async function insertTrustedText(
+  tabId: number,
+  text: string,
+  lease?: number,
+): Promise<InputDispatchState> {
+  const epoch = lease ?? detachEpoch;
   const result = await sendCommand(tabId, 'Input.insertText', { text }, epoch);
   if (result === 'not_attached') return 'not_dispatched';
   return result === 'sent' ? 'dispatched' : 'partial_or_unknown';
@@ -179,8 +194,9 @@ export async function dispatchTrustedKey(
   code: string,
   virtualKeyCode: number,
   modifiers: 0 | 1 | 2 | 4 | 8 = 0,
+  lease?: number,
 ): Promise<InputDispatchState> {
-  const epoch = detachEpoch;
+  const epoch = lease ?? detachEpoch;
   const base = { key, code, modifiers, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode };
   const down = await sendCommand(tabId, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base }, epoch);
   if (down === 'not_attached') return 'not_dispatched';

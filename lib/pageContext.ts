@@ -5,7 +5,13 @@ import {
   READ_PAGE_MESSAGE,
   SEARCH_ELEMENT_MESSAGE,
 } from './types';
-import { dispatchTrustedMouseClick, synthesizeTrustedScrollGesture, dispatchTrustedKey, insertTrustedText } from './cdp';
+import {
+  cdpLease,
+  dispatchTrustedMouseClick,
+  synthesizeTrustedScrollGesture,
+  dispatchTrustedKey,
+  insertTrustedText,
+} from './cdp';
 
 /** macOS 上全选用 Cmd(CDP modifiers 4),其余平台 Ctrl(2) */
 const IS_MAC = /Mac|iPhone|iPad/i.test(typeof navigator !== 'undefined' ? navigator.platform : '');
@@ -610,12 +616,13 @@ export async function performPageAction(
   // click/fill CDP 优先编排:requestAction 可在 resolve/after 间切换;beforeSummary 供 after 注记
   let requestAction: 'resolve' | 'click' | 'fill' | 'scroll' | 'after' = action;
   let nextBeforeSummary: unknown = undefined;
+  let nextBeforeUrl: string | undefined = undefined;
   const request = async (): Promise<PageActionResult | undefined> => {
     const res = (await browser.tabs.sendMessage(tabId, {
       type: PAGE_ACTION_MESSAGE,
       action: requestAction,
       mode: currentMode,
-      ...(requestAction === 'after' ? { beforeSummary: nextBeforeSummary } : {}),
+      ...(requestAction === 'after' ? { beforeSummary: nextBeforeSummary, beforeUrl: nextBeforeUrl } : {}),
       ...params,
     })) as PageActionResult | undefined;
     return res;
@@ -668,11 +675,14 @@ export async function performPageAction(
       const cx = rRes.centerPoint.x;
       const cy = rRes.centerPoint.y;
       const fillValue = typeof params.value === 'string' ? params.value : '';
+      // 操作级连接租约:整个 click/fill 序列共享;中途用户解除调试/切 tab 则后续命令失败,
+      // 不再自动重新附加(避免在错误的连接上继续输入)
+      const lease = cdpLease();
       // fill 序列状态:任一步派发成功后失败 → partial_or_unknown(禁止重发)
       let fillState: 'not_dispatched' | 'dispatched' | 'partial_or_unknown' = 'not_dispatched';
       let clickPartial = false;
       if (action === 'click') {
-        const clickState = await dispatchTrustedMouseClick(tabId, cx, cy);
+        const clickState = await dispatchTrustedMouseClick(tabId, cx, cy, lease);
         // not_dispatched = 点击尚未发生,可安全降级合成;partial = 按下已派发,禁止重发
         if (clickState === 'dispatched') cdpActed = true;
         else if (clickState === 'partial_or_unknown') {
@@ -682,22 +692,22 @@ export async function performPageAction(
       } else {
         // fill:可信点击聚焦 → Ctrl+A 全选(Mac=Cmd) → Backspace 清空 → insertText(非空时) → (Enter 提交)。
         // 点击派发后序列中任何一步未达 → partial_or_unknown(整体未完成,禁止降级重发)
-        const clickState = await dispatchTrustedMouseClick(tabId, cx, cy);
+        const clickState = await dispatchTrustedMouseClick(tabId, cx, cy, lease);
         if (clickState === 'not_dispatched') {
           fillState = 'not_dispatched';
         } else {
           fillState = clickState === 'dispatched' ? 'dispatched' : 'partial_or_unknown';
           if (clickState === 'dispatched') {
-            const selectAll = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, IS_MAC ? 4 : 2);
+            const selectAll = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, IS_MAC ? 4 : 2, lease);
             if (selectAll === 'dispatched') {
-              const clear = await dispatchTrustedKey(tabId, 'Backspace', 'Backspace', 8);
+              const clear = await dispatchTrustedKey(tabId, 'Backspace', 'Backspace', 8, 0, lease);
               if (clear === 'dispatched') {
                 if (fillValue !== '') {
-                  const insert = await insertTrustedText(tabId, fillValue);
+                  const insert = await insertTrustedText(tabId, fillValue, lease);
                   if (insert !== 'dispatched') fillState = 'partial_or_unknown';
                 }
                 if (fillState === 'dispatched' && params.submit === 'enter') {
-                  const enter = await dispatchTrustedKey(tabId, 'Enter', 'Enter', 13);
+                  const enter = await dispatchTrustedKey(tabId, 'Enter', 'Enter', 13, 0, lease);
                   if (enter !== 'dispatched') fillState = 'partial_or_unknown';
                 }
               } else fillState = 'partial_or_unknown';
@@ -709,6 +719,7 @@ export async function performPageAction(
       if (cdpActed) {
         // after 注记:content 侧 settle + before/after 对比 + submit 回读(与合成路径同一套)
         nextBeforeSummary = rRes.element ?? null;
+        nextBeforeUrl = url;
         requestAction = 'after';
         const aOutcome = await requestWithTimeout();
         requestAction = savedAction;
@@ -834,6 +845,8 @@ export async function performPageAction(
         cy,
         vertical ? 0 : dirSign * distance,
         vertical ? dirSign * distance : 0,
+        800,
+        cdpLease(),
       );
       if (gestureState === 'dispatched') {
         await new Promise<void>((resolve) => setTimeout(resolve, 600));

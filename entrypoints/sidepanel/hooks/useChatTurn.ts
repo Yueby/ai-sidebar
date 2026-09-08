@@ -132,7 +132,9 @@ export function useChatTurn(params: {
       setStreamingThinking('');
       setActiveToolNames([]);
       setIsCancelled(false);
-      setErrorMessage(null);
+      // 只清归属本会话或全局的错误;别的会话的错误保留(分流提醒仍在)
+      const errOwner = useAppStore.getState().errorSessionId;
+      if (errOwner === null || errOwner === session.id) setErrorMessage(null);
       resetResolvedGateCount();
       // 上一轮遗留的节流定时器作废(终值已随 message_end 物化或被轮末清空)
       if (streamThrottleRef.current.timer) clearTimeout(streamThrottleRef.current.timer);
@@ -270,6 +272,11 @@ export function useChatTurn(params: {
             messages: [...historyBeforeUser, userMessage, ...result.newMessages.slice(1)],
             updatedAt: Date.now(),
           };
+          // 草稿以内存最新副本为准(后台出队落盘期间用户可能已在编辑该会话草稿)
+          const latestDraft = useAppStore
+            .getState()
+            .sessions.find((s) => s.id === finalizedSession.id)?.draft;
+          if (latestDraft) finalizedSession.draft = latestDraft;
           dropPendingDraftSave(finalizedSession.id);
           useAppStore.getState().setSessions(
             useAppStore.getState().sessions.map((s) =>
@@ -358,11 +365,30 @@ export function useChatTurn(params: {
 
       const store = useAppStore.getState();
 
+      // 0. 目标会话解析前移:显式指定(跨会话队列)优先;未指定且无活跃会话 → 同步创建并登记,
+      //    保证忙时入队也有明确归属(旧顺序在 activeSessionId 为空时直接丢消息)
+      let target = targetSessionId
+        ? store.sessions.find((s) => s.id === targetSessionId)
+        : selectCurrentSession(store);
+      if (!target && targetSessionId) {
+        // 排队目标已被删除:丢弃该条目并继续调度后续队列(不让队列停摆)
+        if (import.meta.env.DEV) {
+          console.log(`[turn] queued target session ${targetSessionId} was deleted; drop`);
+        }
+        setTimeout(() => checkAndDispatchQueue(), 0);
+        return;
+      }
+      if (!target) {
+        target = createSession(titleFromText(trimmed));
+        useAppStore.getState().setSessions([target, ...useAppStore.getState().sessions]);
+        useAppStore.getState().setActiveSessionId(target.id);
+        await activeSessionIdItem.setValue(target.id);
+      }
+
       // 1. 繁忙(流式/门控/压缩)或发送竞态 = 入队(不打断;停止按钮 Square 是唯一打断入口)。
       // 条目归属目标会话并冻结引用快照:后台轮末自动发往归属会话,与当前视图/后续草稿编辑无关
       if (store.isStreaming || store.activeGate !== null || isCompacting || sendingRef.current) {
-        const owner = targetSessionId ?? store.activeSessionId;
-        if (!owner) return;
+        const owner = target.id;
         const ownerSession = store.sessions.find((s) => s.id === owner);
         const draftAtEnqueue = ownerSession?.draft ?? EMPTY_DRAFT;
         // 冻结副本:frozen(出队重入)优先,否则快照入队时刻的草稿引用;此后用户编辑不影响该条目
@@ -403,23 +429,7 @@ export function useChatTurn(params: {
         return;
       }
 
-      // 目标会话:显式指定(跨会话队列出队)优先,否则当前活跃会话(无会话则新建)
-      let session = targetSessionId
-        ? store.sessions.find((s) => s.id === targetSessionId)
-        : selectCurrentSession(store);
-      if (!session) {
-        if (targetSessionId) {
-          // 排队目标会话已被删除:丢弃该条目并继续调度后续队列(不让队列停摆)
-          if (import.meta.env.DEV) {
-            console.log(`[turn] queued target session ${targetSessionId} was deleted; drop`);
-          }
-          setTimeout(() => checkAndDispatchQueue(), 0);
-          return;
-        }
-        session = createSession(titleFromText(trimmed));
-        useAppStore.getState().setActiveSessionId(session.id);
-        await activeSessionIdItem.setValue(session.id);
-      }
+      const session = target;
 
       const isFirstMessage = session.messages.length === 0 || session.title === '新会话';
       // 发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。
@@ -476,8 +486,11 @@ export function useChatTurn(params: {
             ? titleFromText(trimmed)
             : session.title;
 
-      // 提交基于「最新」目标会话(await 期间用户可能已切回编辑草稿):只覆盖消息与必要字段
-      const base = useAppStore.getState().sessions.find((s) => s.id === session!.id) ?? session;
+      // 提交基于「最新」目标会话(await 期间用户可能已切回编辑草稿):只覆盖消息与必要字段。
+      // 目标在准备期间被删除 → 取消本轮,不复活(即使本轮刚创建)
+      const latestTarget = useAppStore.getState().sessions.find((s) => s.id === session.id);
+      if (!latestTarget) return;
+      const base = latestTarget;
       const updatedSession: Session = {
         ...base,
         title: nextTitle,
