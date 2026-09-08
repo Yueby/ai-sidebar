@@ -24,7 +24,7 @@
 
 **接下来(按序)**:①三期步 4(动作返回模板 v2:Before/After + 页面版本指纹,规格见 §8.4)→ ②i18n → ③发布(图标 + wxt zip)。
 
-**以后(backlog,已拍板方向,按需启动)**:划词快捷提问;动作矩阵扩展(hover/select/submit/back/goto——实测需要再议,execute_js 逃生舱已覆盖);多标签管理(open_tab 等);记忆便签工具(新存储域,与页面动作主题无关);chrome.debugger 特权层(isTrusted 拒绝率构成实际阻断或 closed shadow DOM 真实需求时才启动);无 Key 搜索源新路线观察(如 Exa keyless MCP);停止按钮中断挂死工具(上游无工具超时,工具侧 signal 未消费——settle 短路 + 看门狗后基本不可达,留档)。
+**以后(backlog,已拍板方向,按需启动)**:划词快捷提问;动作矩阵扩展(hover/select/submit/back/goto——实测需要再议,execute_js 逃生舱已覆盖);多标签管理(open_tab 等);记忆便签工具(新存储域,与页面动作主题无关);chrome.debugger 特权层(✅ 已启用 2026-09:scroll_page JS 链失败时 CDP Input.dispatchMouseEvent 可信滚轮兜底,lib/cdp.ts 白名单单方法 + 60s 闲置 detach,新决策 28);无 Key 搜索源新路线观察(如 Exa keyless MCP);停止按钮中断挂死工具(上游无工具超时,工具侧 signal 未消费——settle 短路 + 看门狗后基本不可达,留档)。
 
 ## 2. 技术栈与硬约定
 
@@ -70,7 +70,7 @@
 20. **websearch 十源 + fetch_url**:源集 = duckduckgo/searxng(免费)/brave/tavily/bocha/serper/exa/zhipu/metaso(API Key)/bing(无 Key HTML 抓取,稳定性不保证),设置页"搜索"页签配置,`search_web` 仅在源可用时注册(守卫单一来源 `isWebSearchConfigured`);统一结果形状 `{title,url,snippet}[]`,错误前缀 `search_failed:`/`not_configured:`;`fetch_url` = sidepanel 直连 GET + Readability 提取(与 content.ts 同库),**私有/内网地址拒绝且重定向复检**(防提示注入探测内网),2MB/12000 字上限,错误前缀 `fetch_failed:`/`http_error:`/`not_html:`/`too_large:`/`extract_failed:`。
 21. **search_element 寻址 = 默认 focused tab,tabId 可选,不设 tab 白名单**(2026-09,三期步①):自动化任务可能不给引用,静默读的暴露面仅交互元素名(role+可访问名称+状态),可接受;read_page/read_element 的 tab 级白名单不变;发现层自此确立 focused tab 默认,步② click/fill 寻址延续此拍板。
 22. **步②会话级 grant = 工具+tab 粒度,生命周期 = 侧边栏面板**(2026-09,三期步②):切对话/新建对话不清除,关面板即失效;确认卡文案「暂时允许对当前页执行…/关面板后恢复询问」+勾选后「允许并记住」;gate.ts 模块级 grantedScopes 短路(命中直接 approved 不弹卡,应答带 grant 记录);execute_js 永不可 grant。
-23. **动作遮挡 = fallback 直接在元素上派发事件序列并注明**(2026-09,三期步②):scrollIntoView 居中重试仍被遮挡时不中断动作链,结果注记被何元素遮挡;untrusted 合成事件,chrome.debugger 特权层条件触发不排期。
+23. **动作遮挡 = fallback 直接在元素上派发事件序列并注明**(2026-09,三期步②):scrollIntoView 居中重试仍被遮挡时不中断动作链,结果注记被何元素遮挡;untrusted 合成事件,chrome.debugger 特权层已启用(仅滚动兜底,见决策 28)。
 24. **search_element query 支持单串或数组 OR**(2026-09):role/可访问名称大小写不敏感子串,任一命中即保留,过滤先于 80 条预算;截断注记引导用 query;定位/验证元素优先用 search_element 而非 execute_js(描述双向引导)。
 25. **权限架构 = 全部随安装授予,无运行时授权流程**(2026-09,步③;曾实施 optional_host_permissions+request/remove 后回退——content_scripts 关联 origins 本就随安装授予,运行时授权只门槛截图且安装警告无差异):host **`<all_urls>`** 为 screenshot_page(captureVisibleTab)硬要求;设置「权限」页签 = 透明说明(网页访问/6 项安装权限用途 + userScripts 开关状态检测与直达详情页引导——Chrome 无 API 可代开)。
 26. **引用组 = 随焦点切换的工作集**(2026-09,取代隐式注意力注入与累积式自动芯片;借鉴 Gemini 标签页组模型适配 agent):每个 tab 记住其所属引用组快照(refTabs+pickedElements,面板生命周期);焦点切换即恢复该 tab 所属组;**未分组页 = 隐式「当前页」芯片自动跟随焦点**(单例,切页即更新);用户手动添加引用才固定为一组(加/删引用即改当前组并同步组内成员);refs 块 focused 标记发送时刻活动 tab;总开关关闭冻结切换。
@@ -82,6 +82,7 @@
 32. **新会话快捷指令 = 辅助模型动态生成**(2026-09):空会话按聚焦页 title/url 生成 4 条(JSON 输出 + 形状校验),失败静默回退静态四条(lib/quickPrompts FALLBACK_PROMPTS);同 URL 内存缓存(空态期间),「换一批」绕过;聚焦 tab 导航/切换自动重生成;非 http(s) 页( chrome://、新标签页)整区块隐藏;无任何可用模型不生成。
 33. **会话导出 = Markdown**(2026-09):历史行 hover 下载(lib/sessionExport);正文平铺,思考/工具调用收 <details> 折叠,引用页面聚合清单,picked-element 转可读行,工具结果截 1500 字,assistant 消息标注 provider/model;consumed 集合去重(结果不双渲染)。
 34. **动作可靠性三件套**(2026-09,导出反馈驱动):①click_element 结果带 tab 变化报告(动作前后快照对比:新开 tab/焦点切换,附可读化路径);②open_page 同 URL 复用(hash 不敏感:激活现存 tab + 注册可读,确认卡标「复用」,不再开重复页);③隐藏 tab 的 rAF 完全暂停(不是节流)曾致 settle 永久挂死——content 侧 settle 尾帧与 visibilitychange 竞速短路 + sidepanel 8s 看门狗降级成功(动作已派发一次绝不重发;reject+URL 变化 = 导航守卫,不在新页面重跑动作)。
+35. **CDP 特权层 = 滚动可信输入兜底**(2026-09,`lib/cdp.ts`):scroll_page 的 JS 链(主滚动/容器探测/合成 wheel)全部无位移时才 attach chrome.debugger,`Input.dispatchMouseEvent(mouseWheel)` 派发可信滚轮(同时驱动原生滚动与滚动劫持监听,Playwright 底层同机制);**白名单仅此一个 CDP 方法**;按需 attach + 60s 闲置自动 detach,不留常驻附加;attach 失败(浏览器内页/DevTools 占用)静默回退并注明;`debugger` 权限随安装授予,权限页签文案已注明。
 
 ## 4. 当前代码状态
 
@@ -519,7 +520,7 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
    - **会话级 grant 扩展**(gate.ts):confirm 卡加"本会话内允许此类操作"复选框 → grant 存运行时切片(面板关闭即失效);requestGate 查 grant 短路;execute_js 永不可 grant
    - **动作前反馈**:目标元素 400ms 轮廓闪烁(高亮)
    - **寻址双轨**:用户框选 = CSS selector(picked-element 块,不变);模型动作 = ARIA role+name locator(新);默认目标 = focused tab(tabId 可选)
-   - **实施序列**:①search_element(✅ 已完成 2026-09:dom-accessibility-api 0.7.1 + content script 侧计算、稀疏旗标行式、80 条预算(可见优先,隐藏项只填剩余名额)、序号全量计数保证步② locator 可重现、默认 focused tab 无白名单、打点 content durationMs + 工具 totalMs(仅 DEV console);实测 baidu 91 元素全链 5ms)→ ②click/fill + scroll + grant 扩展 + 高亮(✅ 已完成 2026-09:自门控先解析后确认、grant 工具+tab 面板生命周期、遮挡 fallback 直发、受控填充原生 setter、settle 内置、高亮 400ms、search_element query 数组 OR)→ ③screenshot_page(✅ 已完成 2026-09:仅活动 tab 可截(浏览器硬限制,描述明示)、仅 vision 模型注册(canUseImage)、confirm+grant 工具@tabId、拒绝原因原文透传 Browser said;权限前置 = host <all_urls>)→ ④返回模板 v2(✅ 已完成 2026-09:read_page/read_element 附页面指纹 FNV-1a(url|title|正文规模|正文采样),跨读取比对判变化;click/fill 结果附 after 注记——settle 后 re-resolve locator 比对元素状态,导航/失焦短路时跳过)→ ⑤chrome.debugger(条件触发,不排期)
+   - **实施序列**:①search_element(✅ 已完成 2026-09:dom-accessibility-api 0.7.1 + content script 侧计算、稀疏旗标行式、80 条预算(可见优先,隐藏项只填剩余名额)、序号全量计数保证步② locator 可重现、默认 focused tab 无白名单、打点 content durationMs + 工具 totalMs(仅 DEV console);实测 baidu 91 元素全链 5ms)→ ②click/fill + scroll + grant 扩展 + 高亮(✅ 已完成 2026-09:自门控先解析后确认、grant 工具+tab 面板生命周期、遮挡 fallback 直发、受控填充原生 setter、settle 内置、高亮 400ms、search_element query 数组 OR)→ ③screenshot_page(✅ 已完成 2026-09:仅活动 tab 可截(浏览器硬限制,描述明示)、仅 vision 模型注册(canUseImage)、confirm+grant 工具@tabId、拒绝原因原文透传 Browser said;权限前置 = host <all_urls>)→ ④返回模板 v2(✅ 已完成 2026-09:read_page/read_element 附页面指纹 FNV-1a(url|title|正文规模|正文采样),跨读取比对判变化;click/fill 结果附 after 注记——settle 后 re-resolve locator 比对元素状态,导航/失焦短路时跳过)→ ⑤chrome.debugger(✅ 已启用 2026-09:滚动可信输入兜底,lib/cdp.ts;不做常驻附加)
    - **参考**:AhYi8/browser-ai-assistant(CDP 驱动,特权层不可移植;可搬=AX 行格式/噪点过滤/预算截断/受控 fill 法/遮挡检测/wait_for_state 有界轮询/fail-closed 校验——克隆在 `.slim/clonedeps/repos/AhYi8__browser-ai-assistant`,只读)
    - **验收标尺**:模型经 search→click 链完成真实登录页填字点按钮,全程零手写 JS
 5. **四期规格 v1:自定义规则 / 技能 / 记忆与自改进**(自定义系统提示词扩展;调研对齐:pi/Agent Skills 标准(agentskills.io)+ OpenClaw 三层文件记忆 + Hermes 自改进循环 + Cline/Roo 具名规则列表;用户已拍板:规则列表形态、自动+手动双触发、memory 常驻注入、分三步实施):
