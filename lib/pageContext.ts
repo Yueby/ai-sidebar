@@ -647,7 +647,8 @@ export async function performPageAction(
   });
 
   // click/fill:CDP 可信输入优先(默认 = 模拟真实鼠标);resolve 拿坐标 → CDP 执行 → after 注记;
-  // 任何一步失败(attach 不可用/遮挡/无坐标/非文本型元素)降级回原合成路径(单消息,现行为不变)
+  // 三态:dispatched = 完成(after 注记);not_dispatched = 未派发任何输入,可安全降级合成;
+  // partial_or_unknown = 已派发部分输入(可能已点击/已改值),禁止重发,如实返回未确认状态
   let cdpActed = false;
   let cdpFirstResult: PageActionResult | null = null;
   if (action === 'click' || action === 'fill') {
@@ -667,15 +668,37 @@ export async function performPageAction(
       const cx = rRes.centerPoint.x;
       const cy = rRes.centerPoint.y;
       const fillValue = typeof params.value === 'string' ? params.value : '';
+      // fill 序列状态:任一步派发成功后失败 → partial_or_unknown(禁止重发)
+      let fillState: 'not_dispatched' | 'dispatched' | 'partial_or_unknown' = 'not_dispatched';
       if (action === 'click') {
-        cdpActed = await dispatchTrustedMouseClick(tabId, cx, cy);
+        cdpActed = (await dispatchTrustedMouseClick(tabId, cx, cy)) === 'dispatched';
       } else {
         // fill:可信点击聚焦 → Ctrl+A 全选(Mac=Cmd) → Backspace 清空 → insertText(非空时) → (Enter 提交)
-        cdpActed = await dispatchTrustedMouseClick(tabId, cx, cy);
-        if (cdpActed) cdpActed = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, IS_MAC ? 4 : 2);
-        if (cdpActed) cdpActed = await dispatchTrustedKey(tabId, 'Backspace', 'Backspace', 8);
-        if (cdpActed && fillValue !== '') cdpActed = await insertTrustedText(tabId, fillValue);
-        if (cdpActed && params.submit === 'enter') cdpActed = await dispatchTrustedKey(tabId, 'Enter', 'Enter', 13);
+        const clickState = await dispatchTrustedMouseClick(tabId, cx, cy);
+        if (clickState === 'not_dispatched') {
+          fillState = 'not_dispatched';
+        } else if (clickState === 'partial_or_unknown') {
+          fillState = 'partial_or_unknown';
+        } else {
+          fillState = 'dispatched';
+          const selectAll = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, IS_MAC ? 4 : 2);
+          if (selectAll !== 'dispatched') {
+            fillState = selectAll === 'partial_or_unknown' ? 'partial_or_unknown' : fillState;
+          } else {
+            const clear = await dispatchTrustedKey(tabId, 'Backspace', 'Backspace', 8);
+            if (clear !== 'dispatched') {
+              fillState = clear === 'partial_or_unknown' ? 'partial_or_unknown' : fillState;
+            } else if (fillValue !== '') {
+              const insert = await insertTrustedText(tabId, fillValue);
+              if (insert !== 'dispatched') fillState = 'partial_or_unknown';
+            }
+            if (fillState === 'dispatched' && params.submit === 'enter') {
+              const enter = await dispatchTrustedKey(tabId, 'Enter', 'Enter', 13);
+              if (enter !== 'dispatched') fillState = 'partial_or_unknown';
+            }
+          }
+        }
+        cdpActed = fillState !== 'not_dispatched';
       }
       if (cdpActed) {
         // after 注记:content 侧 settle + before/after 对比 + submit 回读(与合成路径同一套)
@@ -695,17 +718,23 @@ export async function performPageAction(
         const actNote =
           action === 'click'
             ? 'cdp_trusted_click: dispatched trusted mouse click via CDP (like a real mouse).'
-            : 'cdp_trusted_fill: focused and typed via CDP (like a real keyboard); value replaced and input/change events fired.';
+            : 'cdp_trusted_fill: focused and typed via CDP (like a real keyboard).';
+        const partialNote =
+          action === 'fill' && fillState === 'partial_or_unknown'
+            ? 'cdp_partial_dispatch: the input sequence was partially dispatched (value may be partially applied); do NOT retry the same fill — verify the field state first.'
+            : null;
         cdpFirstResult = {
           ok: true,
           url: aRes?.ok === true && typeof aRes.url === 'string' ? aRes.url : url,
           title: aRes?.ok === true && typeof aRes.title === 'string' ? aRes.title : '',
           element: normalizeActionElement(rRes.element),
-          notes: [...stateNotes, actNote, ...aNotes],
+          notes: [...stateNotes, actNote, ...(partialNote ? [partialNote] : []), ...aNotes],
         };
       }
     }
   }
+  // P0:CDP 已派发输入时绝不能再发原合成动作(会双击/双填/双提交)——必须先返回
+  if (cdpFirstResult) return cdpFirstResult;
 
   let outcome = await requestWithTimeout();
   if (outcome.kind === 'timeout') {
@@ -777,29 +806,28 @@ export async function performPageAction(
   }
   if (res.ok) {
     const baseNotes = Array.isArray(res.notes) ? res.notes.filter((n): n is string => typeof n === 'string') : [];
-    // scroll 专用:合成 wheel 未观察到位移 → CDP 可信滚轮兜底(含原生默认滚动;合成被 isTrusted 拒时唯一真鼠标等价路径)
-    let dispatched = false;
+    // scroll 专用:合成 wheel 未观察到位移 → CDP 平滑滚动手势(含原生默认滚动;合成被 isTrusted 拒时唯一真鼠标等价路径)。
+    // ⚠ CDP yDistance 方向与 wheel 相反(正 = 向上):此处取反;缺省距离与合成路径统一(~360px)
     if (action === 'scroll' && res.moved === false) {
       const vw = res.viewport?.width ?? 800;
       const vh = res.viewport?.height ?? 600;
       const vertical = params.direction === 'up' || params.direction === 'down';
       const viewportPx = vertical ? vh : vw;
-      const delta =
+      const distance =
         typeof params.amount === 'number' && params.amount > 0
           ? Math.min(Math.round(params.amount), 10000)
-          : Math.min(120, Math.max(40, Math.round(viewportPx * 0.12)));
-      const signed = params.direction === 'up' || params.direction === 'left' ? -delta : delta;
+          : Math.min(360, Math.max(120, Math.round(viewportPx * 0.3)));
+      const dirSign = params.direction === 'up' || params.direction === 'left' ? 1 : -1;
       const cx = Math.max(1, Math.round(vw / 2));
       const cy = Math.max(1, Math.round(vh / 2));
-      // 连续平滑滚动手势(浏览器插值出 tick 流,与真实触控板/触摸一致)——比手动 ticks 循环丝滑
-      dispatched = await synthesizeTrustedScrollGesture(
+      const gestureState = await synthesizeTrustedScrollGesture(
         tabId,
         cx,
         cy,
-        vertical ? 0 : signed,
-        vertical ? signed : 0,
+        vertical ? 0 : dirSign * distance,
+        vertical ? dirSign * distance : 0,
       );
-      if (dispatched) {
+      if (gestureState === 'dispatched') {
         await new Promise<void>((resolve) => setTimeout(resolve, 600));
         baseNotes.push(
           'cdp_trusted_scroll_gesture: dispatched a smooth scroll gesture via CDP (like a real trackpad swipe); the page should glide naturally.',
@@ -833,7 +861,6 @@ export async function performPageAction(
       title: typeof res.title === 'string' ? res.title : '',
       element: normalizeActionElement(res.element),
       notes: baseNotes,
-      moved: dispatched ? undefined : res.moved,
     };
   }
   const reasons = ['not_found', 'ambiguous', 'option_not_found', 'unsupported_element', 'invalid_value'];

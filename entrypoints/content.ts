@@ -1001,12 +1001,15 @@ export default defineContentScript({
       );
     }
 
-    /** 文本类:input(非按钮型)/textarea/contenteditable;checkbox/radio 已被 toggle 分支接走 */
+    /** 文本类:input(非按钮型/非日期/范围/色彩等非文本输入)/textarea/contenteditable;checkbox/radio 已被 toggle 分支接走 */
     function isTextLikeElement(el: Element): boolean {
       if (el instanceof HTMLTextAreaElement) return true;
       if ((el as HTMLElement).isContentEditable) return true;
       if (el instanceof HTMLInputElement) {
-        return !['button', 'submit', 'reset', 'image', 'file', 'hidden', 'checkbox', 'radio'].includes(el.type);
+        return ![
+          'button', 'submit', 'reset', 'image', 'file', 'hidden', 'checkbox', 'radio',
+          'date', 'datetime-local', 'month', 'time', 'week', 'range', 'color',
+        ].includes(el.type);
       }
       return false;
     }
@@ -1168,23 +1171,7 @@ export default defineContentScript({
       return null;
     }
 
-    /** 全页承底:试滚所有几何上可滚且余量 ≥ 50px 的容器(前 N 个,scrollBy 在不可滚目标无副作用)。
-     *  移动门槛 50px:杜绝 enter-btn 之类几像素小容器产出的假「滚动成功」。 */
-    function tryScrollAnyContainer(vertical: boolean, dx: number, dy: number, budget = 400): Element | null {
-      const all = document.querySelectorAll<HTMLElement>('*');
-      let tries = 0;
-      for (const candidate of all) {
-        if (tries >= budget) break;
-        const scrollSize = vertical ? candidate.scrollHeight : candidate.scrollWidth;
-        const clientSize = vertical ? candidate.clientHeight : candidate.clientWidth;
-        if (scrollSize <= clientSize + 50) continue;
-        tries++;
-        if (applyScroll(candidate, dx, dy) > 50) return candidate;
-      }
-      return null;
-    }
-
-    /** 滚动劫持/画廊页兜底:连发合成 wheel ticks(真实滚轮惯性)。合成事件不触发浏览器默认滚动
+        /** 滚动劫持/画廊页兜底:连发合成 wheel ticks(真实滚轮惯性)。合成事件不触发浏览器默认滚动
      *  (no isTrusted),但页面自身的 wheel 监听器(翻页/切卡)照常收到——对原生滚动页零副作用。
      *  返回是否观察到中心内容变化(指纹对比,横向切换同样检出)。 */
     async function dispatchWheelTicks(center: Element | null, vertical: boolean, signed: number, ticks: number): Promise<boolean> {
@@ -1231,8 +1218,16 @@ export default defineContentScript({
       }
       const vertical = direction === 'up' || direction === 'down';
 
-      // 0) 模拟鼠标滚轮:合成 wheel ticks(页面自己的监听/默认滚动/snap 决定行为)
+      // 0) 模拟鼠标滚轮:合成 wheel ticks(页面自己的监听/默认滚动/snap 决定行为)。
+      // 原生可滚页(document 有余量)直接跳过合成:合成不触发浏览器默认滚动,只有 CDP 手势等效
       if (mode === 'wheel') {
+        const scroller = document.scrollingElement || document.documentElement;
+        if (scroller.scrollHeight > scroller.clientHeight + 50) {
+          return {
+            moved: false,
+            notes: ['Viewport is natively scrollable; wheel ticks alone cannot trigger default scrolling.'],
+          };
+        }
         const center = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
         const dirSign = direction === 'up' || direction === 'left' ? -1 : 1;
         const moved = await dispatchWheelTicks(
@@ -1261,25 +1256,22 @@ export default defineContentScript({
       const dx = vertical ? 0 : signed;
       const dy = vertical ? signed : 0;
 
-      // 1) 主滚动视口(document.scrollingElement 兼容 quirks/标准模式)
+      // 1) 主滚动视口(document.scrollingElement 兼容 quirks/标准模式;注记报告实际位移而非请求量)
       const scroller = document.scrollingElement || document.documentElement;
-      if (applyScroll(scroller, dx, dy) > 50) {
-        return { moved: true, notes: [`Scrolled ${direction} by ${delta}px.`] };
+      const mainMoved = applyScroll(scroller, dx, dy);
+      if (mainMoved > 2) {
+        return { moved: true, notes: [`Scrolled ${direction} by ${mainMoved}px (requested ${delta}px).`] };
       }
       // 2) 视口中心元素的最近可滚容器(覆盖 main/面板/聊天窗等内嵌滚动)
       const center = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
       const container = findScrollableAncestor(center instanceof Element ? center : null, vertical);
       let containerEdge = false;
       if (container) {
-        if (applyScroll(container, dx, dy) > 50) {
-          return { moved: true, notes: [`Scrolled ${direction} by ${delta}px inside a scrollable container.`] };
+        const containerMoved = applyScroll(container, dx, dy);
+        if (containerMoved > 2) {
+          return { moved: true, notes: [`Scrolled ${direction} by ${containerMoved}px (requested ${delta}px) inside a scrollable container.`] };
         }
         containerEdge = true;
-      }
-      // 3) 全页兜底(页首 off-screen 容器等边缘情况)
-      const anyContainer = tryScrollAnyContainer(vertical, dx, dy);
-      if (anyContainer) {
-        return { moved: true, notes: [`Scrolled ${direction} by ${delta}px inside a scrollable container.`] };
       }
       if (containerEdge) {
         return {
@@ -1335,7 +1327,57 @@ export default defineContentScript({
         };
       }
 
-      if (action === 'resolve' || action === 'click' || action === 'fill' || action === 'after') {
+      // after = CDP 可信动作执行后的后置观察:不要求 locator 仍解析成功——
+      // 元素消失本身就是重要的动作生效信号,必须能作为注记返回而非 not_found 错误
+      if (action === 'after') {
+        const locator = parseLocator(message.locator);
+        if (!locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
+        const notes: string[] = [];
+        const urlAfterAct = location.href;
+        notes.push(...(await waitForSettle()));
+        if (location.href !== urlAfterAct) {
+          notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
+        } else {
+          try {
+            const after = resolveLocator(enumerateInteractiveElements(libs), locator);
+            if (after.status === 'not_found') {
+              notes.push('after: the locator no longer resolves — the element is gone (often a strong signal the action took effect).');
+            } else if (after.status === 'ok') {
+              const afterSummary = elementSummary(after.hit);
+              const before = (message.beforeSummary ?? null) as ResolvedActionElement | null;
+              if (before && afterSummary.preview === before.preview) {
+                notes.push(`after: locator still resolves to <${afterSummary.tagName}> "${afterSummary.preview}" — element state unchanged.`);
+              } else {
+                notes.push(`after: locator now resolves to <${afterSummary.tagName}> "${afterSummary.preview}" (was "${before?.preview ?? '?'}").`);
+              }
+              // 提交事实信号:回读输入框(仅 Enter 提交场景;元素消失时跳过)
+              if (message.submit === 'enter') {
+                try {
+                  const elNow = after.hit.el as HTMLElement;
+                  const still =
+                    elNow instanceof HTMLInputElement || elNow instanceof HTMLTextAreaElement
+                      ? elNow.value
+                      : (elNow.textContent ?? '');
+                  if (still.trim() === '') {
+                    notes.push('Input is now empty — the Enter key likely submitted the text.');
+                  } else {
+                    notes.push(
+                      'Note: the text is still in the input field — the Enter key may NOT have submitted it. Consider clicking the send button instead.',
+                    );
+                  }
+                } catch {
+                  /* 无法回读,跳过 */
+                }
+              }
+            }
+          } catch {
+            /* After 检查失败不影响动作结果 */
+          }
+        }
+        return { ok: true, url: location.href, title: document.title, notes };
+      }
+
+      if (action === 'resolve' || action === 'click' || action === 'fill') {
         const locator = parseLocator(message.locator);
         if (!locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
         const res = resolveLocator(enumerateInteractiveElements(libs), locator);
@@ -1347,12 +1389,14 @@ export default defineContentScript({
         }
         const summary = elementSummary(res.hit);
         if (action === 'resolve') {
-          // CDP 可信执行前置:元素中心视口坐标 + 遮挡旗标(命中测试与 occluded fallback 同源判定) + 状态旗标
+          // CDP 可信执行前置:元素中心视口坐标(仅当中心落在视口内,视口外 CDP 点击无意义) + 遮挡旗标 + 状态旗标
           const rect = res.hit.el.getBoundingClientRect();
           const hasRect = rect.width > 0 && rect.height > 0;
           const cx = Math.round(rect.left + rect.width / 2);
           const cy = Math.round(rect.top + rect.height / 2);
-          const hitTest = hasRect ? document.elementFromPoint(cx, cy) : null;
+          const inViewport =
+            hasRect && cx >= 0 && cy >= 0 && cx < window.innerWidth && cy < window.innerHeight;
+          const hitTest = inViewport ? document.elementFromPoint(cx, cy) : null;
           const occluded = !!(hitTest && !(hitTest === res.hit.el || res.hit.el.contains(hitTest) || hitTest.contains(res.hit.el)));
           return {
             ok: true,
@@ -1360,7 +1404,7 @@ export default defineContentScript({
             title: document.title,
             element: summary,
             notes: [],
-            ...(hasRect ? { centerPoint: { x: cx, y: cy }, occluded } : {}),
+            ...(inViewport ? { centerPoint: { x: cx, y: cy }, occluded } : {}),
             canTextInput: isTextLikeElement(res.hit.el),
             disabled: res.hit.disabled === true,
             hidden: res.hit.visible === false,
@@ -1377,51 +1421,6 @@ export default defineContentScript({
         let fail: { reason: 'option_not_found' | 'unsupported_element' | 'invalid_value'; options?: string[] } | undefined;
         const value = typeof message.value === 'string' ? message.value : '';
         const submit = message.submit === 'enter' ? ('enter' as const) : undefined;
-
-        // CDP 可信执行后置:settle + navigation 检测 + before/after 注记 + fill submit 回读(与合成路径同一套逻辑)
-        if (action === 'after') {
-          const beforeSummary = (message.beforeSummary ?? null) as ResolvedActionElement | null;
-          const urlAfterAct = location.href;
-          notes.push(...(await waitForSettle()));
-          if (location.href !== urlAfterAct) {
-            notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
-          } else if (!notes.some((n) => n.startsWith('navigation_started'))) {
-            try {
-              const after = resolveLocator(enumerateInteractiveElements(libs), locator);
-              if (after.status === 'not_found') {
-                notes.push('after: the locator no longer resolves — the element is gone (often a strong signal the action took effect).');
-              } else if (after.status === 'ok') {
-                const afterSummary = elementSummary(after.hit);
-                if (beforeSummary && afterSummary.preview === beforeSummary.preview) {
-                  notes.push(`after: locator still resolves to <${afterSummary.tagName}> "${afterSummary.preview}" — element state unchanged.`);
-                } else {
-                  notes.push(`after: locator now resolves to <${afterSummary.tagName}> "${afterSummary.preview}" (was "${beforeSummary?.preview ?? '?'}").`);
-                }
-              }
-            } catch {
-              /* After 检查失败不影响动作结果 */
-            }
-          }
-          if (submit === 'enter') {
-            try {
-              const elNow = res.hit.el as HTMLElement;
-              const still =
-                elNow instanceof HTMLInputElement || elNow instanceof HTMLTextAreaElement
-                  ? elNow.value
-                  : (elNow.textContent ?? '');
-              if (still.trim() === '') {
-                notes.push('Input is now empty — the Enter key likely submitted the text.');
-              } else {
-                notes.push(
-                  'Note: the text is still in the input field — the Enter key may NOT have submitted it. Consider clicking the send button instead.',
-                );
-              }
-            } catch {
-              /* 元素已被页面重渲染替换:无法回读,跳过 */
-            }
-          }
-          return { ok: true, url: location.href, title: document.title, element: summary, notes };
-        }
 
         if (action === 'click') {
           notes.push(...performClick(res.hit.el));
