@@ -5,6 +5,7 @@ import {
   READ_PAGE_MESSAGE,
   SEARCH_ELEMENT_MESSAGE,
 } from './types';
+import { dispatchTrustedMouseWheel } from './cdp';
 
 /**
  * content 侧提取应答:PageContext + 截断标记。
@@ -550,6 +551,10 @@ export type PageActionResult =
       element?: ResolvedActionElement;
       /** 动作注记(遮挡 fallback / navigation_started 等,英文,模型可见) */
       notes: string[];
+      /** scroll 专用:JS 路径是否观察到位移;false 时 sidepanel 侧走 CDP 可信滚轮兜底 */
+      moved?: boolean;
+      /** scroll 专用:moved=false 时带视口尺寸(CDP 坐标中心用) */
+      viewport?: { width: number; height: number };
     }
   | {
       ok: false;
@@ -688,12 +693,43 @@ export async function performPageAction(
     return null;
   }
   if (res.ok) {
+    const baseNotes = Array.isArray(res.notes) ? res.notes.filter((n): n is string => typeof n === 'string') : [];
+    // scroll 专用:JS 路径未观察到位移 → CDP 可信滚轮兜底(劫持页/合成事件被 isTrusted 拒绝)
+    if (action === 'scroll' && res.moved === false) {
+      const vw = res.viewport?.width ?? 800;
+      const vh = res.viewport?.height ?? 600;
+      const vertical = params.direction === 'up' || params.direction === 'down';
+      const viewportPx = vertical ? vh : vw;
+      const delta =
+        typeof params.amount === 'number' && params.amount > 0
+          ? Math.min(Math.round(params.amount), 10000)
+          : Math.round(viewportPx * 0.8);
+      const signed = params.direction === 'up' || params.direction === 'left' ? -delta : delta;
+      const dispatched = await dispatchTrustedMouseWheel(
+        tabId,
+        Math.max(1, Math.round(vw / 2)),
+        Math.max(1, Math.round(vh / 2)),
+        vertical ? 0 : signed,
+        vertical ? signed : 0,
+      );
+      if (dispatched) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 300));
+        baseNotes.push(
+          'cdp_trusted_wheel: dispatched a trusted wheel event via CDP; the page should scroll (or switch view) as with a real mouse.',
+        );
+      } else {
+        baseNotes.push(
+          'cdp_fallback_unavailable: could not attach the debugger (browser-internal page or already inspected by DevTools/another extension).',
+        );
+      }
+    }
     return {
       ok: true,
       url: res.url,
       title: typeof res.title === 'string' ? res.title : '',
       element: normalizeActionElement(res.element),
-      notes: Array.isArray(res.notes) ? res.notes.filter((n): n is string => typeof n === 'string') : [],
+      notes: baseNotes,
+      moved: res.moved,
     };
   }
   const reasons = ['not_found', 'ambiguous', 'option_not_found', 'unsupported_element', 'invalid_value'];

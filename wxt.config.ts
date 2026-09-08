@@ -20,7 +20,7 @@ export default defineConfig({
     // scripting: 程序化注入 content script(兜底扩展加载前已存在的标签页)+ execute_js 降级路线(MAIN world)
     // activeTab: 用户点击工具栏图标时临时授权,便于对未持 host 权限的页面执行注入
     // userScripts: execute_js 主路线 chrome.userScripts.execute(Chrome 135+;138+ 需在扩展详情页开 Allow User Scripts)
-    permissions: ['storage', 'sidePanel', 'unlimitedStorage', 'scripting', 'activeTab', 'userScripts', 'favicon'],
+    permissions: ['storage', 'sidePanel', 'unlimitedStorage', 'scripting', 'activeTab', 'userScripts', 'favicon', 'debugger'],
     // userScripts.execute 自 Chrome 135 起可用
     minimum_chrome_version: '135',
     // host_permissions: <all_urls> 为 captureVisibleTab(截图)硬要求(Chrome 只认 <all_urls>/activeTab,
