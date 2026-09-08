@@ -1,5 +1,5 @@
 import { Agent } from '@earendil-works/pi-agent-core';
-import type { AgentEvent } from '@earendil-works/pi-agent-core';
+import type { AgentEvent, AgentTool } from '@earendil-works/pi-agent-core';
 import {
   createModels,
   createProvider,
@@ -9,7 +9,8 @@ import {
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
-import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { AssistantMessage, Api } from '@earendil-works/pi-ai';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, SessionCompaction, UserMessage, UserRule, WebSearchConfig } from './types';
 import { effectiveMessages } from './contextTokens';
 import { normalizeBaseUrl } from './providers';
@@ -222,6 +223,25 @@ export function setAgentEventSink(sink: AgentEventSink | null): void {
   agentEventSink = sink;
 }
 
+/**
+ * 测试注入缝:让集成测试用 pi-ai 的 faux provider 驱动真实 Agent
+ * (无需网络/真实 provider)。生产路径不设置时行为不变。
+ */
+export interface AgentTestOverrides {
+  /** 覆盖模型解析(测试用 faux 模型) */
+  resolveModel?: (options: RunAgentOptions) => Model<Api> | undefined;
+  /** 覆盖 streamFn(测试用 faux streamSimple) */
+  streamFn?: StreamFn;
+  /** 覆盖工具集(测试环境无 WXT 虚拟模块 i18n,跳过 getTools) */
+  tools?: AgentTool[];
+}
+
+let agentOverrides: AgentTestOverrides | null = null;
+
+export function setAgentOverrides(overrides: AgentTestOverrides | null): void {
+  agentOverrides = overrides;
+}
+
 /** 构造每轮可变的 Agent 输入(provider/模型/工具白名单/系统提示词;并发 run 各自独立) */
 function buildAgentInputs(options: RunAgentOptions, transcript: ChatMessage[]): {
   models: ReturnType<typeof createModels>;
@@ -232,7 +252,7 @@ function buildAgentInputs(options: RunAgentOptions, transcript: ChatMessage[]): 
 
   const models = createModels();
   models.setProvider(buildProvider(options.provider));
-  const model = models.getModel(options.provider.id, options.modelId);
+  const model = agentOverrides?.resolveModel?.(options) ?? models.getModel(options.provider.id, options.modelId);
   if (!model) throw new Error(`模型 ${options.modelId} 不存在,请检查提供商配置`);
 
   // 工具白名单 = 当前草稿引用 ∪ 历史 <page-refs> 块引用。
@@ -276,17 +296,19 @@ function buildAgentInputs(options: RunAgentOptions, transcript: ChatMessage[]): 
   // vision 门控在协议层同源:toPiModel 的 input 由 ModelConfig.vision 决定,
   // model.input 含 image 才允许 read_element 产 ImageContent 块(省 token + 非 vision 走文字描述);
   // pi-ai transform-messages 的 downgradeUnsupportedImages 是双保险(不支持时块降为占位文本)。
-  const tools = getTools({
-    refTabs,
-    pickedElements,
-    canUseImage: model.input.includes('image'),
-    onCompactContext: options.onCompactContext,
-    webSearch: options.webSearch ?? null,
-    // agent 本回合开启的 tab(动态注册表,面板生命周期):读工具 execute 时实时查询
-    dynamicTabs: getAgentOpenedTabs(),
-    // 门控归属会话(并发 run 各自独立,确认卡/提问按会话路由)
-    sessionId: options.sessionId,
-  });
+  const tools =
+    agentOverrides?.tools ??
+    getTools({
+      refTabs,
+      pickedElements,
+      canUseImage: model.input.includes('image'),
+      onCompactContext: options.onCompactContext,
+      webSearch: options.webSearch ?? null,
+      // agent 本回合开启的 tab(动态注册表,面板生命周期):读工具 execute 时实时查询
+      dynamicTabs: getAgentOpenedTabs(),
+      // 门控归属会话(并发 run 各自独立,确认卡/提问按会话路由)
+      sessionId: options.sessionId,
+    });
 
   const systemPrompt = buildSystemPrompt(options.language ?? null, options.rules ?? [], options.systemPrompt ?? '');
   return { models, model, tools, systemPrompt };
@@ -309,11 +331,13 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
   // 白名单/初始化的转录来源:显式覆盖 > Agent 自持
   const transcript = (options.history ?? existing?.agent.state.messages ?? []) as ChatMessage[];
   const { models, model, tools, systemPrompt } = buildAgentInputs(options, transcript);
-  const streamFn = (
-    m: Parameters<typeof models.streamSimple>[0],
-    ctx: Parameters<typeof models.streamSimple>[1],
-    o: Parameters<typeof models.streamSimple>[2],
-  ) => models.streamSimple(m, ctx, o);
+  const streamFn =
+    agentOverrides?.streamFn ??
+    ((
+      m: Parameters<typeof models.streamSimple>[0],
+      ctx: Parameters<typeof models.streamSimple>[1],
+      o: Parameters<typeof models.streamSimple>[2],
+    ) => models.streamSimple(m, ctx, o));
   // 压缩裁剪(非破坏):请求面 = [摘要]+之后,转录本体不变
   const transformContext = options.compaction
     ? (msgs: Parameters<NonNullable<Agent['transformContext']>>[0]) =>
