@@ -1211,7 +1211,7 @@ export default defineContentScript({
       const viewport = vertical
         ? document.documentElement.clientHeight || window.innerHeight
         : document.documentElement.clientWidth || window.innerWidth;
-      const delta = typeof amount === 'number' && amount > 0 ? Math.min(Math.round(amount), 10000) : Math.round(viewport * 0.8);
+      const delta = typeof amount === 'number' && amount > 0 ? Math.min(Math.round(amount), 10000) : Math.round(viewport * 0.35);
       const signed = direction === 'up' || direction === 'left' ? -delta : delta;
       const dx = vertical ? 0 : signed;
       const dy = vertical ? signed : 0;
