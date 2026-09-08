@@ -33,12 +33,15 @@ export interface ChatSlice {
   runs: Record<string, SessionRun>;
   /** 发送准备中会话(首个 await 到落盘之间;空会话回收需避让,否则刚发的话被回收) */
   preparingSessionIds: string[];
+  /** 压缩目标会话(全局单例压缩;store 真值供跨 hook 的忙判定,不受 React 闭包滞后影响) */
+  compactingSessionId: string | null;
   /** 消息队列:目标会话忙时排队的消息(仅内存,FIFO;按归属会话出队) */
   queuedMessages: QueuedMessage[];
 
   /** 由 SessionRuntime 状态出口同步渲染镜像(active=false 时移除该会话运行态) */
   syncRun: (sessionId: string, snapshot: SessionRun, active: boolean) => void;
   setPreparing: (sessionId: string, preparing: boolean) => void;
+  setCompactingSession: (sessionId: string | null) => void;
 
   enqueueMessage: (item: QueuedMessage) => void;
   removeQueuedMessage: (id: string) => void;
@@ -54,6 +57,7 @@ export function createChatSlice(set: SliceSet): ChatSlice {
   return {
     runs: {},
     preparingSessionIds: [],
+    compactingSessionId: null,
     queuedMessages: [],
 
     syncRun: (sessionId, snapshot, active) =>
@@ -74,6 +78,8 @@ export function createChatSlice(set: SliceSet): ChatSlice {
             : [...s.preparingSessionIds, sessionId]
           : s.preparingSessionIds.filter((id) => id !== sessionId),
       })),
+
+    setCompactingSession: (sessionId) => set({ compactingSessionId: sessionId }),
 
     enqueueMessage: (item) => set((s) => ({ queuedMessages: [...(s.queuedMessages ?? []), item] })),
     removeQueuedMessage: (id) =>

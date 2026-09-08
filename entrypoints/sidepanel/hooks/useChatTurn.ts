@@ -70,10 +70,11 @@ export function useChatTurn(params: {
         rt.isStreaming ||
         !!s.gates[sessionId] ||
         rt.isSending ||
-        (isCompacting && compactingSessionId === sessionId)
+        // store 真值(非闭包 props):压缩刚开始的一帧内也能正确判忙
+        s.compactingSessionId === sessionId
       );
     },
-    [isCompacting, compactingSessionId],
+    [],
   );
 
   /** 出队指定会话的排队消息(该会话空闲时;不切换当前视图) */

@@ -64,6 +64,8 @@ export function useCompact() {
       compactingRef.current = true;
       setIsCompacting(true);
       setCompactingSessionId(session.id);
+      // store 真值:跨 hook 的忙判定(useChatTurn.isSessionBusy)读它,不受 React 闭包滞后影响
+      useAppStore.getState().setCompactingSession(session.id);
       try {
         const result = await runCompact({
           provider: buildProvider(active.provider),
@@ -115,10 +117,11 @@ export function useCompact() {
         compactingRef.current = false;
         setIsCompacting(false);
         setCompactingSessionId(null);
+        useAppStore.getState().setCompactingSession(null);
         compactAbortRef.current = null;
       }
     },
-    [isCompacting, setErrorMessage]
+    [setErrorMessage]
   );
 
   /** 取消进行中的压缩(预留) */
