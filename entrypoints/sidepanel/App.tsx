@@ -265,7 +265,7 @@ export default function App() {
     const all = [...(currentSession?.messages ?? []), ...liveInFlight];
     const effective = effectiveMessages(all, currentSession?.compaction);
     // 流式中的 live 文本(尚未 message_end 物化)计入尾部
-    if (isStreaming && streamingContent) {
+    if (isStreamingHere && streamingContent) {
       effective.push({
         role: 'assistant',
         content: [{ type: 'text', text: streamingContent }],
@@ -327,6 +327,9 @@ export default function App() {
   // 会话隔离派生:运行/门控归属 = in-flight 声明的会话;仅当与当前视图一致才在视图内呈现
   // (live 流式气泡/停止按钮/队列条/门控卡),否则后台运行——当前会话完全不受影响
   const runningSessionId = useAppStore((s) => s.runningSessionId);
+  // 压缩归属:后台轮末压缩不锁当前会话编辑器(发送仍会因全局互斥入队)
+  const isCompactingHere =
+    compact.isCompacting && compact.compactingSessionId === currentSession?.id;
   const isStreamingHere = runningSessionId !== null && runningSessionId === currentSession?.id;
   const isGateHere = gate.activeGate != null && gate.activeGate.sessionId === currentSession?.id;
 
@@ -526,7 +529,7 @@ export default function App() {
 
           {/* 审批槽位:交互审批 UI 的唯一渲染位(消息流内工具卡一律状态化,零交互控件)。
               in-flow flex 子节点,出现时挤压列表;卡片框架永不滚动,高度由内容决定。 */}
-          {gate.activeGate && (
+          {isGateHere && gate.activeGate && (
             <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <ApprovalSection
                 request={gate.activeGate.request}
@@ -604,8 +607,8 @@ export default function App() {
             onStartPickElement={pageRefs.handleStartPickElement}
             onRemovePickedElement={pageRefs.handleRemovePickedElement}
             onOpenSettings={handleOpenSettings}
-            disabled={!activeModelInfo || compact.isCompacting}
-            placeholder={compact.isCompacting ? i18n.t('app.compacting') : undefined}
+            disabled={!activeModelInfo || isCompactingHere}
+            placeholder={isCompactingHere ? i18n.t('app.compacting') : undefined}
             initialInput={draft.input}
             onInputChange={handleDraftInput}
             contextUsage={contextData?.usage ?? null}

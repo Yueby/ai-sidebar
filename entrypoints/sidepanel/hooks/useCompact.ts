@@ -25,6 +25,8 @@ import { i18n } from '#i18n';
  */
 export function useCompact() {
   const [isCompacting, setIsCompacting] = useState(false);
+  /** 压缩目标会话(后台轮末压缩时不锁当前会话编辑器) */
+  const [compactingSessionId, setCompactingSessionId] = useState<string | null>(null);
   const compactAbortRef = useRef<AbortController | null>(null);
   // 门控/错误域:store 直读(一期收敛)
   const hasPendingGate = useAppStore((s) => s.activeGate !== null);
@@ -57,6 +59,7 @@ export function useCompact() {
       const abortCtrl = new AbortController();
       compactAbortRef.current = abortCtrl;
       setIsCompacting(true);
+      setCompactingSessionId(session.id);
       try {
         const result = await runCompact({
           provider: buildProvider(active.provider),
@@ -81,9 +84,12 @@ export function useCompact() {
         }`;
         const summaryMessage = createUserMessage(summaryText);
 
+        // 落盘基于最新内存副本的草稿(压缩窗口内引用 chip/框选回填不能被旧快照回滚)
+        const latestDraft = useAppStore.getState().sessions.find((s) => s.id === session.id)?.draft;
         const updated: Session = {
           ...session,
           messages: [...session.messages, summaryMessage],
+          ...(latestDraft ? { draft: latestDraft } : {}),
           updatedAt: Date.now(),
           compaction: {
             summaryTimestamp: summaryMessage.timestamp,
@@ -103,6 +109,7 @@ export function useCompact() {
         return false;
       } finally {
         setIsCompacting(false);
+        setCompactingSessionId(null);
         compactAbortRef.current = null;
       }
     },
@@ -114,5 +121,5 @@ export function useCompact() {
     compactAbortRef.current?.abort();
   }, []);
 
-  return { isCompacting, handleCompact, cancelCompact };
+  return { isCompacting, compactingSessionId, handleCompact, cancelCompact };
 }

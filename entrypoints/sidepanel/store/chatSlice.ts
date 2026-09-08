@@ -26,6 +26,8 @@ export interface ChatSlice {
   inFlight: InFlightRun | null;
   /** 运行中会话 id(整个 run 生命周期保持;finalize 落盘期间不闪断,供后台指示/隔离派生) */
   runningSessionId: string | null;
+  /** 发送准备中会话 id(首个 await 到 setSessions 之间;空会话回收需避让,否则刚发的话被回收) */
+  preparingSessionId: string | null;
   /** 消息队列:繁忙期间用户排队发送的消息(仅内存,FIFO;按目标会话归属,跨会话隔离) */
   queuedMessages: QueuedMessage[];
 
@@ -35,6 +37,7 @@ export interface ChatSlice {
   setActiveToolNames: (value: string[] | ((prev: string[]) => string[])) => void;
   setIsCancelled: (value: boolean) => void;
   setRunningSessionId: (value: string | null) => void;
+  setPreparingSessionId: (value: string | null) => void;
   setInFlight: (
     value: InFlightRun | null | ((prev: InFlightRun | null) => InFlightRun | null),
   ) => void;
@@ -59,6 +62,7 @@ export function createChatSlice(set: SliceSet): ChatSlice {
     isCancelled: false,
     inFlight: null,
     runningSessionId: null,
+    preparingSessionId: null,
     queuedMessages: [],
 
     setIsStreaming: (isStreaming) => set({ isStreaming }),
@@ -68,6 +72,7 @@ export function createChatSlice(set: SliceSet): ChatSlice {
       set((s) => ({ activeToolNames: typeof value === 'function' ? value(s.activeToolNames) : value })),
     setIsCancelled: (isCancelled) => set({ isCancelled }),
     setRunningSessionId: (runningSessionId) => set({ runningSessionId }),
+    setPreparingSessionId: (preparingSessionId) => set({ preparingSessionId }),
     setInFlight: (value) =>
       set((s) => ({ inFlight: typeof value === 'function' ? value(s.inFlight) : value })),
     enqueueMessage: (item) =>

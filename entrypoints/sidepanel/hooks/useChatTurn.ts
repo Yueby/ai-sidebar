@@ -74,8 +74,8 @@ export function useChatTurn(params: {
   const checkAndDispatchQueue = useCallback(() => {
     const s = useAppStore.getState();
     if (s.queuedMessages.length === 0) return;
-    // 若当前正在流式/门控挂起/压缩中，暂缓出队
-    if (s.isStreaming || s.activeGate !== null || isCompacting) return;
+    // 若当前正在流式/门控挂起/压缩中/另有发送在准备，暂缓出队
+    if (s.isStreaming || s.activeGate !== null || isCompacting || sendingRef.current) return;
     const next = s.dequeueMessage();
     if (next) {
       if (import.meta.env.DEV) {
@@ -416,6 +416,7 @@ export function useChatTurn(params: {
       }
 
       sendingRef.current = true;
+      useAppStore.getState().setPreparingSessionId(target.id);
       try {
       if (import.meta.env.DEV) {
         console.log(
@@ -426,6 +427,7 @@ export function useChatTurn(params: {
       const active = findActiveModel(store.settings);
       if (!active) {
         setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
+        setTimeout(() => checkAndDispatchQueue(), 0);
         return;
       }
 
@@ -489,7 +491,11 @@ export function useChatTurn(params: {
       // 提交基于「最新」目标会话(await 期间用户可能已切回编辑草稿):只覆盖消息与必要字段。
       // 目标在准备期间被删除 → 取消本轮,不复活(即使本轮刚创建)
       const latestTarget = useAppStore.getState().sessions.find((s) => s.id === session.id);
-      if (!latestTarget) return;
+      if (!latestTarget) {
+        // 目标在准备期间被删除:取消本轮并继续调度后续队列(否则整条队列停摆)
+        setTimeout(() => checkAndDispatchQueue(), 0);
+        return;
+      }
       const base = latestTarget;
       const updatedSession: Session = {
         ...base,
@@ -526,6 +532,7 @@ export function useChatTurn(params: {
       });
       } finally {
         sendingRef.current = false;
+        useAppStore.getState().setPreparingSessionId(null);
       }
     },
     [
@@ -544,8 +551,8 @@ export function useChatTurn(params: {
       const trimmed = newText.trim();
       if (!trimmed) return;
 
-      // 双保险守卫:编辑重发仅允许在非流式、非门控、非压缩时触发
-      if (isStreaming || hasPendingGate || isCompacting) {
+      // 双保险守卫:编辑重发仅允许在非流式、非门控、非压缩、无并发发送时触发
+      if (isStreaming || hasPendingGate || isCompacting || sendingRef.current) {
         return;
       }
 

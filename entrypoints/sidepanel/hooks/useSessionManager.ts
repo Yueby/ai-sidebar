@@ -256,6 +256,7 @@ export function useSessionManager() {
         leaving.messages.length === 0 &&
         !st.queuedMessages.some((q) => q.sessionId === leaving.id) &&
         !(st.isStreaming && st.inFlight?.sessionId === leaving.id) &&
+        st.preparingSessionId !== leaving.id &&
         st.activeGate?.sessionId !== leaving.id;
       // 回收前先摘除离开会话的待发草稿,避免 flush 把它写回后与 deleteSession 竞态复活
       if (recycle) dropPendingDraftSave(leaving!.id);
@@ -286,6 +287,7 @@ export function useSessionManager() {
       cur.messages.length === 0 &&
       !st0.queuedMessages.some((q) => q.sessionId === cur.id) &&
       !(st0.isStreaming && st0.inFlight?.sessionId === cur.id) &&
+      st0.preparingSessionId !== cur.id &&
       st0.activeGate?.sessionId !== cur.id;
     if (idleEmpty) {
       setErrorMessage(null);

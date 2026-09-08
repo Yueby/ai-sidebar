@@ -1461,6 +1461,8 @@ export default defineContentScript({
         if (action === 'fill' && submit === 'enter') {
           try {
             const elNow = res.hit.el as HTMLElement;
+            // 页面重渲染替换节点后游离节点的 value 不可信(会产生假阳性/假阴性)
+            if (!elNow.isConnected) return { ok: true, url: location.href, title: document.title, element: summary, notes };
             const still =
               elNow instanceof HTMLInputElement || elNow instanceof HTMLTextAreaElement
                 ? elNow.value

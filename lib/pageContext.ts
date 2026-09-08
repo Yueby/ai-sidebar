@@ -724,7 +724,25 @@ export async function performPageAction(
         const aOutcome = await requestWithTimeout();
         requestAction = savedAction;
         const aRes = aOutcome.kind === 'response' ? aOutcome.res : undefined;
-        const aNotes = aRes?.ok === true && Array.isArray(aRes.notes) ? aRes.notes.filter((n): n is string => typeof n === 'string') : [];
+        let aNotes = aRes?.ok === true && Array.isArray(aRes.notes) ? aRes.notes.filter((n): n is string => typeof n === 'string') : [];
+        let actedUrl = aRes?.ok === true && typeof aRes.url === 'string' ? aRes.url : url;
+        if (!aRes) {
+          // after 请求被销毁/超时:常见于动作触发的同 tab 导航——补导航注记并采用新 URL
+          try {
+            const t = await browser.tabs.get(tabId);
+            if (t?.url?.startsWith('http')) {
+              actedUrl = t.url;
+              if (t.url !== url) {
+                aNotes = [
+                  ...aNotes,
+                  'navigation_started: the page navigated after the action; element state may have changed.',
+                ];
+              }
+            }
+          } catch {
+            /* tab 已关闭:保留动作前 URL */
+          }
+        }
         const stateNotes =
           rRes.disabled === true || rRes.hidden === true
             ? [
@@ -744,7 +762,7 @@ export async function performPageAction(
               : null;
         cdpFirstResult = {
           ok: true,
-          url: aRes?.ok === true && typeof aRes.url === 'string' ? aRes.url : url,
+          url: actedUrl,
           title: aRes?.ok === true && typeof aRes.title === 'string' ? aRes.title : '',
           element: normalizeActionElement(rRes.element),
           notes: [...stateNotes, actNote, ...(partialNote ? [partialNote] : []), ...aNotes],
@@ -812,8 +830,6 @@ export async function performPageAction(
     }
   }
   // CDP 可信执行成功链:直接返回(resolve → CDP act → after 已完成,notes 已含注记)
-  if (cdpFirstResult) return cdpFirstResult;
-
   const res = outcome.kind === 'response' ? outcome.res : undefined;
   if (
     !res ||
