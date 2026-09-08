@@ -194,7 +194,21 @@ export interface RunAgentResult {
  * 失败经 Agent 协议事件编码(stopReason='error'),取消经 signal 注入;
  * 中止时已生成的部分保留在转录中。
  */
-export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentResult> {
+/**
+ * 会话 Agent 注册表(pi 设计:每会话一个 Agent 实例,持有转录与运行状态)。
+ * 阶段①:每轮仍以调用方传入的 history 覆盖转录(与重建 Agent 等价,行为零变化);
+ * 阶段②将改为 Agent 自持转录,调用方不再传 history。
+ */
+const sessionAgents = new Map<string, Agent>();
+
+/** 构造每轮可变的 Agent 输入(provider/模型/工具白名单/系统提示词;并发 run 各自独立) */
+function buildAgentInputs(options: RunAgentOptions): {
+  models: ReturnType<typeof createModels>;
+  model: NonNullable<ReturnType<ReturnType<typeof createModels>['getModel']>>;
+  tools: ReturnType<typeof getTools>;
+  systemPrompt: string;
+} {
+
   const models = createModels();
   models.setProvider(buildProvider(options.provider));
   const model = models.getModel(options.provider.id, options.modelId);
@@ -253,20 +267,70 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
     sessionId: options.sessionId,
   });
 
+  const systemPrompt = buildSystemPrompt(options.language ?? null, options.rules ?? [], options.systemPrompt ?? '');
+  return { models, model, tools, systemPrompt };
+}
+
+/** 获取或创建会话 Agent:复用则刷新每轮可变配置(provider/工具/模型/思考档) */
+function ensureSessionAgent(options: RunAgentOptions): Agent {
+  const { models, model, tools, systemPrompt } = buildAgentInputs(options);
+  const streamFn = (m: Parameters<typeof models.streamSimple>[0], ctx: Parameters<typeof models.streamSimple>[1], o: Parameters<typeof models.streamSimple>[2]) =>
+    models.streamSimple(m, ctx, o);
+  const sid = options.sessionId;
+  if (!sid) {
+    // 无会话 id(理论不可达):退化为一次性实例,不进注册表
+    return new Agent({
+      initialState: {
+        systemPrompt,
+        model,
+        thinkingLevel: options.thinkingLevel,
+        tools,
+        messages: options.history.map(toLlmMessage),
+      },
+      streamFn,
+      sessionId: sid,
+      toolExecution: 'sequential',
+    });
+  }
+  const existing = sessionAgents.get(sid);
+  if (existing) {
+    existing.streamFunction = streamFn;
+    existing.state.tools = tools;
+    existing.state.systemPrompt = systemPrompt;
+    existing.state.model = model;
+    existing.state.thinkingLevel = options.thinkingLevel;
+    return existing;
+  }
   const agent = new Agent({
     initialState: {
-      systemPrompt: buildSystemPrompt(options.language ?? null, options.rules ?? [], options.systemPrompt ?? ''),
+      systemPrompt,
       model,
       thinkingLevel: options.thinkingLevel,
       tools,
-      // 请求副本:user 消息的元素标记在请求时原位展开为 <picked-element> 块
-      // (内容取自该消息自身 refs 块);转录外副本 —— 持久化仍是标记 + refs 块
       messages: options.history.map(toLlmMessage),
     },
-    streamFn: (m, ctx, o) => models.streamSimple(m, ctx, o),
-    sessionId: options.sessionId,
+    streamFn,
+    sessionId: sid,
     toolExecution: 'sequential',
   });
+  sessionAgents.set(sid, agent);
+  return agent;
+}
+
+/** 会话删除时释放 Agent 实例 */
+export function disposeSessionAgent(sessionId: string): void {
+  sessionAgents.delete(sessionId);
+}
+
+/**
+ * 基于 pi-agent-core 的 Agent 跑一轮对话(可能包含多轮工具调用循环)。
+ * 失败经 Agent 协议事件编码(stopReason='error'),取消经 signal 注入;
+ * 中止时已生成的部分保留在转录中。
+ */
+export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentResult> {
+  const agent = ensureSessionAgent(options);
+  // 阶段①兼容语义:每轮以调用方传入的 history 为准(与每轮重建 Agent 等价)
+  agent.state.messages = options.history.map(toLlmMessage);
 
   let newMessages: ChatMessage[] = [];
   const unsubscribe = agent.subscribe((event) => {
