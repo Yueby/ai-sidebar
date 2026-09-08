@@ -55,8 +55,18 @@ export function createGateSlice(set: SliceSet, get: SliceGet): GateSlice {
     gates: {},
     resolvedGateCounts: {},
 
-    pushGate: (request, resolve, sessionId) =>
-      set((s) => ({ gates: { ...s.gates, [sessionId]: { request, resolve, sessionId } } })),
+    pushGate: (request, resolve, sessionId) => {
+      // 同会话重复门控(异常:旧 run 未收尾):先安全拒绝旧请求,绝不覆盖悬挂 Promise
+      const existing = get().gates[sessionId];
+      if (existing) {
+        existing.resolve(
+          existing.request.kind === 'confirm'
+            ? { kind: 'confirm', approved: false }
+            : { kind: 'ask', answer: '', cancelled: true },
+        );
+      }
+      set((s) => ({ gates: { ...s.gates, [sessionId]: { request, resolve, sessionId } } }));
+    },
 
     approveGate: (sessionId, grant?: boolean) =>
       respond(

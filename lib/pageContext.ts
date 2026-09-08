@@ -11,6 +11,7 @@ import {
   synthesizeTrustedScrollGesture,
   dispatchTrustedKey,
   insertTrustedText,
+  withCdpInputLock,
 } from './cdp';
 
 /** macOS 上全选用 Cmd(CDP modifiers 4),其余平台 Ctrl(2) */
@@ -678,21 +679,23 @@ export async function performPageAction(
       const cx = rRes.centerPoint.x;
       const cy = rRes.centerPoint.y;
       const fillValue = typeof params.value === 'string' ? params.value : '';
-      // 操作级连接租约:整个 click/fill 序列共享;中途用户解除调试/切 tab 则后续命令失败,
-      // 不再自动重新附加(避免在错误的连接上继续输入)
-      const lease = cdpLease();
       // fill 序列状态:任一步派发成功后失败 → partial_or_unknown(禁止重发)
       let fillState: 'not_dispatched' | 'dispatched' | 'partial_or_unknown' = 'not_dispatched';
       let clickPartial = false;
-      if (action === 'click') {
-        const clickState = await dispatchTrustedMouseClick(tabId, cx, cy, lease);
-        // not_dispatched = 点击尚未发生,可安全降级合成;partial = 按下已派发,禁止重发
-        if (clickState === 'dispatched') cdpActed = true;
-        else if (clickState === 'partial_or_unknown') {
-          cdpActed = true;
-          clickPartial = true;
+      // 浏览器输入互斥(操作级):完整 click/fill 序列持锁串行;锁内领取连接租约
+      // (中途用户解除调试/切 tab 则后续命令失败,不再自动重新附加)
+      const runCdpSequence = async (): Promise<void> => {
+        const lease = cdpLease();
+        if (action === 'click') {
+          const clickState = await dispatchTrustedMouseClick(tabId, cx, cy, lease);
+          // not_dispatched = 点击尚未发生,可安全降级合成;partial = 按下已派发,禁止重发
+          if (clickState === 'dispatched') cdpActed = true;
+          else if (clickState === 'partial_or_unknown') {
+            cdpActed = true;
+            clickPartial = true;
+          }
+          return;
         }
-      } else {
         // fill:可信点击聚焦 → Ctrl+A 全选(Mac=Cmd) → Backspace 清空 → insertText(非空时) → (Enter 提交)。
         // 点击派发后序列中任何一步未达 → partial_or_unknown(整体未完成,禁止降级重发)
         const clickState = await dispatchTrustedMouseClick(tabId, cx, cy, lease);
@@ -718,7 +721,10 @@ export async function performPageAction(
           }
         }
         cdpActed = fillState !== 'not_dispatched';
-      }
+      };
+      await withCdpInputLock(runCdpSequence);
+      // 闭包内赋值的读取:显式函数避免 TS 控制流把 fillState 收窄回初始字面量
+      const isFillPartial = (): boolean => fillState === 'partial_or_unknown';
       if (cdpActed) {
         // after 注记:content 侧 settle + before/after 对比 + submit 回读(与合成路径同一套)
         nextBeforeSummary = rRes.element ?? null;
@@ -758,7 +764,7 @@ export async function performPageAction(
             ? 'cdp_trusted_click: dispatched trusted mouse click via CDP (like a real mouse).'
             : 'cdp_trusted_fill: focused and typed via CDP (like a real keyboard).';
         const partialNote =
-          action === 'fill' && fillState === 'partial_or_unknown'
+          action === 'fill' && isFillPartial()
             ? 'cdp_partial_dispatch: the input sequence was partially dispatched (value may be partially applied); do NOT retry the same fill — verify the field state first.'
             : clickPartial
               ? 'cdp_partial_dispatch: the mouse press was dispatched but the release was not confirmed; do NOT retry the same click — verify the page state first.'
@@ -858,14 +864,17 @@ export async function performPageAction(
       const dirSign = params.direction === 'up' || params.direction === 'left' ? 1 : -1;
       const cx = Math.max(1, Math.round(vw / 2));
       const cy = Math.max(1, Math.round(vh / 2));
-      const gestureState = await synthesizeTrustedScrollGesture(
-        tabId,
-        cx,
-        cy,
-        vertical ? 0 : dirSign * distance,
-        vertical ? dirSign * distance : 0,
-        800,
-        cdpLease(),
+      // 浏览器输入互斥(操作级):滚动手势持锁串行;锁内领取连接租约
+      const gestureState = await withCdpInputLock(() =>
+        synthesizeTrustedScrollGesture(
+          tabId,
+          cx,
+          cy,
+          vertical ? 0 : dirSign * distance,
+          vertical ? dirSign * distance : 0,
+          800,
+          cdpLease(),
+        ),
       );
       if (gestureState === 'dispatched') {
         await new Promise<void>((resolve) => setTimeout(resolve, 600));

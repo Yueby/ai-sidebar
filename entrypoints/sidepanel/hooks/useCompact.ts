@@ -50,7 +50,7 @@ export function useCompact() {
       if (store.runs[session.id] || store.gates[session.id]) return false;
       const active = findActiveModel(store.settings);
       if (!active) {
-        setErrorMessage(i18n.t('compaction.toast.noModel'));
+        setErrorMessage(i18n.t('compaction.toast.noModel'), session.id);
         return false;
       }
 

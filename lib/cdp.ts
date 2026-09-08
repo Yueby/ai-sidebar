@@ -25,6 +25,22 @@ export function cdpLease(): number {
   return detachEpoch;
 }
 
+/**
+ * 浏览器输入互斥(操作级):多会话可并发生成,但 CDP 输入是共享资源(单连接/单焦点)。
+ * 完整 click/fill/scroll 操作必须串行执行,避免并发会话在序列中途切换连接或交错输入。
+ * 锁内应重新领取 cdpLease()(attach 发生在锁内)。
+ */
+let inputLockChain: Promise<unknown> = Promise.resolve();
+
+export function withCdpInputLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = inputLockChain.then(fn, fn);
+  inputLockChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 /** 输入派发状态(见文件头三态契约) */
 export type InputDispatchState = 'not_dispatched' | 'dispatched' | 'partial_or_unknown';
 

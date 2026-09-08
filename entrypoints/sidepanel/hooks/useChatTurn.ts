@@ -103,16 +103,20 @@ export function useChatTurn(params: {
     [isSessionBusy],
   );
 
-  /** 压缩结束后补出队(压缩可能压住了该会话的排队消息) */
-  const prevCompactingRef = useRef(isCompacting);
+  /** 压缩结束后补出队(压缩可能压住了该会话的排队消息)。
+   *  注意:isCompacting 变 false 时 compactingSessionId 已被 useCompact 置 null,
+   *  因此必须记住「上一个压缩 owner」。 */
+  const prevCompactingRef = useRef<{ active: boolean; sessionId: string | null }>({
+    active: isCompacting,
+    sessionId: compactingSessionId ?? null,
+  });
   useEffect(() => {
-    if (prevCompactingRef.current && !isCompacting) {
-      const target = compactingSessionId;
-      setTimeout(() => {
-        if (target) dispatchQueueFor(target);
-      }, 0);
+    const prev = prevCompactingRef.current;
+    if (prev.active && !isCompacting && prev.sessionId) {
+      const target = prev.sessionId;
+      setTimeout(() => dispatchQueueFor(target), 0);
     }
-    prevCompactingRef.current = isCompacting;
+    prevCompactingRef.current = { active: isCompacting, sessionId: compactingSessionId ?? null };
   }, [isCompacting, compactingSessionId, dispatchQueueFor]);
 
   // 共享转录执行内核:runAgentTurn 流式循环、事件透出、in-flight 物化、非破坏落盘与异常清理。
@@ -182,6 +186,8 @@ export function useChatTurn(params: {
           webSearch: useAppStore.getState().settings.webSearch,
           // compact_context 工具 execute 只置标记;轮末由本 hook 消费
           onCompactContext: () => {
+            // 同会话旧 run 无权置位新 run 的压缩请求
+            if (seq !== turnSeqRef.current[sid]) return;
             compactRequestedRef.current[sid] = true;
           },
           onEvent: (event) => {
@@ -203,6 +209,8 @@ export function useChatTurn(params: {
               if (!th.timer) {
                 th.timer = setTimeout(() => {
                   th.timer = null;
+                  // 旧 run 的迟到冲刷不得写新 run 的流式态
+                  if (seq !== turnSeqRef.current[sid]) return;
                   useAppStore.getState().patchRun(sid, { content: th.text, thinking: th.thinking });
                 }, STREAM_FLUSH_INTERVAL_MS);
               }
@@ -224,8 +232,10 @@ export function useChatTurn(params: {
               if (seq !== turnSeqRef.current[sid]) return;
               useAppStore.getState().appendRunInFlight(sid, event.message as ChatMessage);
             } else if (event.type === 'tool_execution_start') {
+              if (seq !== turnSeqRef.current[sid]) return;
               useAppStore.getState().addRunTool(sid, event.toolName);
             } else if (event.type === 'tool_execution_end') {
+              if (seq !== turnSeqRef.current[sid]) return;
               useAppStore.getState().removeRunTool(sid, event.toolName);
             }
           },
@@ -235,7 +245,7 @@ export function useChatTurn(params: {
         // 基于该会话的「最新」内存副本:流式期间用户可能已在草稿中添加新引用,不能覆盖。
         // 若会话已被删除(流式中途删掉当前会话),不复活,丢弃本轮转录。
         if (seq !== turnSeqRef.current[sid]) {
-          compactRequestedRef.current[sid] = false;
+          // 旧 run 被同会话新 turn 接管:不得触碰新 run 的压缩标记/运行态
           return;
         }
         // AI 自主压缩标记:本 turn 置位的消费归属本 turn
@@ -294,7 +304,6 @@ export function useChatTurn(params: {
         }
       } catch (err: unknown) {
         if (seq !== turnSeqRef.current[sid]) {
-          compactRequestedRef.current[sid] = false;
           return;
         }
         autoCompactPending = false;
@@ -349,10 +358,10 @@ export function useChatTurn(params: {
         return;
       }
       if (!target) {
+        // 同步登记(渲染可见),持久化 activeSessionId 在领取执行权之后
         target = createSession(titleFromText(trimmed));
         useAppStore.getState().setSessions([target, ...useAppStore.getState().sessions]);
         useAppStore.getState().setActiveSessionId(target.id);
-        await activeSessionIdItem.setValue(target.id);
       }
 
       // 1. 目标会话自身忙(有 run/门控/准备中/压缩中)或发送竞态 = 入队。
@@ -392,6 +401,7 @@ export function useChatTurn(params: {
       sendingRef.current.add(target.id);
       useAppStore.getState().setPreparing(target.id, true);
       try {
+        await activeSessionIdItem.setValue(target.id);
         if (import.meta.env.DEV) {
           console.log(
             `[turn] handleSendMessage enter: target=${target.id} activeId=${store.activeSessionId}`,

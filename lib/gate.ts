@@ -49,6 +49,7 @@ const grantedScopes = new Set<string>();
 interface PendingGate {
   req: GateRequest;
   resolve: (res: GateResponse) => void;
+  sessionId: string;
 }
 const pending = new Set<PendingGate>();
 
@@ -64,12 +65,14 @@ export function setGateHandler(handler: GateHandler | null): void {
   activeHandler = handler;
 }
 
-/** 冲销所有 pending 门控请求(confirm→deny,ask→cancelled)。App 在停止/中止生成时调用 */
-export function flushPendingGates(): void {
+/** 冲销 pending 门控请求(confirm→deny,ask→cancelled)。
+ *  传 sessionId = 仅冲销该会话(停止/删除单个会话不影响其他并发 run);无参 = 全部 */
+export function flushPendingGates(sessionId?: string): void {
   for (const entry of pending) {
+    if (sessionId !== undefined && entry.sessionId !== sessionId) continue;
     entry.resolve(denyResponse(entry.req));
+    pending.delete(entry);
   }
-  pending.clear();
 }
 
 /**
@@ -79,6 +82,8 @@ export function flushPendingGates(): void {
  * 应答携带 grant 时记录 scope,供同类后续调用短路。
  */
 export function requestGate(req: GateRequest, sessionId: string): Promise<GateResponse> {
+  // 归属缺失 = 非 run 上下文(异常):在 grant 快捷通过之前安全拒绝,绝不悬挂
+  if (!sessionId) return Promise.resolve(denyResponse(req));
   if (req.kind === 'confirm') {
     const scope = req.grantScope;
     if (scope && grantedScopes.has(scope)) {
@@ -88,7 +93,7 @@ export function requestGate(req: GateRequest, sessionId: string): Promise<GateRe
   const h = activeHandler;
   if (!h) return Promise.resolve(denyResponse(req));
   return new Promise<GateResponse>((resolve) => {
-    const entry: PendingGate = { req, resolve };
+    const entry: PendingGate = { req, resolve, sessionId };
     pending.add(entry);
     h(req, sessionId)
       .then((res) => {
