@@ -703,7 +703,7 @@ export async function performPageAction(
       const delta =
         typeof params.amount === 'number' && params.amount > 0
           ? Math.min(Math.round(params.amount), 10000)
-          : Math.round(viewportPx * 0.35);
+          : Math.min(120, Math.max(40, Math.round(viewportPx * 0.12)));
       const signed = params.direction === 'up' || params.direction === 'left' ? -delta : delta;
       const dispatched = await dispatchTrustedMouseWheel(
         tabId,

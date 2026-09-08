@@ -60,7 +60,7 @@ export function createScrollPageToolDefinition(): AgentTool<typeof SCROLL_PAGE_P
     label: toolLabel('scroll_page'),
     risk: 'safe',
     description:
-      'Scroll a web page tab: by viewport in one of four directions (defaults to about a third of the viewport — a few wheel notches), or scroll a specific element into view by passing its locator (role + accessible name + optional ordinal, exactly as listed by search_element). On pages with animated or step-by-step reveals, call repeatedly for gradual progression; pass a larger amount (px) to jump further in one call. Defaults to the currently focused tab; pass tabId to scroll another tab.',
+      'Scroll a web page tab like a mouse wheel: by viewport in one of four directions (defaults to a single wheel notch, about 120px), or scroll a specific element into view by passing its locator (role + accessible name + optional ordinal, exactly as listed by search_element). On pages with smooth page-flip or snap transitions, a single call advances one step the same way a real wheel tick does — call repeatedly to move through the page. Pass a larger amount (px) to jump further in one call. Defaults to the currently focused tab; pass tabId to scroll another tab.',
     parameters: SCROLL_PAGE_PARAMS,
     execute: async (_toolCallId, args) => {
       const direction = typeof args?.direction === 'string' ? args.direction : '';
