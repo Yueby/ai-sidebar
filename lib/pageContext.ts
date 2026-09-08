@@ -705,17 +705,30 @@ export async function performPageAction(
           ? Math.min(Math.round(params.amount), 10000)
           : Math.min(120, Math.max(40, Math.round(viewportPx * 0.12)));
       const signed = params.direction === 'up' || params.direction === 'left' ? -delta : delta;
-      const dispatched = await dispatchTrustedMouseWheel(
-        tabId,
-        Math.max(1, Math.round(vw / 2)),
-        Math.max(1, Math.round(vh / 2)),
-        vertical ? 0 : signed,
-        vertical ? signed : 0,
-      );
+      const tickSign = Math.sign(signed) || 1;
+      const ticks =
+        typeof params.amount === 'number' && params.amount > 0
+          ? Math.min(12, Math.max(1, Math.round(params.amount / 120)))
+          : 3;
+      const cx = Math.max(1, Math.round(vw / 2));
+      const cy = Math.max(1, Math.round(vh / 2));
+      let dispatched = false;
+      for (let i = 0; i < ticks; i++) {
+        const ok = await dispatchTrustedMouseWheel(
+          tabId,
+          cx,
+          cy,
+          vertical ? 0 : tickSign * 120,
+          vertical ? tickSign * 120 : 0,
+        );
+        if (ok) dispatched = true;
+        if (!ok) break;
+        await new Promise<void>((resolve) => setTimeout(resolve, 60));
+      }
       if (dispatched) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 300));
+        await new Promise<void>((resolve) => setTimeout(resolve, 400));
         baseNotes.push(
-          'cdp_trusted_wheel: dispatched a trusted wheel event via CDP; the page should scroll (or switch view) as with a real mouse.',
+          'cdp_trusted_wheel: dispatched trusted wheel ticks via CDP (like real mouse input); the page should scroll or switch views naturally.',
         );
       } else {
         baseNotes.push(

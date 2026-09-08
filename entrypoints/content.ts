@@ -1125,6 +1125,23 @@ export default defineContentScript({
       return { fail: { reason: 'unsupported_element' } };
     }
 
+    /** 真实滚轮单 tick ≈ 120px;amount(px)折算 tick 数(1-12),缺省 3 tick ≈ 轻滚一下 */
+    const WHEEL_TICK_PX = 120;
+    function wheelTickCount(amount: number | undefined): number {
+      if (typeof amount === 'number' && amount > 0) {
+        return Math.min(12, Math.max(1, Math.round(amount / WHEEL_TICK_PX)));
+      }
+      return 3;
+    }
+
+    /** 视口中心内容指纹(tagName+className+短文本):横向切卡/变换切换页 rect 不动也能检出内容变化 */
+    function contentFingerprintAtCenter(): string {
+      const el = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+      if (!(el instanceof Element)) return '';
+      const c = typeof el.className === 'string' ? el.className.slice(0, 60) : '';
+      return `${el.tagName}.${c}#${(el.textContent ?? '').slice(0, 120)}`;
+    }
+
     /** 在目标上 scrollBy 并返回实际移动量(像素,横纵合计);不可滚目标无副作用 */
     function applyScroll(target: Element, dx: number, dy: number): number {
       const beforeX = target.scrollLeft;
@@ -1133,7 +1150,7 @@ export default defineContentScript({
       return Math.abs(target.scrollLeft - beforeX) + Math.abs(target.scrollTop - beforeY);
     }
 
-    /** 最近的可滚动祖先(含自身):overflow 可滚且确有滚动态。html/body 主滚动不归此(由 scrollingElement 路径处理) */
+    /** 最近的可滚动祖先(含自身):overflow 可滚且确有真实滚动态(余量 ≥ 50px)。html/body 主滚动不归此 */
     function findScrollableAncestor(start: Element | null, vertical: boolean): Element | null {
       let node: Element | null = start;
       while (node && node !== document.documentElement && node !== document.body) {
@@ -1142,7 +1159,7 @@ export default defineContentScript({
           const ov = vertical ? style.overflowY : style.overflowX;
           const scrollSize = vertical ? node.scrollHeight : node.scrollWidth;
           const clientSize = vertical ? node.clientHeight : node.clientWidth;
-          if ((ov === 'auto' || ov === 'scroll' || ov === 'overlay') && scrollSize > clientSize + 4) {
+          if ((ov === 'auto' || ov === 'scroll' || ov === 'overlay') && scrollSize > clientSize + 50) {
             return node;
           }
         }
@@ -1151,7 +1168,8 @@ export default defineContentScript({
       return null;
     }
 
-    /** 全页兜底:试滚所有几何上可滚的容器(前 N 个,scrollBy 在不可滚目标无副作用),返回实际移动的容器 */
+    /** 全页承底:试滚所有几何上可滚且余量 ≥ 50px 的容器(前 N 个,scrollBy 在不可滚目标无副作用)。
+     *  移动门槛 50px:杜绝 enter-btn 之类几像素小容器产出的假「滚动成功」。 */
     function tryScrollAnyContainer(vertical: boolean, dx: number, dy: number, budget = 400): Element | null {
       const all = document.querySelectorAll<HTMLElement>('*');
       let tries = 0;
@@ -1159,37 +1177,34 @@ export default defineContentScript({
         if (tries >= budget) break;
         const scrollSize = vertical ? candidate.scrollHeight : candidate.scrollWidth;
         const clientSize = vertical ? candidate.clientHeight : candidate.clientWidth;
-        if (scrollSize <= clientSize + 4) continue;
+        if (scrollSize <= clientSize + 50) continue;
         tries++;
-        if (applyScroll(candidate, dx, dy) > 2) return candidate;
+        if (applyScroll(candidate, dx, dy) > 50) return candidate;
       }
       return null;
     }
 
-    /** 滚动劫持页兜底:派发合成 wheel 事件。合成事件不触发浏览器默认滚动(no isTrusted),
-     *  但页面自身的 wheel 监听器(翻页/切 view 的劫持逻辑)照常收到——对原生滚动页零副作用。
-     *  返回是否观察到内容位移(中心元素 rect 变化 > 8px)。 */
-    async function dispatchWheelScroll(center: Element | null, vertical: boolean, signed: number): Promise<boolean> {
+    /** 滚动劫持/画廊页兜底:连发合成 wheel ticks(真实滚轮惯性)。合成事件不触发浏览器默认滚动
+     *  (no isTrusted),但页面自身的 wheel 监听器(翻页/切卡)照常收到——对原生滚动页零副作用。
+     *  返回是否观察到中心内容变化(指纹对比,横向切换同样检出)。 */
+    async function dispatchWheelTicks(center: Element | null, vertical: boolean, signed: number, ticks: number): Promise<boolean> {
       const targetEl = center instanceof Element ? center : document.documentElement;
-      const before = center instanceof Element ? center.getBoundingClientRect().top : null;
-      targetEl.dispatchEvent(
-        new WheelEvent('wheel', {
-          deltaX: vertical ? 0 : signed,
-          deltaY: vertical ? signed : 0,
-          deltaMode: 0,
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-        }),
-      );
-      await new Promise<void>((resolve) => setTimeout(resolve, 300));
-      if (before !== null && center instanceof Element) {
-        const after = center.getBoundingClientRect().top;
-        if (Math.abs(after - before) > 8) {
-          return true;
-        }
+      const before = contentFingerprintAtCenter();
+      for (let i = 0; i < ticks; i++) {
+        targetEl.dispatchEvent(
+          new WheelEvent('wheel', {
+            deltaX: vertical ? 0 : signed,
+            deltaY: vertical ? signed : 0,
+            deltaMode: 0,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+          }),
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, 60));
       }
-      return false;
+      await new Promise<void>((resolve) => setTimeout(resolve, 400));
+      return contentFingerprintAtCenter() !== before;
     }
 
     /** 滚动:无定位 = 主视口滚,失败依次降级内嵌滚动容器(SPA/面板页)与 wheel 事件(劫持翻页页)。moved 供 sidepanel 侧 CDP 兜底判定 */
@@ -1221,7 +1236,7 @@ export default defineContentScript({
 
       // 1) 主滚动视口(document.scrollingElement 兼容 quirks/标准模式)
       const scroller = document.scrollingElement || document.documentElement;
-      if (applyScroll(scroller, dx, dy) > 2) {
+      if (applyScroll(scroller, dx, dy) > 50) {
         return { moved: true, notes: [`Scrolled ${direction} by ${delta}px.`] };
       }
       // 2) 视口中心元素的最近可滚容器(覆盖 main/面板/聊天窗等内嵌滚动)
@@ -1229,7 +1244,7 @@ export default defineContentScript({
       const container = findScrollableAncestor(center instanceof Element ? center : null, vertical);
       let containerEdge = false;
       if (container) {
-        if (applyScroll(container, dx, dy) > 2) {
+        if (applyScroll(container, dx, dy) > 50) {
           return { moved: true, notes: [`Scrolled ${direction} by ${delta}px inside a scrollable container.`] };
         }
         containerEdge = true;
@@ -1239,9 +1254,15 @@ export default defineContentScript({
       if (anyContainer) {
         return { moved: true, notes: [`Scrolled ${direction} by ${delta}px inside a scrollable container.`] };
       }
-      // 4) 劫持页兜底:合成 wheel(翻页型页面鼠标滚动即切页,原生 scrollTop 不动)
-      const wheelMoved = await dispatchWheelScroll(center instanceof Element ? center : null, vertical, signed);
-      const wheelNote = 'Dispatched wheel event to the page; content did not move measurably.';
+      // 4) 劫持/画廊页兜底:合成 wheel 多 tick(真实滚轮惯性;翻页/切卡页面鼠标滚动即切换,原生 scrollTop 不动)
+      const wheelMoved = await dispatchWheelTicks(
+        center instanceof Element ? center : null,
+        vertical,
+        Math.sign(signed) * WHEEL_TICK_PX,
+        wheelTickCount(amount),
+      );
+      const wheelNote =
+        'Dispatched wheel ticks to the page; content did not change measurably.';
       if (containerEdge) {
         return {
           moved: wheelMoved,
