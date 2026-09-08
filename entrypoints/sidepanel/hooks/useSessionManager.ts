@@ -6,6 +6,7 @@ import { migrateLegacySessions, saveSession, deleteSession } from '@/lib/session
 import { resolveAuxModel } from '@/lib/providers';
 import { resolveAiLanguage } from '@/lib/language';
 import { buildProvider } from '@/lib/agent';
+import { disposeRuntime } from '@/lib/sessionRuntime';
 import { useAppStore } from '../store';
 import { flushDraftSaves, dropPendingDraftSave } from '../store/sessionSlice';
 
@@ -307,6 +308,8 @@ export function useSessionManager() {
   const handleDeleteSession = useCallback(
     async (id: string) => {
       // 被删会话的遗留物按归属清理:其排队条目;其挂起门控(无论是否当前视图)冲销
+      // 被删会话的遗留物按归属清理:运行时实例/排队条目/挂起门控(无论是否当前视图)
+      disposeRuntime(id);
       useAppStore.getState().removeQueuedMessagesForSession(id);
       if (useAppStore.getState().gates[id]) {
         resetGates(id);
