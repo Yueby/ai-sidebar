@@ -232,6 +232,16 @@ export default function App() {
   );
 
   // 统计本轮 in-flight / live 消息中需要门控确认的工具调用总数(支持分页 1/N 呈现)
+  // 会话隔离派生:运行/门控归属 = in-flight 声明的会话;仅当与当前视图一致才在视图内呈现
+  // (live 流式气泡/停止按钮/队列条/门控卡),否则后台运行——当前会话完全不受影响
+  const runningSessionId = useAppStore((s) => s.runningSessionId);
+  // 压缩归属:后台轮末压缩不锁当前会话编辑器(发送仍会因全局互斥入队)
+  const isCompactingHere =
+    compact.isCompacting && compact.compactingSessionId === currentSession?.id;
+  const isStreamingHere = runningSessionId !== null && runningSessionId === currentSession?.id;
+  const isGateHere = gate.activeGate != null && gate.activeGate.sessionId === currentSession?.id;
+
+
   const gatePagination = useMemo(() => {
     if (!gate.activeGate) return { step: 1, total: 1 };
     let confirmCallCount = 0;
@@ -333,18 +343,9 @@ export default function App() {
       store.setActiveSessionId(restoredActive);
       void activeSessionIdItem.setValue(restoredActive);
     },
-    [inFlight, isStreaming],
+    [inFlight, isStreaming, compact.isCompacting],
   );
   const latestLocalSessionAt = sessions.reduce((max, s) => Math.max(max, s.updatedAt), 0);
-
-  // 会话隔离派生:运行/门控归属 = in-flight 声明的会话;仅当与当前视图一致才在视图内呈现
-  // (live 流式气泡/停止按钮/队列条/门控卡),否则后台运行——当前会话完全不受影响
-  const runningSessionId = useAppStore((s) => s.runningSessionId);
-  // 压缩归属:后台轮末压缩不锁当前会话编辑器(发送仍会因全局互斥入队)
-  const isCompactingHere =
-    compact.isCompacting && compact.compactingSessionId === currentSession?.id;
-  const isStreamingHere = runningSessionId !== null && runningSessionId === currentSession?.id;
-  const isGateHere = gate.activeGate != null && gate.activeGate.sessionId === currentSession?.id;
 
   // 渲染源 = 会话转录 + 本次运行的 in-flight assistant 消息(仅当归属当前会话;
   // 流式中途切到别的会话时不串显)。live 气泡仍由 MessageList 追加在最后。
