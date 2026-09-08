@@ -1295,6 +1295,7 @@ export default defineContentScript({
       amount?: unknown;
       submit?: unknown;
       mode?: unknown;
+      beforeSummary?: unknown;
     }): Promise<PageActionResult> {
       const libs = await loadAccessibilityLibs();
       if (!libs) return { ok: false, url: location.href, reason: 'not_found' };
@@ -1331,7 +1332,7 @@ export default defineContentScript({
         };
       }
 
-      if (action === 'resolve' || action === 'click' || action === 'fill') {
+      if (action === 'resolve' || action === 'click' || action === 'fill' || action === 'after') {
         const locator = parseLocator(message.locator);
         if (!locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
         const res = resolveLocator(enumerateInteractiveElements(libs), locator);
@@ -1343,7 +1344,21 @@ export default defineContentScript({
         }
         const summary = elementSummary(res.hit);
         if (action === 'resolve') {
-          return { ok: true, url: urlBefore, title: document.title, element: summary, notes: [] };
+          // CDP 可信执行前置:元素中心视口坐标 + 遮挡旗标(命中测试与 occluded fallback 同源判定)
+          const rect = res.hit.el.getBoundingClientRect();
+          const hasRect = rect.width > 0 && rect.height > 0;
+          const cx = Math.round(rect.left + rect.width / 2);
+          const cy = Math.round(rect.top + rect.height / 2);
+          const hitTest = hasRect ? document.elementFromPoint(cx, cy) : null;
+          const occluded = !!(hitTest && !(hitTest === res.hit.el || res.hit.el.contains(hitTest) || hitTest.contains(res.hit.el)));
+          return {
+            ok: true,
+            url: urlBefore,
+            title: document.title,
+            element: summary,
+            notes: [],
+            ...(hasRect ? { centerPoint: { x: cx, y: cy }, occluded } : {}),
+          };
         }
 
         const notes: string[] = [];
@@ -1356,6 +1371,52 @@ export default defineContentScript({
         let fail: { reason: 'option_not_found' | 'unsupported_element' | 'invalid_value'; options?: string[] } | undefined;
         const value = typeof message.value === 'string' ? message.value : '';
         const submit = message.submit === 'enter' ? ('enter' as const) : undefined;
+
+        // CDP 可信执行后置:settle + navigation 检测 + before/after 注记 + fill submit 回读(与合成路径同一套逻辑)
+        if (action === 'after') {
+          const beforeSummary = (message.beforeSummary ?? null) as ResolvedActionElement | null;
+          const urlAfterAct = location.href;
+          notes.push(...(await waitForSettle()));
+          if (location.href !== urlAfterAct) {
+            notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
+          } else if (!notes.some((n) => n.startsWith('navigation_started'))) {
+            try {
+              const after = resolveLocator(enumerateInteractiveElements(libs), locator);
+              if (after.status === 'not_found') {
+                notes.push('after: the locator no longer resolves — the element is gone (often a strong signal the action took effect).');
+              } else if (after.status === 'ok') {
+                const afterSummary = elementSummary(after.hit);
+                if (beforeSummary && afterSummary.preview === beforeSummary.preview) {
+                  notes.push(`after: locator still resolves to <${afterSummary.tagName}> "${afterSummary.preview}" — element state unchanged.`);
+                } else {
+                  notes.push(`after: locator now resolves to <${afterSummary.tagName}> "${afterSummary.preview}" (was "${beforeSummary?.preview ?? '?'}").`);
+                }
+              }
+            } catch {
+              /* After 检查失败不影响动作结果 */
+            }
+          }
+          if (submit === 'enter') {
+            try {
+              const elNow = res.hit.el as HTMLElement;
+              const still =
+                elNow instanceof HTMLInputElement || elNow instanceof HTMLTextAreaElement
+                  ? elNow.value
+                  : (elNow.textContent ?? '');
+              if (still.trim() === '') {
+                notes.push('Input is now empty — the Enter key likely submitted the text.');
+              } else {
+                notes.push(
+                  'Note: the text is still in the input field — the Enter key may NOT have submitted it. Consider clicking the send button instead.',
+                );
+              }
+            } catch {
+              /* 元素已被页面重渲染替换:无法回读,跳过 */
+            }
+          }
+          return { ok: true, url: location.href, title: document.title, element: summary, notes };
+        }
+
         if (action === 'click') {
           notes.push(...performClick(res.hit.el));
         } else {

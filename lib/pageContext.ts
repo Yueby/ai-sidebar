@@ -5,7 +5,7 @@ import {
   READ_PAGE_MESSAGE,
   SEARCH_ELEMENT_MESSAGE,
 } from './types';
-import { dispatchTrustedMouseWheel } from './cdp';
+import { dispatchTrustedMouseClick, dispatchTrustedMouseWheel, dispatchTrustedKey, insertTrustedText } from './cdp';
 
 /**
  * content 侧提取应答:PageContext + 截断标记。
@@ -555,6 +555,10 @@ export type PageActionResult =
       moved?: boolean;
       /** scroll 专用:moved=false 时带视口尺寸(CDP 坐标中心用) */
       viewport?: { width: number; height: number };
+      /** CDP 前置解析:元素中心视口坐标(可信点击/填充用) */
+      centerPoint?: { x: number; y: number };
+      /** CDP 前置解析:中心点被其他元素遮挡(命中测试;遮挡时不走可信点击,避免点到遮挡物上) */
+      occluded?: boolean;
     }
   | {
       ok: false;
@@ -595,11 +599,15 @@ export async function performPageAction(
   }
   // scroll 模式轮次:wheel = 合成滚轮优先(模拟鼠标);CDP 附加失败才切 js = 滚动条快路径
   let currentMode: 'wheel' | 'js' = 'wheel';
+  // click/fill CDP 优先编排:requestAction 可在 resolve/after 间切换;beforeSummary 供 after 注记
+  let requestAction: 'resolve' | 'click' | 'fill' | 'scroll' | 'after' = action;
+  let nextBeforeSummary: unknown = undefined;
   const request = async (): Promise<PageActionResult | undefined> => {
     const res = (await browser.tabs.sendMessage(tabId, {
       type: PAGE_ACTION_MESSAGE,
-      action,
+      action: requestAction,
       mode: currentMode,
+      ...(requestAction === 'after' ? { beforeSummary: nextBeforeSummary } : {}),
       ...params,
     })) as PageActionResult | undefined;
     return res;
@@ -629,6 +637,58 @@ export async function performPageAction(
     title: '',
     notes: [note],
   });
+
+  // click/fill:CDP 可信输入优先(默认 = 模拟真实鼠标);resolve 拿坐标 → CDP 执行 → after 注记;
+  // 任何一步失败(attach 不可用/遮挡/无坐标)降级回原合成路径(单消息,现行为不变)
+  let cdpActed = false;
+  let cdpFirstResult: PageActionResult | null = null;
+  if (action === 'click' || action === 'fill') {
+    const savedAction = requestAction;
+    requestAction = 'resolve';
+    const rOutcome = await requestWithTimeout();
+    requestAction = savedAction;
+    const rRes = rOutcome.kind === 'response' ? rOutcome.res : undefined;
+    if (
+      rRes?.ok === true &&
+      typeof rRes.centerPoint?.x === 'number' &&
+      typeof rRes.centerPoint?.y === 'number' &&
+      rRes.occluded !== true
+    ) {
+      const cx = rRes.centerPoint.x;
+      const cy = rRes.centerPoint.y;
+      const fillValue = typeof params.value === 'string' ? params.value : '';
+      if (action === 'click') {
+        cdpActed = await dispatchTrustedMouseClick(tabId, cx, cy);
+      } else {
+        // fill:可信点击聚焦 → Ctrl+A 全选 → Backspace 清空 → insertText → (Enter 提交)
+        cdpActed = await dispatchTrustedMouseClick(tabId, cx, cy);
+        if (cdpActed) cdpActed = await dispatchTrustedKey(tabId, 'a', 'KeyA', 65, 2);
+        if (cdpActed) cdpActed = await dispatchTrustedKey(tabId, 'Backspace', 'Backspace', 8);
+        if (cdpActed) cdpActed = await insertTrustedText(tabId, fillValue);
+        if (cdpActed && params.submit === 'enter') cdpActed = await dispatchTrustedKey(tabId, 'Enter', 'Enter', 13);
+      }
+      if (cdpActed) {
+        // after 注记:content 侧 settle + before/after 对比 + submit 回读(与合成路径同一套)
+        nextBeforeSummary = rRes.element ?? null;
+        requestAction = 'after';
+        const aOutcome = await requestWithTimeout();
+        requestAction = savedAction;
+        const aRes = aOutcome.kind === 'response' ? aOutcome.res : undefined;
+        const aNotes = aRes?.ok === true && Array.isArray(aRes.notes) ? aRes.notes.filter((n): n is string => typeof n === 'string') : [];
+        const actNote =
+          action === 'click'
+            ? 'cdp_trusted_click: dispatched trusted mouse click via CDP (like a real mouse).'
+            : 'cdp_trusted_fill: focused and typed via CDP (like a real keyboard); value replaced and input/change events fired.';
+        cdpFirstResult = {
+          ok: true,
+          url: aRes?.ok === true && typeof aRes.url === 'string' ? aRes.url : url,
+          title: aRes?.ok === true && typeof aRes.title === 'string' ? aRes.title : '',
+          element: normalizeActionElement(rRes.element),
+          notes: [actNote, ...aNotes],
+        };
+      }
+    }
+  }
 
   let outcome = await requestWithTimeout();
   if (outcome.kind === 'timeout') {
@@ -686,6 +746,9 @@ export async function performPageAction(
       }
     }
   }
+  // CDP 可信执行成功链:直接返回(resolve → CDP act → after 已完成,notes 已含注记)
+  if (cdpFirstResult) return cdpFirstResult;
+
   const res = outcome.kind === 'response' ? outcome.res : undefined;
   if (
     !res ||

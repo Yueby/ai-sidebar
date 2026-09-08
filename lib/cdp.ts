@@ -67,6 +67,10 @@ function scheduleDetach(idleMs: number): void {
  * 可信滚轮:CDP Input.dispatchMouseEvent(mouseWheel)。
  * 坐标 = viewport CSS 坐标;成功返回 true(事件已投递,不等动画/默认滚动完成)。
  */
+/**
+ * 可信滚轮:CDP Input.dispatchMouseEvent(mouseWheel)。
+ * 坐标 = viewport CSS 坐标;成功返回 true(事件已投递,不等动画/默认滚动完成)。
+ */
 export async function dispatchTrustedMouseWheel(
   tabId: number,
   x: number,
@@ -83,6 +87,91 @@ export async function dispatchTrustedMouseWheel(
       y: Math.round(y),
       deltaX: Math.round(deltaX),
       deltaY: Math.round(deltaY),
+    });
+    scheduleDetach(60_000);
+    return true;
+  } catch {
+    attachedTabId = null;
+    return false;
+  }
+}
+
+/**
+ * 可信点击:CDP Input.dispatchMouseEvent(mousePressed + mouseReleased),坐标 = viewport CSS 像素。
+ * 与真实鼠标等价(含页面校验 isTrusted 的监听器)。
+ */
+export async function dispatchTrustedMouseClick(
+  tabId: number,
+  x: number,
+  y: number,
+): Promise<boolean> {
+  const attached = await ensureAttached(tabId);
+  if (!attached) return false;
+  try {
+    const cx = Math.round(x);
+    const cy = Math.round(y);
+    await browser.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: cx,
+      y: cy,
+    });
+    await browser.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: cx,
+      y: cy,
+      button: 'left',
+      buttons: 1,
+      clickCount: 1,
+    });
+    await browser.debugger.sendCommand({ tabId }, 'Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: cx,
+      y: cy,
+      button: 'left',
+      buttons: 0,
+      clickCount: 1,
+    });
+    scheduleDetach(60_000);
+    return true;
+  } catch {
+    attachedTabId = null;
+    return false;
+  }
+}
+
+/** 可信文本插入:CDP Input.insertText(需先聚焦,由调用方以可信点击完成)。生成可信 beforeinput/input。 */
+export async function insertTrustedText(tabId: number, text: string): Promise<boolean> {
+  const attached = await ensureAttached(tabId);
+  if (!attached) return false;
+  try {
+    await browser.debugger.sendCommand({ tabId }, 'Input.insertText', { text });
+    scheduleDetach(60_000);
+    return true;
+  } catch {
+    attachedTabId = null;
+    return false;
+  }
+}
+
+/** 可信按键(如 Enter 提交 / Ctrl+A 全选):CDP Input.dispatchKeyEvent(rawKeyDown + keyUp)。 */
+export async function dispatchTrustedKey(
+  tabId: number,
+  key: string,
+  code: string,
+  virtualKeyCode: number,
+  modifiers: 0 | 1 | 2 | 4 | 8 = 0,
+): Promise<boolean> {
+  const attached = await ensureAttached(tabId);
+  if (!attached) return false;
+  try {
+    const base = { key, code, modifiers, windowsVirtualKeyCode: virtualKeyCode, nativeVirtualKeyCode: virtualKeyCode };
+    await browser.debugger.sendCommand({ tabId }, 'Input.dispatchKeyEvent', {
+      type: 'rawKeyDown',
+      ...base,
+    });
+    await browser.debugger.sendCommand({ tabId }, 'Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      ...base,
     });
     scheduleDetach(60_000);
     return true;
