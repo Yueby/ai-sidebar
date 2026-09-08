@@ -528,6 +528,7 @@ export default function App() {
           {/* Composer:按会话重挂载(key),草稿输入/引用派生自当前会话 draft */}
           <ChatInput
             key={`${activeSessionId ?? 'none'}#${composerNonce}`}
+            overlap={!gate.activeGate && !slashHelpOpen}
             onSend={(text) => {
               followUps.clearSuggestions();
               void chat.handleSendMessage(text);

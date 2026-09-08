@@ -41,6 +41,7 @@ import { TabRefBar } from './TabRefBar';
 import { InlineBadge } from './extensions/InlineBadge';
 import { buildBadgeAttrs, buildUrlBadgeAttrs, extractEditorState, isSingleUrlText } from './extensions/editorSerialize';
 import { FaviconIcon } from './TabRefBar';
+import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -83,6 +84,8 @@ interface ChatInputProps {
   onCompact?: (customInstructions?: string) => void;
   /** 斜杠命令分发:/compact /clear /help;命令文本不进草稿、不走 onSend */
   onCommand?: (name: string, args: string) => void;
+  /** 是否启用与上方对话区的负 margin 叠压渐变衔接(默认 true; 审批槽/卡片插入时自动置 false 避让) */
+  overlap?: boolean;
 }
 
 const REASONING_LABEL_MAP = REASONING_LEVEL_LABELS;
@@ -123,6 +126,7 @@ export function ChatInput({
   isCompacting,
   onCompact,
   onCommand,
+  overlap = true,
 }: ChatInputProps) {
   // 提取文本内部 state:由编辑器 onUpdate 驱动(序列化含 <picked-element …/> 块原文),
   // 挂载时用会话草稿 seed(App 以 key=sessionId 重挂载),变化经 onInputChange 写回草稿。
@@ -487,13 +491,22 @@ export function ChatInput({
   );
 
   return (
-    <div className="bg-background p-2.5 shrink-0">
+    <div
+      className={cn(
+        'relative z-10 shrink-0 px-2.5 pb-2.5 transition-[margin,padding] duration-150 ease-out',
+        overlap
+          ? '-mt-9 pt-9 bg-gradient-to-b from-transparent via-background/80 via-20% to-background pointer-events-none'
+          : 'pt-2.5 bg-background',
+      )}
+    >
       {/* 标签页引用区 (独立小控件, 位于输入框卡片上方, 底部被输入框轻微压住层叠) */}
-      <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
+      <div className="pointer-events-auto">
+        <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
+      </div>
 
       {/* 队列提示条: 流式期间且队列非空时展示 */}
       {isStreaming && queuedMessages && queuedMessages.length > 0 && (
-        <div className="mb-1.5 flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] text-muted-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+        <div className="pointer-events-auto mb-1.5 flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] text-muted-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
           <div className="flex items-center justify-between font-medium text-foreground">
             <span className="flex items-center gap-1.5">
               <span className="size-1.5 rounded-full bg-primary animate-pulse" />
@@ -538,7 +551,7 @@ export function ChatInput({
 
       {/* 推荐跟进建议 chips: 空闲时展示 (与流式队列提示条同槽位互斥) */}
       {!isStreaming && followUpSuggestions && followUpSuggestions.length > 0 && (
-        <div className="mb-1.5 flex flex-wrap items-center gap-1.5 px-0.5 py-0.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+        <div className="pointer-events-auto mb-1.5 flex flex-wrap items-center gap-1.5 px-0.5 py-0.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
           <Sparkles className="size-3 text-muted-foreground shrink-0 ml-0.5" />
           <TooltipProvider delay={200}>
             {followUpSuggestions.map((item, idx) => (
@@ -566,7 +579,7 @@ export function ChatInput({
 
       {/* Input container (TipTap 编辑器 + 底部工具栏) */}
       <div
-        className={`relative z-10 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs transition-[box-shadow,border-color] duration-200 ease-out focus-within:ring-1 focus-within:ring-ring ${
+        className={`pointer-events-auto relative z-10 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs transition-[box-shadow,border-color] duration-200 ease-out focus-within:ring-1 focus-within:ring-ring ${
           refTabs &&
           refTabs.length > 0 &&
           (!queuedMessages || queuedMessages.length === 0) &&

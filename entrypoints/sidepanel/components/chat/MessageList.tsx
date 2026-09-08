@@ -288,7 +288,7 @@ export function MessageList({
                   同一消息对象引用(pi agent-loop.ts:355/368),React 才能跨 live→in-flight→落盘
                   复用同一 MessageItem 实例(live 槽键 = 未来物化位置);若 pi 升级改变此行为
                   (消息对象在转写间重建),流式交接会重现闪烁。 */}
-              <MessageScrollerContent className="gap-1 pb-4">
+              <MessageScrollerContent className="gap-1 pb-12">
                 {filteredMessages.map((msg, i) => (
                   <MessageScrollerItem
                     key={`msg-${i}`}
@@ -348,7 +348,7 @@ export function MessageList({
                     <MessageScrollerButton
                       direction="end"
                       size="icon"
-                      className="bottom-3 z-20 size-7 rounded-full border border-border shadow-md"
+                      className="bottom-12 z-20 size-7 rounded-full border border-border shadow-md"
                       aria-label={i18n.t('messages.backToBottom')}
                     />
                   }
