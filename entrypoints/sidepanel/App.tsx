@@ -466,7 +466,6 @@ export default function App() {
               void chat.handleEditResend(timestamp, newText);
             }}
             canEditMessage={canEditMessage}
-            followUpSuggestions={followUps.suggestions}
           />
 
           {/* 槽位区:审批槽位 → /help 卡(均为 in-flow,挤压列表零遮挡) */}
@@ -537,6 +536,8 @@ export default function App() {
             isStreaming={isStreaming}
             queuedMessages={queuedMessages}
             onRemoveQueuedMessage={removeQueuedMessage}
+            followUpSuggestions={followUps.suggestions}
+            onSelectFollowUp={handleSelectPrompt}
             settings={settings}
             onSelectModel={handleSelectModel}
             onChangeReasoningLevel={handleChangeReasoningLevel}

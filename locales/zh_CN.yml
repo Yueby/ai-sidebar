@@ -81,7 +81,6 @@ messages:
   goSettings: 前往设置
   starterPrompts: 推荐快捷指令
   refreshPrompts: 换一批
-  followUps: 推荐跟进
   backToBottom: 回到底部
   current: 当前
   refCount: 引用 {total} 项

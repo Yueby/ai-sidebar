@@ -14,7 +14,9 @@ import {
   Check,
   Sliders,
   SquareMousePointer,
+  Sparkles,
 } from 'lucide-react';
+import type { FollowUpSuggestion } from '@/lib/followUpSuggestions';
 import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
 import { REASONING_LEVEL_LABELS } from '@/lib/types';
 import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
@@ -22,6 +24,7 @@ import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { listCandidateTabs, getActiveTabMeta, type RefTab } from '@/lib/pageContext';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +50,10 @@ interface ChatInputProps {
   queuedMessages?: string[];
   /** 移除某条排队消息 */
   onRemoveQueuedMessage?: (index: number) => void;
+  /** 推荐跟进建议:AI 回复完成后显示在输入框上方 */
+  followUpSuggestions?: FollowUpSuggestion[];
+  /** 点击跟进建议填入输入框 */
+  onSelectFollowUp?: (prompt: string) => void;
   settings: Settings;
   onSelectModel: (providerId: string, modelId: string) => void;
   onChangeReasoningLevel: (level: ReasoningLevel) => void;
@@ -94,6 +101,8 @@ export function ChatInput({
   isStreaming,
   queuedMessages,
   onRemoveQueuedMessage,
+  followUpSuggestions,
+  onSelectFollowUp,
   settings,
   onSelectModel,
   onChangeReasoningLevel,
@@ -527,10 +536,43 @@ export function ChatInput({
         </div>
       )}
 
+      {/* 推荐跟进建议 chips: 空闲时展示 (与流式队列提示条同槽位互斥) */}
+      {!isStreaming && followUpSuggestions && followUpSuggestions.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5 px-0.5 py-0.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <Sparkles className="size-3 text-muted-foreground shrink-0 ml-0.5" />
+          <TooltipProvider delay={200}>
+            {followUpSuggestions.map((item, idx) => (
+              <Tooltip key={idx}>
+                <TooltipTrigger
+                  render={
+                    <Badge
+                      variant="outline"
+                      render={<button type="button" />}
+                      onClick={() => onSelectFollowUp?.(item.prompt)}
+                      className="h-auto py-1 px-2.5 text-xs font-normal rounded-full text-foreground hover:bg-muted transition-colors text-left select-none cursor-default"
+                    />
+                  }
+                >
+                  <span className="truncate max-w-[240px]">{item.title}</span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {item.prompt}
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </TooltipProvider>
+        </div>
+      )}
+
       {/* Input container (TipTap 编辑器 + 底部工具栏) */}
       <div
         className={`relative z-10 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs transition-[box-shadow,border-color] duration-200 ease-out focus-within:ring-1 focus-within:ring-ring ${
-          refTabs && refTabs.length > 0 && (!queuedMessages || queuedMessages.length === 0) ? '-mt-2' : ''
+          refTabs &&
+          refTabs.length > 0 &&
+          (!queuedMessages || queuedMessages.length === 0) &&
+          (!followUpSuggestions || followUpSuggestions.length === 0)
+            ? '-mt-2'
+            : ''
         }`}
       >
 
