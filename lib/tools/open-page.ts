@@ -22,9 +22,10 @@ const OPEN_PAGE_PARAMS = Type.Object({
  * 新 tabId 注册进 agent 开启标签页注册表(白名单三源之一),后续 read_page/
  * fill_element(tabId) 可直接寻址;grantScope = open_page@*(勾选一次本会话开页免确认)。
  */
-export function createOpenPageToolDefinition(): AgentTool<typeof OPEN_PAGE_PARAMS> & {
+export function createOpenPageToolDefinition(sessionId?: string): AgentTool<typeof OPEN_PAGE_PARAMS> & {
   risk: ToolRisk;
 } {
+  const gateForRun = (req: Parameters<typeof requestGate>[0]) => requestGate(req, sessionId ?? '');
   return {
     name: 'open_page',
     label: toolLabel('open_page'),
@@ -51,7 +52,7 @@ export function createOpenPageToolDefinition(): AgentTool<typeof OPEN_PAGE_PARAM
       // open_page 同 URL 曾叠加出第二个重复 tab)
       const existing = await findTabByUrl(url);
 
-      const approved = await requestGate({
+      const approved = await gateForRun({
         kind: 'confirm',
         toolName: 'open_page',
         label: toolLabel('open_page'),

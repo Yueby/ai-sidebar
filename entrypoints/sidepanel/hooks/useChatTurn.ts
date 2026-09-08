@@ -22,82 +22,98 @@ import { parsePageRefs } from '@/lib/pageRefs';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 
+/** 冻结的入队负载(队列出队重放用:不读会话后续被编辑的草稿) */
+interface FrozenPayload {
+  refTabs: RefTab[];
+  pickedElements: PickedElement[];
+}
+
 /**
  * 对话轮次域 hook(编排层):handleSendMessage(唯一发送入口)/handleStopGeneration/handleEditResend。
- * turnSeqRef(turn 身份守卫)/abortControllerRef/compactRequestedRef 留本 hook;
- * 流式状态/in-flight 在 store/chatSlice,门控与错误在 store 直读,会话经 getState() 取最新值。
  *
- * 域服务边界:store=共享状态唯一家(流式态/in-flight 在 chatSlice,activeGate 在 gateSlice);
- * 编排 hook=异步流程(runAgentTurn/saveSession 时序)+ ephemeral ref(turnSeqRef/abortControllerRef/
- * compactRequestedRef);派生值=消费点就地 useMemo。
+ * 并发模型:每个会话独立运行(runs[sessionId]),turn 守卫/abort/节流/发送锁/压缩标记全部按会话隔离。
+ * A 会话流式期间,B 会话发送**立即执行**,互不干扰;仅当目标会话自身忙时才入队(该会话轮末出队)。
  */
 export function useChatTurn(params: {
-  /** 上下文压缩进行中(压缩/发送互斥) */
+  /** 压缩进行中(全局互斥:同一时刻至多一个压缩) */
   isCompacting: boolean;
-  /** 轮末自主压缩触发(互斥守卫在 useCompact;后台轮传运行会话 id,压缩跟随归属) */
+  /** 压缩目标会话(压缩期间该会话不可发送;其他会话不受影响) */
+  compactingSessionId?: string | null;
+  /** 轮末自主压缩触发(按运行会话) */
   onAutoCompact: (sessionId: string) => void;
   /** 首轮对话结束后自动 AI 命名回调(若未手动命名) */
   onAutoAiTitle?: (sessionId: string) => void;
-  /** 轮次正常成功完成回调(非打断、非错误、无队列积压) */
+  /** 轮次正常成功完成回调(非打断、非错误、无本会话队列积压) */
   onTurnSuccess?: (sessionId: string, session: Session) => void;
 }) {
-  const { isCompacting, onAutoCompact, onAutoAiTitle, onTurnSuccess } = params;
+  const { isCompacting, compactingSessionId, onAutoCompact, onAutoAiTitle, onTurnSuccess } = params;
 
-  // 门控/错误域:store 直读(一期收敛);isStreaming 参与守卫判定,需响应式订阅
-  const isStreaming = useAppStore((s) => s.isStreaming);
-  const hasPendingGate = useAppStore((s) => s.activeGate !== null);
-  const dismissPendingGates = useAppStore((s) => s.dismissPendingGates);
-  const resetResolvedGateCount = useAppStore((s) => s.resetResolvedGateCount);
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
-  // turn 身份守卫:打断重发后旧 turn 的拆卸链与新 turn 并发,seq 不匹配者不得触碰共享状态
-  const turnSeqRef = useRef(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  // 流式增量节流:token 级 message_update 每次都全量渲染,长对话会卡;攒最新值定期冲刷,终值不丢
+  // ── per-session 临时状态(React ref,不入 store)──────────────────────────
+  /** turn 身份守卫:同会话打断重发后旧 turn 的拆卸链失效(按会话独立) */
+  const turnSeqRef = useRef<Record<string, number>>({});
+  /** 各会话的在途请求(停止按钮按会话中止) */
+  const abortControllersRef = useRef<Record<string, AbortController>>({});
+  // 流式增量节流(token 级增量直推 store 会让长对话全列表重绘卡顿)
   const STREAM_FLUSH_INTERVAL_MS = 50;
-  const streamThrottleRef = useRef<{ text: string; thinking: string; timer: ReturnType<typeof setTimeout> | null }>({
-    text: '',
-    thinking: '',
-    timer: null,
-  });
-  // AI 自主压缩标记:compact_context 工具 execute 只置位;轮末由本 hook 消费
-  const compactRequestedRef = useRef(false);
+  const streamThrottleRef = useRef<
+    Record<string, { text: string; thinking: string; timer: ReturnType<typeof setTimeout> | null }>
+  >({});
+  /** AI 自主压缩标记(compact_context 工具置位;按会话,轮末消费) */
+  const compactRequestedRef = useRef<Record<string, boolean>>({});
+  /** 同步发送锁(按会话):busy 状态在首个 await 之后才置位,并发调用会双开 turn */
+  const sendingRef = useRef<Set<string>>(new Set());
 
   // 引用稳定的 handleSendMessage 指针(避免循环依赖,供出队延后调用;可指定目标会话后台发送)
   const handleSendMessageRef = useRef<
-    (text: string, targetSessionId?: string, frozen?: { refTabs: RefTab[]; pickedElements: PickedElement[] }) => Promise<void>
+    (text: string, targetSessionId?: string, frozen?: FrozenPayload) => Promise<void>
   >(async () => {});
-  // 同步发送锁:busy 状态在首个 await 之后才置位,并发调用会双开 turn
-  const sendingRef = useRef(false);
 
-  // 检查并出队发送下一条排队消息(按条目归属会话后台发送,不切换当前视图)
-  const checkAndDispatchQueue = useCallback(() => {
-    const s = useAppStore.getState();
-    if (s.queuedMessages.length === 0) return;
-    // 若当前正在流式/门控挂起/压缩中/另有发送在准备，暂缓出队
-    if (s.isStreaming || s.activeGate !== null || isCompacting || sendingRef.current) return;
-    const next = s.dequeueMessage();
-    if (next) {
+  /** 某会话当前是否忙(自身有 run/门控/准备中/压缩中) */
+  const isSessionBusy = useCallback(
+    (sessionId: string): boolean => {
+      const s = useAppStore.getState();
+      return (
+        !!s.runs[sessionId] ||
+        !!s.gates[sessionId] ||
+        sendingRef.current.has(sessionId) ||
+        (isCompacting && compactingSessionId === sessionId)
+      );
+    },
+    [isCompacting, compactingSessionId],
+  );
+
+  /** 出队指定会话的排队消息(该会话空闲时;不切换当前视图) */
+  const dispatchQueueFor = useCallback(
+    (sessionId: string) => {
+      if (isSessionBusy(sessionId)) return;
+      const s = useAppStore.getState();
+      const item = s.queuedMessages.find((q) => q.sessionId === sessionId);
+      if (!item) return;
+      s.removeQueuedMessage(item.id);
       if (import.meta.env.DEV) {
-        console.log(`[turn] dispatch queued message -> session ${next.sessionId}: "${next.text.slice(0, 30)}..."`);
+        console.log(`[turn] dispatch queued message -> session ${sessionId}: "${item.text.slice(0, 30)}..."`);
       }
-      void handleSendMessageRef.current(next.text, next.sessionId, {
-        refTabs: next.refTabs ?? [],
-        pickedElements: next.pickedElements ?? [],
+      void handleSendMessageRef.current(item.text, sessionId, {
+        refTabs: item.refTabs ?? [],
+        pickedElements: item.pickedElements ?? [],
       });
-    }
-  }, [isCompacting]);
+    },
+    [isSessionBusy],
+  );
 
-  // 压缩结束后若有积压队列，自动尝试出队
+  /** 压缩结束后补出队(压缩可能压住了该会话的排队消息) */
   const prevCompactingRef = useRef(isCompacting);
   useEffect(() => {
     if (prevCompactingRef.current && !isCompacting) {
+      const target = compactingSessionId;
       setTimeout(() => {
-        checkAndDispatchQueue();
+        if (target) dispatchQueueFor(target);
       }, 0);
     }
     prevCompactingRef.current = isCompacting;
-  }, [isCompacting, checkAndDispatchQueue]);
+  }, [isCompacting, compactingSessionId, dispatchQueueFor]);
 
   // 共享转录执行内核:runAgentTurn 流式循环、事件透出、in-flight 物化、非破坏落盘与异常清理。
   // handleSendMessage 与 handleEditResend 共用本逻辑，保证 turn 身份守卫与时序一致。
@@ -122,28 +138,23 @@ export function useChatTurn(params: {
         shouldTriggerAutoAiTitle,
         active,
       } = args;
+      const sid = session.id;
 
-      // turn 身份守卫:自此新 turn 接管,旧 turn 拆卸链的 setInFlight(null)/落盘/finally 全部失效
-      const seq = ++turnSeqRef.current;
-      const { setIsStreaming, setStreamingContent, setStreamingThinking, setActiveToolNames, setIsCancelled, setInFlight } = useAppStore.getState();
-      setIsStreaming(true);
-      useAppStore.getState().setRunningSessionId(session.id);
-      setStreamingContent('');
-      setStreamingThinking('');
-      setActiveToolNames([]);
-      setIsCancelled(false);
+      // turn 身份守卫(按会话):自此新 turn 接管,同会话旧 turn 的拆卸链全部失效
+      const seq = (turnSeqRef.current[sid] = (turnSeqRef.current[sid] ?? 0) + 1);
+      const st = useAppStore.getState();
+      st.startRun(sid);
+      st.resetResolvedGateCount(sid);
       // 只清归属本会话或全局的错误;别的会话的错误保留(分流提醒仍在)
       const errOwner = useAppStore.getState().errorSessionId;
-      if (errOwner === null || errOwner === session.id) setErrorMessage(null);
-      resetResolvedGateCount();
+      if (errOwner === null || errOwner === sid) setErrorMessage(null);
       // 上一轮遗留的节流定时器作废(终值已随 message_end 物化或被轮末清空)
-      if (streamThrottleRef.current.timer) clearTimeout(streamThrottleRef.current.timer);
-      streamThrottleRef.current = { text: '', thinking: '', timer: null };
-      // 新一轮运行:清空 in-flight 并声明归属会话
-      setInFlight({ sessionId: session.id, messages: [] });
+      const prevThrottle = streamThrottleRef.current[sid];
+      if (prevThrottle?.timer) clearTimeout(prevThrottle.timer);
+      streamThrottleRef.current[sid] = { text: '', thinking: '', timer: null };
 
       const abortCtrl = new AbortController();
-      abortControllerRef.current = abortCtrl;
+      abortControllersRef.current[sid] = abortCtrl;
       // AI 自主压缩标记(try 块内置位消费;finally 需访问,故提升到 try 外)
       let autoCompactPending = false;
 
@@ -155,8 +166,7 @@ export function useChatTurn(params: {
           // messagesWithUser 预落盘保持全量(非破坏契约,见 finalize)
           history: effectiveMessages(historyBeforeUser, effectiveCompaction),
           userMessage,
-          // 实时引用(含 tabId)供本轮 read_page/read_element 工具用;
-          // agent 侧再并入历史块,追问旧页面时句柄不丢
+          // 实时引用(含 tabId)供本轮 read_page/read_element 工具用;agent 侧再并入历史块
           refTabs,
           pickedElements,
           thinkingLevel: resolveReasoningLevel(active.model, useAppStore.getState().settings.reasoningLevel),
@@ -166,19 +176,18 @@ export function useChatTurn(params: {
           rules: useAppStore.getState().settings.rules,
           // 用户自定义系统提示词(常驻注入)
           systemPrompt: useAppStore.getState().settings.systemPrompt,
-          sessionId: session.id,
+          sessionId: sid,
           signal: abortCtrl.signal,
           // search_web 工具注册配置:设置里配置了可用搜索源才下发
           webSearch: useAppStore.getState().settings.webSearch,
           // compact_context 工具 execute 只置标记;轮末由本 hook 消费
           onCompactContext: () => {
-            compactRequestedRef.current = true;
+            compactRequestedRef.current[sid] = true;
           },
           onEvent: (event) => {
             if (event.type === 'message_update' && event.message.role === 'assistant') {
-              // 打断重发后,旧 turn 的 aborted partial 事件流必须静默——
-              // 同会话守卫拦不住跨 turn,ghost 半截回答会悬空 + finalize 索引回移重挂载
-              if (seq !== turnSeqRef.current) return;
+              // 同会话旧 turn(打断重发)的 aborted partial 事件流必须静默
+              if (seq !== turnSeqRef.current[sid]) return;
               const text = event.message.content
                 .filter((b) => b.type === 'text')
                 .map((b) => b.text)
@@ -187,59 +196,37 @@ export function useChatTurn(params: {
                 .filter((b) => b.type === 'thinking')
                 .map((b) => b.thinking)
                 .join('');
-              // 攒最新值,定期冲刷(token 级增量直推 store 会让长对话全列表重绘卡顿)
-              const st = streamThrottleRef.current;
-              st.text = text;
-              st.thinking = thinking;
-              if (!st.timer) {
-                st.timer = setTimeout(() => {
-                  st.timer = null;
-                  const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
-                  setStreamText(st.text);
-                  setStreamThink(st.thinking);
+              const th = streamThrottleRef.current[sid] ?? { text: '', thinking: '', timer: null };
+              streamThrottleRef.current[sid] = th;
+              th.text = text;
+              th.thinking = thinking;
+              if (!th.timer) {
+                th.timer = setTimeout(() => {
+                  th.timer = null;
+                  useAppStore.getState().patchRun(sid, { content: th.text, thinking: th.thinking });
                 }, STREAM_FLUSH_INTERVAL_MS);
               }
             } else if (event.type === 'message_end' && event.message.role === 'assistant') {
-              // 同上,旧 turn 的 message_end 不得进新 turn 的 in-flight
-              if (seq !== turnSeqRef.current) return;
+              if (seq !== turnSeqRef.current[sid]) return;
               if (import.meta.env.DEV) {
-                const prevLen = useAppStore.getState().inFlight?.messages.length ?? -1;
-                console.log(`[turn] msg_end assistant: inFlight ${prevLen}->+1 (seq ${seq})`);
+                const prevLen = useAppStore.getState().runs[sid]?.inFlight.length ?? -1;
+                console.log(`[turn:${sid}] msg_end assistant: inFlight ${prevLen}->+1 (seq ${seq})`);
               }
               // 一条 assistant 完成:整体进 in-flight(思考/toolCall/正文齐全),
-              // 同一批 setState 里重置 live 流式态,准备承载下一 turn —— 交接无闪烁
-              const done = event.message;
-              useAppStore.getState().setInFlight((prev) =>
-                prev && prev.sessionId === session.id
-                  ? { ...prev, messages: [...prev.messages, done as ChatMessage] }
-                  : prev
-              );
-              if (streamThrottleRef.current.timer) clearTimeout(streamThrottleRef.current.timer);
-              streamThrottleRef.current = { text: '', thinking: '', timer: null };
-              const { setStreamingContent: setStreamText, setStreamingThinking: setStreamThink } = useAppStore.getState();
-              setStreamText('');
-              setStreamThink('');
+              // 同批重置 live 流式态,准备承载下一 turn —— 交接无闪烁
+              useAppStore.getState().appendRunInFlight(sid, event.message as ChatMessage);
+              const th = streamThrottleRef.current[sid];
+              if (th?.timer) clearTimeout(th.timer);
+              streamThrottleRef.current[sid] = { text: '', thinking: '', timer: null };
+              useAppStore.getState().patchRun(sid, { content: '', thinking: '' });
             } else if (event.type === 'message_end' && event.message.role === 'toolResult') {
               // 工具结果即时入 in-flight:工具卡立刻显示返回结果,不等整轮结束
-              // (转录落盘时同一消息对象引用已在 in-flight 中,零重挂载)
-              if (seq !== turnSeqRef.current) return;
-              if (import.meta.env.DEV) {
-                console.log(
-                  `[turn] msg_end toolResult: inFlight ${useAppStore.getState().inFlight?.messages.length ?? '?'}->+1 (seq ${seq})`,
-                );
-              }
-              const done = event.message;
-              useAppStore.getState().setInFlight((prev) =>
-                prev && prev.sessionId === session.id
-                  ? { ...prev, messages: [...prev.messages, done as ChatMessage] }
-                  : prev
-              );
+              if (seq !== turnSeqRef.current[sid]) return;
+              useAppStore.getState().appendRunInFlight(sid, event.message as ChatMessage);
             } else if (event.type === 'tool_execution_start') {
-              useAppStore.getState().setActiveToolNames((prev) =>
-                prev.includes(event.toolName) ? prev : [...prev, event.toolName]
-              );
+              useAppStore.getState().addRunTool(sid, event.toolName);
             } else if (event.type === 'tool_execution_end') {
-              useAppStore.getState().setActiveToolNames((prev) => prev.filter((n) => n !== event.toolName));
+              useAppStore.getState().removeRunTool(sid, event.toolName);
             }
           },
         });
@@ -247,19 +234,17 @@ export function useChatTurn(params: {
         // 用完整转录落盘(含 assistant/toolResult,回放零转换;user 消息带 refSnapshot)。
         // 基于该会话的「最新」内存副本:流式期间用户可能已在草稿中添加新引用,不能覆盖。
         // 若会话已被删除(流式中途删掉当前会话),不复活,丢弃本轮转录。
-        // 已被新 turn 接管(打断重发)时,旧转录不落盘、不清理新 turn 的 in-flight;
-        // 被打断轮的压缩请求标记作废,不得在下一轮末触发付费压缩
-        if (seq !== turnSeqRef.current) {
-          compactRequestedRef.current = false;
+        if (seq !== turnSeqRef.current[sid]) {
+          compactRequestedRef.current[sid] = false;
           return;
         }
-        // AI 自主压缩标记:本 turn 置位的消费归属本 turn(新 turn 的标记留给新 turn)
-        autoCompactPending = compactRequestedRef.current;
-        compactRequestedRef.current = false;
-        const latest = useAppStore.getState().sessions.find((s) => s.id === session.id);
+        // AI 自主压缩标记:本 turn 置位的消费归属本 turn
+        autoCompactPending = compactRequestedRef.current[sid] === true;
+        compactRequestedRef.current[sid] = false;
+        const latest = useAppStore.getState().sessions.find((s) => s.id === sid);
         if (import.meta.env.DEV) {
           console.log(
-            `[turn] finalize: latest msgs=${latest?.messages.length ?? '?'} result.newMessages=${result.newMessages.length} stopReason=${result.errorMessage ? 'error' : 'ok'} inFlight=${JSON.stringify(useAppStore.getState().inFlight?.messages.length ?? null)}`,
+            `[turn:${sid}] finalize: latest msgs=${latest?.messages.length ?? '?'} result.newMessages=${result.newMessages.length} stopReason=${result.errorMessage ? 'error' : 'ok'} inFlight=${useAppStore.getState().runs[sid]?.inFlight.length ?? null}`,
           );
         }
         if (latest) {
@@ -273,18 +258,14 @@ export function useChatTurn(params: {
             updatedAt: Date.now(),
           };
           // 草稿以内存最新副本为准(后台出队落盘期间用户可能已在编辑该会话草稿)
-          const latestDraft = useAppStore
-            .getState()
-            .sessions.find((s) => s.id === finalizedSession.id)?.draft;
+          const latestDraft = useAppStore.getState().sessions.find((s) => s.id === sid)?.draft;
           if (latestDraft) finalizedSession.draft = latestDraft;
-          dropPendingDraftSave(finalizedSession.id);
+          dropPendingDraftSave(sid);
           useAppStore.getState().setSessions(
-            useAppStore.getState().sessions.map((s) =>
-              s.id === finalizedSession.id ? finalizedSession : s
-            )
+            useAppStore.getState().sessions.map((s) => (s.id === sid ? finalizedSession : s)),
           );
-          // 完整转录已含 in-flight 各条 assistant → 同批清空 inFlight,避免重复渲染闪烁
-          useAppStore.getState().setInFlight(null);
+          // 完整转录已含 in-flight 各条 assistant → 同批清空该会话 inFlight,避免重复渲染闪烁
+          useAppStore.getState().clearRunInFlight(sid);
           await saveSession(finalizedSession);
 
           // 首轮对话成功完成:尝试静默自动 AI 命名一次(若失败则保持目前的截断标题)
@@ -294,88 +275,77 @@ export function useChatTurn(params: {
             }, 100);
           }
 
-          // 轮次成功完成且无打断、无错误、无排队积压: 触发跟进建议生成
-          const hasQueue = useAppStore.getState().queuedMessages.length > 0;
+          // 轮次成功完成且无打断、无错误、无本会话排队积压: 触发跟进建议生成
+          const hasQueue = useAppStore
+            .getState()
+            .queuedMessages.some((q) => q.sessionId === finalizedSession.id);
           if (!abortCtrl.signal.aborted && !result.errorMessage && !hasQueue && onTurnSuccess) {
             setTimeout(() => {
               onTurnSuccess(finalizedSession.id, finalizedSession);
             }, 50);
           }
         } else {
-          useAppStore.getState().setInFlight(null);
+          useAppStore.getState().clearRunInFlight(sid);
         }
         if (abortCtrl.signal.aborted) {
-          useAppStore.getState().setIsCancelled(true);
+          useAppStore.getState().patchRun(sid, { cancelled: true });
         } else if (result.errorMessage) {
-          // 后台会话错误归属该会话(App 按当前视图分流: here 弹横幅 toast,否则后台提醒)
-          setErrorMessage(result.errorMessage, session.id);
+          setErrorMessage(result.errorMessage, sid);
         }
       } catch (err: unknown) {
-        // 旧 turn 已被接管时不清理新 turn 的 in-flight;
-        // 出错轮的压缩请求标记作废
-        if (seq !== turnSeqRef.current) {
-          compactRequestedRef.current = false;
+        if (seq !== turnSeqRef.current[sid]) {
+          compactRequestedRef.current[sid] = false;
           return;
         }
         autoCompactPending = false;
         // 异常路径不落盘转录,in-flight 无处可归 → 清空避免残留悬空气泡
-        useAppStore.getState().setInFlight(null);
+        useAppStore.getState().clearRunInFlight(sid);
         if (abortCtrl.signal.aborted) {
-          useAppStore.getState().setIsCancelled(true);
+          useAppStore.getState().patchRun(sid, { cancelled: true });
         } else {
-          setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置', session.id);
+          setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置', sid);
         }
       } finally {
-        // 仅当前 turn 的所有者才能拆卸 streaming/abort 状态(不弄坏新 turn 的停止按钮)
-        if (seq === turnSeqRef.current) {
+        // 仅当前 turn 的所有者才能拆卸本会话运行态(不弄坏同会话新 turn)
+        if (seq === turnSeqRef.current[sid]) {
           const teardown = useAppStore.getState();
-          teardown.setIsStreaming(false);
-          teardown.setRunningSessionId(null);
-          teardown.setActiveToolNames([]);
-          abortControllerRef.current = null;
-          // 残余节流定时器作废(避免旧轮终值写进新轮的流式态)
-          if (streamThrottleRef.current.timer) clearTimeout(streamThrottleRef.current.timer);
-          streamThrottleRef.current = { text: '', thinking: '', timer: null };
-          // 轮末自主压缩:finally 清理完成后再触发(isStreaming 已复位,互斥守卫可通过);
-          // setTimeout 0 = 完全脱离本链,handleCompact 的守卫与错误处理自洽
+          teardown.endRun(sid);
+          delete abortControllersRef.current[sid];
+          const th = streamThrottleRef.current[sid];
+          if (th?.timer) clearTimeout(th.timer);
+          delete streamThrottleRef.current[sid];
+          // 轮末自主压缩:清理完成后再触发(endRun 已复位,互斥守卫可通过)
           if (autoCompactPending) {
-            setTimeout(() => onAutoCompact(session.id), 0);
+            setTimeout(() => onAutoCompact(sid), 0);
           } else {
-            // 出队时机: 轮次彻底结束后且无自动压缩，延迟一拍出队下一条排队消息
-            setTimeout(() => {
-              checkAndDispatchQueue();
-            }, 0);
+            // 出队时机:本会话轮次彻底结束后,尝试发送该会话排队中的下一条
+            setTimeout(() => dispatchQueueFor(sid), 0);
           }
         }
       }
     },
-    [onAutoCompact, onAutoAiTitle, onTurnSuccess, resetResolvedGateCount, setErrorMessage, checkAndDispatchQueue]
+    [dispatchQueueFor, onAutoCompact, onAutoAiTitle, onTurnSuccess, setErrorMessage],
   );
 
   // AI Chat & Agent Loop (新消息发送入口;targetSessionId = 跨会话队列出队的归属会话,
   // 后台发送不切换当前视图)
   const handleSendMessage = useCallback(
-    async (
-      userText: string,
-      targetSessionId?: string,
-      frozen?: { refTabs: RefTab[]; pickedElements: PickedElement[] },
-    ) => {
+    async (userText: string, targetSessionId?: string, frozen?: FrozenPayload) => {
       const trimmed = userText.trim();
       if (!trimmed) return;
 
       const store = useAppStore.getState();
 
-      // 0. 目标会话解析前移:显式指定(跨会话队列)优先;未指定且无活跃会话 → 同步创建并登记,
-      //    保证忙时入队也有明确归属(旧顺序在 activeSessionId 为空时直接丢消息)
+      // 0. 目标会话解析前移:显式指定(跨会话队列)优先;未指定且无活跃会话 → 同步创建并登记
       let target = targetSessionId
         ? store.sessions.find((s) => s.id === targetSessionId)
         : selectCurrentSession(store);
       if (!target && targetSessionId) {
-        // 排队目标已被删除:丢弃该条目并继续调度后续队列(不让队列停摆)
+        // 排队目标已被删除:丢弃该条目并继续调度该会话队列(不让队列停摆)
         if (import.meta.env.DEV) {
           console.log(`[turn] queued target session ${targetSessionId} was deleted; drop`);
         }
-        setTimeout(() => checkAndDispatchQueue(), 0);
+        setTimeout(() => dispatchQueueFor(targetSessionId), 0);
         return;
       }
       if (!target) {
@@ -385,13 +355,13 @@ export function useChatTurn(params: {
         await activeSessionIdItem.setValue(target.id);
       }
 
-      // 1. 繁忙(流式/门控/压缩)或发送竞态 = 入队(不打断;停止按钮 Square 是唯一打断入口)。
-      // 条目归属目标会话并冻结引用快照:后台轮末自动发往归属会话,与当前视图/后续草稿编辑无关
-      if (store.isStreaming || store.activeGate !== null || isCompacting || sendingRef.current) {
+      // 1. 目标会话自身忙(有 run/门控/准备中/压缩中)或发送竞态 = 入队。
+      // 其他会话的 run 与本会话无关(并发隔离):B 在 A 流式期间发送会立即执行
+      if (isSessionBusy(target.id) || sendingRef.current.has(target.id)) {
         const owner = target.id;
         const ownerSession = store.sessions.find((s) => s.id === owner);
         const draftAtEnqueue = ownerSession?.draft ?? EMPTY_DRAFT;
-        // 冻结副本:frozen(出队重入)优先,否则快照入队时刻的草稿引用;此后用户编辑不影响该条目
+        // 冻结副本:frozen(出队重入)优先,否则快照入队时刻的草稿引用
         const frozenTabs = frozen
           ? [...frozen.refTabs]
           : store.settings.includePageContext
@@ -419,132 +389,114 @@ export function useChatTurn(params: {
         return;
       }
 
-      sendingRef.current = true;
-      useAppStore.getState().setPreparingSessionId(target.id);
+      sendingRef.current.add(target.id);
+      useAppStore.getState().setPreparing(target.id, true);
       try {
-      if (import.meta.env.DEV) {
-        console.log(
-          `[turn] handleSendMessage enter: inFlight=${JSON.stringify(store.inFlight?.messages.length ?? null)} activeId=${store.activeSessionId}`,
-        );
-      }
+        if (import.meta.env.DEV) {
+          console.log(
+            `[turn] handleSendMessage enter: target=${target.id} activeId=${store.activeSessionId}`,
+          );
+        }
 
-      const active = findActiveModel(store.settings);
-      if (!active) {
-        setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
-        setTimeout(() => checkAndDispatchQueue(), 0);
-        return;
-      }
+        const active = findActiveModel(store.settings);
+        if (!active) {
+          setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
+          setTimeout(() => dispatchQueueFor(target!.id), 0);
+          return;
+        }
 
-      const session = target;
+        const session = target;
+        const isFirstMessage = session.messages.length === 0 || session.title === '新会话';
+        // 发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。
+        // 逐 tab 刷新元信息(getTabMeta 失败回退草稿值,绝不丢引用);focused 标注发送时刻的活动 tab。
+        const draftAtSend = session.draft ?? EMPTY_DRAFT;
+        // frozen(跨会话队列出队)= 入队时刻的快照;否则取发送时会话草稿
+        const snapTabs = frozen
+          ? frozen.refTabs
+          : store.settings.includePageContext
+            ? draftAtSend.refTabs
+            : [];
+        const snapElements = frozen
+          ? frozen.pickedElements
+          : store.settings.includePageContext
+            ? draftAtSend.pickedElements
+            : [];
+        let refreshedTabs = snapTabs;
+        let pageRefs: PageRefs | undefined;
+        if (snapTabs.length > 0 || snapElements.length > 0) {
+          const focusedTabId = (await getActiveTabMeta().catch(() => null))?.id;
+          refreshedTabs = await Promise.all(
+            snapTabs.map(async (t) => (await getTabMeta(t.id).catch(() => null)) ?? t),
+          );
+          const tabs = refreshedTabs.map((t) => ({
+            tabId: t.id,
+            title: t.title,
+            url: t.url,
+            ...(t.id === focusedTabId ? { focused: true } : {}),
+          }));
+          const elements = snapElements.map((e) => ({
+            id: e.elementId,
+            tabId: e.tabId,
+            selector: e.selector,
+            tagName: e.tagName,
+            preview: e.preview,
+          }));
+          pageRefs = { tabs, elements };
+        }
+        const userMessage = createUserMessage(trimmed, pageRefs);
+        const messagesWithUser: ChatMessage[] = [...session.messages, userMessage];
 
-      const isFirstMessage = session.messages.length === 0 || session.title === '新会话';
-      // 发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。
-      // 逐 tab 刷新元信息(getTabMeta 失败回退草稿值,绝不丢引用);focused 仅标注
-      // 「发送时刻活动且在该引用列表内」的 tab,由 usePageContextRefs 的「当前页」动态芯片随焦点
-      // 自动维护(用户可移除;移除后面板级不再自动引用该 tab)。focused 标注发送时刻的活动 tab。
-      const draftAtSend = session.draft ?? EMPTY_DRAFT;
-      // frozen(跨会话队列出队)= 入队时刻的快照;否则取发送时会话草稿
-      const snapTabs = frozen
-        ? frozen.refTabs
-        : store.settings.includePageContext
-          ? draftAtSend.refTabs
-          : [];
-      const snapElements = frozen
-        ? frozen.pickedElements
-        : store.settings.includePageContext
-          ? draftAtSend.pickedElements
-          : [];
-      let refreshedTabs = snapTabs;
-      let pageRefs: PageRefs | undefined;
-      if (snapTabs.length > 0 || snapElements.length > 0) {
-        const focusedTabId = (await getActiveTabMeta().catch(() => null))?.id;
-        refreshedTabs = await Promise.all(
-          snapTabs.map(async (t) => (await getTabMeta(t.id).catch(() => null)) ?? t)
-        );
-        const tabs = refreshedTabs.map((t) => ({
-          tabId: t.id,
-          title: t.title,
-          url: t.url,
-          ...(t.id === focusedTabId ? { focused: true } : {}),
-        }));
-        // id = 数据侧 elementId(与 ChatInput 插入的 [element:N] 标记永久对齐)。
-        // 元素内容不随消息携带:模型按 refs 块内 tabId+selector 调 read_element 获取;
-        // preview 保持框选时的 100 字存量(仅 UI chip label 用)
-        const elements = snapElements.map((e) => ({
-          id: e.elementId,
-          tabId: e.tabId,
-          selector: e.selector,
-          tagName: e.tagName,
-          preview: e.preview,
-        }));
-        pageRefs = { tabs, elements };
-      }
-      const userMessage = createUserMessage(trimmed, pageRefs);
-      const messagesWithUser: ChatMessage[] = [...session.messages, userMessage];
+        // 先落盘用户消息,长对话中断也不丢;发送即清空该会话草稿
+        const nextTitle =
+          session.customTitle
+            ? session.title
+            : isFirstMessage
+              ? titleFromText(trimmed)
+              : session.title;
 
-      // 先落盘用户消息,长对话中断也不丢;规则 4:发送即清空该会话草稿
-      // (流式期间用户可继续为新消息添加引用,故清空在此刻完成而非转录落盘时)
-      // 若该会话此前已手动重命名过(customTitle: true),则自动截断命名不覆盖其已有标题
-      const nextTitle =
-        session.customTitle
-          ? session.title
-          : isFirstMessage
-            ? titleFromText(trimmed)
-            : session.title;
+        // 提交基于「最新」目标会话(await 期间用户可能已切回编辑草稿):只覆盖消息与必要字段。
+        // 目标在准备期间被删除 → 取消本轮,不复活(即使本轮刚创建)
+        const latestTarget = useAppStore.getState().sessions.find((s) => s.id === session.id);
+        if (!latestTarget) {
+          setTimeout(() => dispatchQueueFor(session.id), 0);
+          return;
+        }
+        const base = latestTarget;
+        const updatedSession: Session = {
+          ...base,
+          title: nextTitle,
+          messages: messagesWithUser,
+          // 发送后保留 refTabs(决策 13 修订);frozen(队列出队)= 用户后来编辑的草稿原样保留
+          draft: frozen
+            ? (base.draft ?? EMPTY_DRAFT)
+            : { input: '', refTabs: base.draft?.refTabs ?? [], pickedElements: [] },
+          updatedAt: Date.now(),
+        };
+        // 原子 upsert:新建会话不在列表时插入(只 map 会丢掉刚创建的首轮会话)
+        const currentSessions = useAppStore.getState().sessions;
+        const nextSessions = currentSessions.some((s) => s.id === session.id)
+          ? currentSessions.map((s) => (s.id === session.id ? updatedSession : s))
+          : [updatedSession, ...currentSessions];
+        useAppStore.getState().setSessions(nextSessions);
+        if (!frozen) dropPendingDraftSave(session.id);
+        await saveSession(updatedSession);
 
-      // 提交基于「最新」目标会话(await 期间用户可能已切回编辑草稿):只覆盖消息与必要字段。
-      // 目标在准备期间被删除 → 取消本轮,不复活(即使本轮刚创建)
-      const latestTarget = useAppStore.getState().sessions.find((s) => s.id === session.id);
-      if (!latestTarget) {
-        // 目标在准备期间被删除:取消本轮并继续调度后续队列(否则整条队列停摆)
-        setTimeout(() => checkAndDispatchQueue(), 0);
-        return;
-      }
-      const base = latestTarget;
-      const updatedSession: Session = {
-        ...base,
-        title: nextTitle,
-        messages: messagesWithUser,
-        // 发送后保留 refTabs:会话的引用上下文跨消息存活(决策 13 修订;参考 google/llm-sidebar-with-context 的 pin 模型);
-        // 输入与框选元素照常清空(元素是一次性指代,持续重发是噪音)。
-        // frozen(队列出队)= 用户后来编辑的草稿必须原样保留
-        draft: frozen
-          ? (base.draft ?? EMPTY_DRAFT)
-          : { input: '', refTabs: base.draft?.refTabs ?? [], pickedElements: [] },
-        updatedAt: Date.now(),
-      };
-      // 原子 upsert:新建会话不在列表时插入(只 map 会丢掉刚创建的首轮会话)
-      const currentSessions = useAppStore.getState().sessions;
-      const nextSessions = currentSessions.some((s) => s.id === session!.id)
-        ? currentSessions.map((s) => (s.id === session!.id ? updatedSession : s))
-        : [updatedSession, ...currentSessions];
-      useAppStore.getState().setSessions(nextSessions);
-      // 非 frozen:草稿已被发送语义取代,丢弃待发项避免旧对象复活引用;
-      // frozen(队列出队):用户后续草稿必须保留,不得冲销
-      if (!frozen) dropPendingDraftSave(session.id);
-      await saveSession(updatedSession);
-
-      await executeTurn({
-        session: updatedSession,
-        historyBeforeUser: session.messages,
-        userMessage,
-        refTabs: refreshedTabs,
-        pickedElements: snapElements,
-        effectiveCompaction: session.compaction,
-        shouldTriggerAutoAiTitle: isFirstMessage && !session.customTitle,
-        active,
-      });
+        await executeTurn({
+          session: updatedSession,
+          historyBeforeUser: session.messages,
+          userMessage,
+          refTabs: refreshedTabs,
+          pickedElements: snapElements,
+          effectiveCompaction: session.compaction,
+          shouldTriggerAutoAiTitle: isFirstMessage && !session.customTitle,
+          active,
+        });
       } finally {
-        sendingRef.current = false;
-        useAppStore.getState().setPreparingSessionId(null);
+        sendingRef.current.delete(target.id);
+        useAppStore.getState().setPreparing(target.id, false);
       }
     },
-    [
-      isCompacting,
-      setErrorMessage,
-      executeTurn,
-      checkAndDispatchQueue,
-    ]
+    [dispatchQueueFor, executeTurn, isSessionBusy, setErrorMessage],
   );
 
   handleSendMessageRef.current = handleSendMessage;
@@ -555,8 +507,12 @@ export function useChatTurn(params: {
       const trimmed = newText.trim();
       if (!trimmed) return;
 
-      // 双保险守卫:编辑重发仅允许在非流式、非门控、非压缩、无并发发送时触发
-      if (isStreaming || hasPendingGate || isCompacting || sendingRef.current) {
+      const store = useAppStore.getState();
+      const session = selectCurrentSession(store);
+      if (!session) return;
+
+      // 双保险守卫:该会话非流式/非门控/非压缩/无并发发送时才允许(与按钮使能一致)
+      if (isSessionBusy(session.id)) {
         return;
       }
 
@@ -566,15 +522,11 @@ export function useChatTurn(params: {
         );
       }
 
-      const store = useAppStore.getState();
       const active = findActiveModel(store.settings);
       if (!active) {
         setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
         return;
       }
-
-      const session = selectCurrentSession(store);
-      if (!session) return;
 
       // 1. 定位目标用户消息
       const targetIndex = session.messages.findIndex(
@@ -593,7 +545,7 @@ export function useChatTurn(params: {
       const historyBeforeUser = session.messages.slice(0, targetIndex);
       const truncatedMessages: ChatMessage[] = [...historyBeforeUser, userMessage];
 
-      // 5. 压缩标记处理: 若 summaryTimestamp >= 截断点 (即摘要在被截断区域内) → 清空 compaction
+      // 5. 压缩标记处理: 若摘要处在被截断区域内 → 清空 compaction
       const shouldKeepCompaction = Boolean(
         session.compaction &&
         session.compaction.summaryTimestamp < targetMessage.timestamp &&
@@ -623,58 +575,61 @@ export function useChatTurn(params: {
         delete updatedSession.compaction;
       }
 
-      const nextSessions = store.sessions.map((s) => (s.id === session.id ? updatedSession : s));
-      useAppStore.getState().setSessions(nextSessions);
-      dropPendingDraftSave(session.id);
-      await saveSession(updatedSession);
+      sendingRef.current.add(session.id);
+      useAppStore.getState().setPreparing(session.id, true);
+      try {
+        const nextSessions = useAppStore
+          .getState()
+          .sessions.map((s) => (s.id === session.id ? updatedSession : s));
+        useAppStore.getState().setSessions(nextSessions);
+        dropPendingDraftSave(session.id);
+        await saveSession(updatedSession);
 
-      // 7. 转换原引用为 refTabs / pickedElements (若标签页存活则刷新实时元信息)
-      let refreshedTabs: RefTab[] = (originalRefs?.tabs ?? []).map((t) => ({
-        id: t.tabId,
-        title: t.title,
-        url: t.url,
-      }));
-      if (refreshedTabs.length > 0) {
-        refreshedTabs = await Promise.all(
-          refreshedTabs.map(async (t) => (await getTabMeta(t.id).catch(() => null)) ?? t)
-        );
+        // 7. 转换原引用为 refTabs / pickedElements (若标签页存活则刷新实时元信息)
+        let refreshedTabs: RefTab[] = (originalRefs?.tabs ?? []).map((t) => ({
+          id: t.tabId,
+          title: t.title,
+          url: t.url,
+        }));
+        if (refreshedTabs.length > 0) {
+          refreshedTabs = await Promise.all(
+            refreshedTabs.map(async (t) => (await getTabMeta(t.id).catch(() => null)) ?? t),
+          );
+        }
+        const pickedElements: PickedElement[] = (originalRefs?.elements ?? []).map((e) => ({
+          id: `${e.tabId}:${e.selector}`,
+          elementId: e.id,
+          tabId: e.tabId,
+          selector: e.selector,
+          tagName: e.tagName,
+          preview: e.preview,
+        }));
+
+        // 8. 触发重发链路
+        await executeTurn({
+          session: updatedSession,
+          historyBeforeUser,
+          userMessage,
+          refTabs: refreshedTabs,
+          pickedElements,
+          effectiveCompaction: updatedSession.compaction,
+          shouldTriggerAutoAiTitle: isFirstUserMessage && !session.customTitle,
+          active,
+        });
+      } finally {
+        sendingRef.current.delete(session.id);
+        useAppStore.getState().setPreparing(session.id, false);
       }
-      const pickedElements: PickedElement[] = (originalRefs?.elements ?? []).map((e) => ({
-        id: `${e.tabId}:${e.selector}`,
-        elementId: e.id,
-        tabId: e.tabId,
-        selector: e.selector,
-        tagName: e.tagName,
-        preview: e.preview,
-      }));
-
-      // 8. 触发重发链路
-      await executeTurn({
-        session: updatedSession,
-        historyBeforeUser,
-        userMessage,
-        refTabs: refreshedTabs,
-        pickedElements,
-        effectiveCompaction: updatedSession.compaction,
-        shouldTriggerAutoAiTitle: isFirstUserMessage && !session.customTitle,
-        active,
-      });
     },
-    [
-      isStreaming,
-      hasPendingGate,
-      isCompacting,
-      setErrorMessage,
-      executeTurn,
-    ]
+    [executeTurn, isSessionBusy, setErrorMessage],
   );
 
-  // Stop generation: 中止流式请求并冲销 pending 门控
-  const handleStopGeneration = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    useAppStore.getState().dismissPendingGates();
+  // Stop generation: 中止指定会话的在途请求并冲销其门控(缺省 = 当前活跃会话)
+  const handleStopGeneration = useCallback((sessionId?: string) => {
+    const sid = sessionId ?? useAppStore.getState().activeSessionId;
+    if (!sid) return;
+    abortControllersRef.current[sid]?.abort();
+    useAppStore.getState().dismissPendingGates(sid);
   }, []);
 
   return {

@@ -58,9 +58,10 @@ function parseLocatorArgs(args: unknown): ActionLocator | null {
  * (原生 prototype setter + input/change 事件,React/Vue 兼容;空串=清空)。
  * grantScope = fill_element@tabId(工具+tab 粒度)。
  */
-export function createFillElementToolDefinition(): AgentTool<typeof FILL_ELEMENT_PARAMS> & {
+export function createFillElementToolDefinition(sessionId?: string): AgentTool<typeof FILL_ELEMENT_PARAMS> & {
   risk: ToolRisk;
 } {
+  const gateForRun = (req: Parameters<typeof requestGate>[0]) => requestGate(req, sessionId ?? '');
   return {
     name: 'fill_element',
     label: toolLabel('fill_element'),
@@ -105,7 +106,7 @@ export function createFillElementToolDefinition(): AgentTool<typeof FILL_ELEMENT
       }
 
       const valuePreview = value.length > 200 ? `${value.slice(0, 200)}… (${value.length} chars)` : value;
-      const approved = await requestGate({
+      const approved = await gateForRun({
         kind: 'confirm',
         toolName: 'fill_element',
         label: toolLabel('fill_element'),

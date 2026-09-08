@@ -52,12 +52,9 @@ export default function App() {
   const loaded = useAppStore((s) => s.loaded);
   const patchActiveDraft = useAppStore((s) => s.patchActiveDraft);
   const currentSession = useAppStore(selectCurrentSession);
-  const isStreaming = useAppStore((s) => s.isStreaming);
-  const streamingContent = useAppStore((s) => s.streamingContent);
-  const streamingThinking = useAppStore((s) => s.streamingThinking);
-  const activeToolNames = useAppStore((s) => s.activeToolNames);
-  const isCancelled = useAppStore((s) => s.isCancelled);
-  const inFlight = useAppStore((s) => s.inFlight);
+  // 按会话隔离的运行态(多会话并发):当前视图只消费自己会话的 run/gate
+  const runs = useAppStore((s) => s.runs);
+  const gates = useAppStore((s) => s.gates);
   const queuedMessages = useAppStore((s) => s.queuedMessages);
   const removeQueuedMessage = useAppStore((s) => s.removeQueuedMessage);
 
@@ -99,6 +96,7 @@ export default function App() {
   // ── 对话轮次域 ──────────────────────────────────────────────────
   const chat = useChatTurn({
     isCompacting: compact.isCompacting,
+    compactingSessionId: compact.compactingSessionId,
     onAutoCompact,
     onAutoAiTitle: (sessionId) => {
       void session.handleAiTitleSession(sessionId, true);
@@ -234,16 +232,27 @@ export default function App() {
   // 统计本轮 in-flight / live 消息中需要门控确认的工具调用总数(支持分页 1/N 呈现)
   // 会话隔离派生:运行/门控归属 = in-flight 声明的会话;仅当与当前视图一致才在视图内呈现
   // (live 流式气泡/停止按钮/队列条/门控卡),否则后台运行——当前会话完全不受影响
-  const runningSessionId = useAppStore((s) => s.runningSessionId);
-  // 压缩归属:后台轮末压缩不锁当前会话编辑器(发送仍会因全局互斥入队)
+  // 压缩归属:后台轮末压缩不锁当前会话编辑器
   const isCompactingHere =
     compact.isCompacting && compact.compactingSessionId === currentSession?.id;
-  const isStreamingHere = runningSessionId !== null && runningSessionId === currentSession?.id;
-  const isGateHere = gate.activeGate != null && gate.activeGate.sessionId === currentSession?.id;
+  // 当前会话的运行态/门控(其他会话的 run/gate 完全不影响本视图)
+  const currentRun = currentSession ? runs[currentSession.id] : undefined;
+  const currentGate = currentSession ? gates[currentSession.id] : undefined;
+  const isStreamingHere = !!currentRun;
+  const isGateHere = !!currentGate;
+  const runningSessionIds = Object.keys(runs);
+  // 兼容派生(下游组件沿用 inFlight/streaming* 形状,值来自本会话 run)
+  const inFlight = currentRun
+    ? { sessionId: currentSession!.id, messages: currentRun.inFlight }
+    : null;
+  const streamingContent = currentRun?.content ?? '';
+  const streamingThinking = currentRun?.thinking ?? '';
+  const activeToolNames = currentRun?.toolNames ?? [];
+  const isCancelled = currentRun?.cancelled ?? false;
 
 
   const gatePagination = useMemo(() => {
-    if (!gate.activeGate) return { step: 1, total: 1 };
+    if (!currentGate) return { step: 1, total: 1 };
     let confirmCallCount = 0;
     // 检查 in-flight 消息中的 confirm 工具调用（如 execute_js）
     if (inFlight && inFlight.messages) {
@@ -272,10 +281,10 @@ export default function App() {
     ) {
       confirmCallCount = 1;
     }
-    const currentStep = gate.resolvedGateCount + 1;
+    const currentStep = (currentSession ? (gate.resolvedGateCounts[currentSession.id] ?? 0) : 0) + 1;
     const totalCount = Math.max(currentStep, confirmCallCount);
     return { step: currentStep, total: totalCount };
-  }, [gate.activeGate, inFlight, activeToolNames, gate.resolvedGateCount]);
+  }, [currentGate, currentSession, inFlight, activeToolNames, gate.resolvedGateCounts]);
 
   // 上下文占用派生:有效历史(压缩过 = [摘要]+之后)× 当前模型窗口 + 三角色占比(lib estimateTokens 统一口径)。
   // in-flight 消息与流式 live 文本一并计入尾部,环随流式增长
@@ -308,7 +317,7 @@ export default function App() {
       else if (m.role === 'toolResult') roleShares.toolResult += t;
     }
     return { usage, roleShares };
-  }, [activeModelInfo, currentSession, inFlight, isStreaming, streamingContent]);
+  }, [activeModelInfo, currentSession, inFlight, currentRun, streamingContent]);
 
   // 模型切换溢出建议:当前上下文超出新模型窗口(shouldCompact)→ 建议压缩,不自动执行
   // 用户可手动关闭本次提示(切会话或会话更新后若依然超出可再次自然产生或关闭)
@@ -325,7 +334,7 @@ export default function App() {
   const handleSyncRestore = useCallback(
     async (bundle: SyncBundle) => {
       // 运行中/在途消息/后台压缩进行中:恢复会与进行中的写入竞态(同 id 覆盖)
-      if (isStreaming || (inFlight && inFlight.messages.length > 0) || compact.isCompacting) {
+      if (Object.keys(runs).length > 0 || compact.isCompacting) {
         throw new Error(i18n.t('sync.error.streaming'));
       }
       // 防 400ms 防抖窗口内的旧会话对象在恢复后落盘回滚(major-4)
@@ -343,7 +352,7 @@ export default function App() {
       store.setActiveSessionId(restoredActive);
       void activeSessionIdItem.setValue(restoredActive);
     },
-    [inFlight, isStreaming, compact.isCompacting],
+    [runs, compact.isCompacting],
   );
   const latestLocalSessionAt = sessions.reduce((max, s) => Math.max(max, s.updatedAt), 0);
 
@@ -361,7 +370,7 @@ export default function App() {
       : 0;
   // 编辑重发使能:非流式、非门控、非压缩时允许用户编辑已发送消息
   // 编辑重发走全局单 run(handleEditResend 的 busy 守卫):与按钮使能保持一致,避免可点但无效
-  const canEditMessage = !isStreaming && !gate.activeGate && !compact.isCompacting;
+  const canEditMessage = !isStreamingHere && !isGateHere && !isCompactingHere;
 
   // 新会话快捷指令:空会话展示时异步生成(模型失败静默回退静态四条)
   const quickPrompts = useQuickPrompts(
@@ -371,11 +380,11 @@ export default function App() {
 
   // 后台会话门控提醒:运行中会话的确认卡不在当前视图弹出(toast 点击切回),
   // 切回后该视图内正常渲染门控卡;离开时提醒重新挂起
-  const pendingElsewhereGate = gate.activeGate != null && gate.activeGate.sessionId !== currentSession?.id;
+  const elsewhereGateSessionId =
+    Object.keys(gates).find((id) => id !== currentSession?.id) ?? null;
   useEffect(() => {
-    const g = gate.activeGate;
-    if (pendingElsewhereGate && g?.sessionId) {
-      const target = sessions.find((x) => x.id === g.sessionId);
+    if (elsewhereGateSessionId) {
+      const target = sessions.find((x) => x.id === elsewhereGateSessionId);
       toast.add({
         id: 'gate-elsewhere',
         type: 'warning',
@@ -386,20 +395,20 @@ export default function App() {
         actionProps: {
           children: i18n.t('app.gateSwitchTo'),
           onClick: () => {
-            session.handleSelectSession(g.sessionId as string);
+            session.handleSelectSession(elsewhereGateSessionId);
           },
         },
       });
     } else {
       toast.close('gate-elsewhere');
     }
-  }, [pendingElsewhereGate, gate.activeGate, sessions, currentSession?.id, session.handleSelectSession]);
+  }, [elsewhereGateSessionId, sessions, session.handleSelectSession]);
 
   // 删除会话:若目标是后台运行会话,先中止其轮次(转录已无处可落,继续跑只是白烧 token)
   const handleDeleteSession = useCallback(
     async (id: string) => {
-      if (useAppStore.getState().runningSessionId === id) {
-        chat.handleStopGeneration();
+      if (useAppStore.getState().runs[id]) {
+        chat.handleStopGeneration(id);
       }
       await session.handleDeleteSession(id);
     },
@@ -516,7 +525,7 @@ export default function App() {
             sessions={sessions}
             activeSessionId={activeSessionId}
             titlingSessionIds={session.titlingSessionIds}
-            runningSessionId={runningSessionId}
+            runningSessionIds={runningSessionIds}
             onSelectSession={session.handleSelectSession}
             onDeleteSession={handleDeleteSession}
             onRenameSession={session.handleRenameSession}
@@ -532,7 +541,7 @@ export default function App() {
             streamingContent={isStreamingHere ? streamingContent : ''}
             streamingThinking={isStreamingHere ? streamingThinking : ''}
             activeToolLabels={isStreamingHere ? activeToolNames : []}
-            gateRequest={isGateHere ? (gate.activeGate?.request ?? null) : null}
+            gateRequest={isGateHere ? (currentGate?.request ?? null) : null}
             pendingGateTotal={isGateHere ? gatePagination.total : 0}
             quietTailCount={quietTailCount}
             sessionKey={currentSession?.id ?? 'empty'}
@@ -564,14 +573,14 @@ export default function App() {
 
           {/* 审批槽位:交互审批 UI 的唯一渲染位(消息流内工具卡一律状态化,零交互控件)。
               in-flow flex 子节点,出现时挤压列表;卡片框架永不滚动,高度由内容决定。 */}
-          {isGateHere && gate.activeGate && (
+          {isGateHere && currentGate && (
             <div className="w-full shrink-0 px-2.5 pb-1 animate-in fade-in-0 slide-in-from-bottom-2 duration-150 motion-reduce:animate-none">
               <ApprovalSection
-                request={gate.activeGate.request}
-                onApprove={gate.handleGateApprove}
-                onDeny={gate.handleGateDeny}
-                onAnswer={gate.handleGateAnswer}
-                onCancel={gate.handleGateCancel}
+                request={currentGate.request}
+                onApprove={(grant) => gate.handleGateApprove(currentSession!.id, grant)}
+                onDeny={() => gate.handleGateDeny(currentSession!.id)}
+                onAnswer={(answer) => gate.handleGateAnswer(currentSession!.id, answer)}
+                onCancel={() => gate.handleGateCancel(currentSession!.id)}
               />
             </div>
           )}
@@ -625,7 +634,7 @@ export default function App() {
               followUps.clearSuggestions();
               void chat.handleSendMessage(text);
             }}
-            onStop={chat.handleStopGeneration}
+            onStop={() => chat.handleStopGeneration(currentSession?.id)}
             isStreaming={isStreamingHere}
             queuedMessages={queuedMessages.filter((q) => q.sessionId === currentSession?.id)}
             onRemoveQueuedMessage={(id) => removeQueuedMessage(id)}

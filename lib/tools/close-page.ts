@@ -20,9 +20,10 @@ const CLOSE_PAGE_PARAMS = Type.Object({
  * close_page 工具定义(confirm):关闭本 agent 开启的标签页(任务完成后的清理)。
  * 安全边界:仅限运行时注册表内的 tab(agent 自己开的);用户手动打开的标签页拒绝关闭。
  */
-export function createClosePageToolDefinition(): AgentTool<
+export function createClosePageToolDefinition(sessionId?: string): AgentTool<
   typeof CLOSE_PAGE_PARAMS
 > & { risk: ToolRisk } {
+  const gateForRun = (req: Parameters<typeof requestGate>[0]) => requestGate(req, sessionId ?? '');
   return {
     name: 'close_page',
     label: toolLabel('close_page'),
@@ -50,7 +51,7 @@ export function createClosePageToolDefinition(): AgentTool<
         };
       }
 
-      const approved = await requestGate({
+      const approved = await gateForRun({
         kind: 'confirm',
         toolName: 'close_page',
         label: toolLabel('close_page'),

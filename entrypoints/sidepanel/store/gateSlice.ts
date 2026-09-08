@@ -1,29 +1,30 @@
 import { flushPendingGates, type GateRequest, type GateResponse } from '../gateAdapter';
 
-/** 挂起中的门控请求(lib/gate requestGate → store.pushGate;resolve 由 UI 应答调用) */
+/** 挂起中的门控请求(按会话隔离:并发 run 各自持有自己的门控) */
 export interface ActiveGate {
   request: GateRequest;
   resolve: (res: GateResponse) => void;
-  /** 归属运行会话(turn 内产生):非当前会话的门控不弹卡,仅提醒用户切回 */
-  sessionId: string | null;
+  /** 归属会话(工具层透传,run 上下文内产生) */
+  sessionId: string;
 }
 
 export interface GateSlice {
-  activeGate: ActiveGate | null;
-  /** 本轮已应答门控数(分页 1/N 用;冲销路径不计数) */
-  resolvedGateCount: number;
+  /** 挂起门控按会话(gates[sessionId];多会话并发时各自独立,互不覆盖) */
+  gates: Record<string, ActiveGate>;
+  /** 每会话已应答门控数(分页 1/N 用;冲销路径不计数) */
+  resolvedGateCounts: Record<string, number>;
   /** lib/gate handler 入口(模块级注册一次) */
-  pushGate: (request: GateRequest, resolve: (res: GateResponse) => void, sessionId: string | null) => void;
+  pushGate: (request: GateRequest, resolve: (res: GateResponse) => void, sessionId: string) => void;
   /** 四类应答:计数 +1、resolve、收卡;confirm 可携带会话级 grant */
-  approveGate: (grant?: boolean) => void;
-  denyGate: () => void;
-  answerGate: (answer: string) => void;
-  cancelGate: () => void;
-  /** 冲销挂起门控(安全拒绝),不重置计数:停止生成/打断重发/删除归属会话用 */
-  dismissPendingGates: () => void;
-  /** 冲销 + 重置计数:会话切换/新建/删除用 */
-  resetGates: () => void;
-  resetResolvedGateCount: () => void;
+  approveGate: (sessionId: string, grant?: boolean) => void;
+  denyGate: (sessionId: string) => void;
+  answerGate: (sessionId: string, answer: string) => void;
+  cancelGate: (sessionId: string) => void;
+  /** 冲销挂起门控(安全拒绝):无参 = 全部;传会话 = 仅该会话 */
+  dismissPendingGates: (sessionId?: string) => void;
+  /** 冲销 + 重置计数:无参 = 全部;传会话 = 仅该会话(会话切换/删除用) */
+  resetGates: (sessionId?: string) => void;
+  resetResolvedGateCount: (sessionId: string) => void;
 }
 
 type SliceSet = (
@@ -32,37 +33,91 @@ type SliceSet = (
 type SliceGet = () => GateSlice;
 
 /** 应答公共体:无挂起门控则忽略;否则计数 +1、resolve、收卡 */
-function respond(get: SliceGet, set: SliceSet, resp: GateResponse): void {
-  const gate = get().activeGate;
+function respond(get: SliceGet, set: SliceSet, sessionId: string, resp: GateResponse): void {
+  const gate = get().gates[sessionId];
   if (!gate) return;
-  set((s) => ({ resolvedGateCount: s.resolvedGateCount + 1, activeGate: null }));
+  set((s) => {
+    const gates = { ...s.gates };
+    delete gates[sessionId];
+    return {
+      gates,
+      resolvedGateCounts: {
+        ...s.resolvedGateCounts,
+        [sessionId]: (s.resolvedGateCounts[sessionId] ?? 0) + 1,
+      },
+    };
+  });
   gate.resolve(resp);
 }
 
 export function createGateSlice(set: SliceSet, get: SliceGet): GateSlice {
   return {
-    activeGate: null,
-    resolvedGateCount: 0,
+    gates: {},
+    resolvedGateCounts: {},
 
     pushGate: (request, resolve, sessionId) =>
-      set({ activeGate: { request, resolve, sessionId } }),
+      set((s) => ({ gates: { ...s.gates, [sessionId]: { request, resolve, sessionId } } })),
 
-    approveGate: (grant?: boolean) =>
-      respond(get, set, grant ? { kind: 'confirm', approved: true, grant } : { kind: 'confirm', approved: true }),
-    denyGate: () => respond(get, set, { kind: 'confirm', approved: false }),
-    answerGate: (answer) => respond(get, set, { kind: 'ask', answer }),
-    cancelGate: () => respond(get, set, { kind: 'ask', answer: '', cancelled: true }),
+    approveGate: (sessionId, grant?: boolean) =>
+      respond(
+        get,
+        set,
+        sessionId,
+        grant ? { kind: 'confirm', approved: true, grant } : { kind: 'confirm', approved: true },
+      ),
+    denyGate: (sessionId) => respond(get, set, sessionId, { kind: 'confirm', approved: false }),
+    answerGate: (sessionId, answer) => respond(get, set, sessionId, { kind: 'ask', answer }),
+    cancelGate: (sessionId) => respond(get, set, sessionId, { kind: 'ask', answer: '', cancelled: true }),
 
-    dismissPendingGates: () => {
-      flushPendingGates();
-      set({ activeGate: null });
+    dismissPendingGates: (sessionId) => {
+      if (sessionId === undefined) {
+        flushPendingGates();
+        set({ gates: {} });
+        return;
+      }
+      const gate = get().gates[sessionId];
+      if (!gate) return;
+      set((s) => {
+        const gates = { ...s.gates };
+        delete gates[sessionId];
+        return { gates };
+      });
+      gate.resolve(
+        gate.request.kind === 'confirm'
+          ? { kind: 'confirm', approved: false }
+          : { kind: 'ask', answer: '', cancelled: true },
+      );
     },
 
-    resetGates: () => {
-      flushPendingGates();
-      set({ activeGate: null, resolvedGateCount: 0 });
+    resetGates: (sessionId) => {
+      if (sessionId === undefined) {
+        flushPendingGates();
+        set({ gates: {}, resolvedGateCounts: {} });
+        return;
+      }
+      const gate = get().gates[sessionId];
+      if (gate) {
+        gate.resolve(
+          gate.request.kind === 'confirm'
+            ? { kind: 'confirm', approved: false }
+            : { kind: 'ask', answer: '', cancelled: true },
+        );
+      }
+      set((s) => {
+        const gates = { ...s.gates };
+        delete gates[sessionId];
+        const counts = { ...s.resolvedGateCounts };
+        delete counts[sessionId];
+        return { gates, resolvedGateCounts: counts };
+      });
     },
 
-    resetResolvedGateCount: () => set({ resolvedGateCount: 0 }),
+    resetResolvedGateCount: (sessionId) =>
+      set((s) => {
+        if (!(sessionId in s.resolvedGateCounts)) return s;
+        const counts = { ...s.resolvedGateCounts };
+        delete counts[sessionId];
+        return { resolvedGateCounts: counts };
+      }),
   };
 }

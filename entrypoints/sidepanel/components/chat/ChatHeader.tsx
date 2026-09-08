@@ -35,8 +35,8 @@ interface ChatHeaderProps {
   sessions: Session[];
   activeSessionId: string | null;
   titlingSessionIds?: Set<string>;
-  /** 后台运行中的会话 id(历史列表显示运行指示) */
-  runningSessionId?: string | null;
+  /** 后台运行中的会话 id 集合(历史列表显示运行指示) */
+  runningSessionIds?: string[];
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   onRenameSession?: (id: string, newTitle: string) => void;
@@ -49,7 +49,7 @@ export function ChatHeader({
   sessions,
   activeSessionId,
   titlingSessionIds,
-  runningSessionId,
+  runningSessionIds,
   onSelectSession,
   onDeleteSession,
   onRenameSession,
@@ -153,7 +153,7 @@ export function ChatHeader({
                   const isActive = s.id === activeSessionId;
                   const isEditing = editingId === s.id;
                   const isAiTitling = titlingSessionIds?.has(s.id);
-                  const isRunning = s.id === runningSessionId;
+                  const isRunning = runningSessionIds?.includes(s.id) ?? false;
 
                   if (isEditing) {
                     return (

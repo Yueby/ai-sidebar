@@ -26,6 +26,7 @@ const EXECUTE_JS_PARAMS = Type.Object({
 export function createExecuteJsToolDefinition(
   refTabs: RefTab[],
   dynamicTabs?: ReadonlySet<number>,
+  sessionId?: string,
 ): AgentTool<typeof EXECUTE_JS_PARAMS> & { risk: ToolRisk } {
   const validTabIds = new Set<number>(refTabs.map((t) => t.id));
   const base: AgentTool<typeof EXECUTE_JS_PARAMS> & { risk: ToolRisk } = {
@@ -84,5 +85,7 @@ export function createExecuteJsToolDefinition(
       code,
       target,
     ].join('\n');
-  });
+    },
+    sessionId,
+  );
 }

@@ -249,6 +249,8 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
     webSearch: options.webSearch ?? null,
     // agent 本回合开启的 tab(动态注册表,面板生命周期):读工具 execute 时实时查询
     dynamicTabs: getAgentOpenedTabs(),
+    // 门控归属会话(并发 run 各自独立,确认卡/提问按会话路由)
+    sessionId: options.sessionId,
   });
 
   const agent = new Agent({

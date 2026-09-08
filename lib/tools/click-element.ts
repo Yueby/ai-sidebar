@@ -48,9 +48,10 @@ function parseLocatorArgs(args: unknown): ActionLocator | null {
  * 确认(grantScope = click_element@tabId,工具+tab 粒度);content 侧完成
  * scrollIntoView → 400ms 高亮 → 遮挡检测 → 合成鼠标序列(遮挡时 fallback 直发)→ settle。
  */
-export function createClickElementToolDefinition(): AgentTool<typeof CLICK_ELEMENT_PARAMS> & {
+export function createClickElementToolDefinition(sessionId?: string): AgentTool<typeof CLICK_ELEMENT_PARAMS> & {
   risk: ToolRisk;
 } {
+  const gateForRun = (req: Parameters<typeof requestGate>[0]) => requestGate(req, sessionId ?? '');
   return {
     name: 'click_element',
     label: toolLabel('click_element'),
@@ -93,7 +94,7 @@ export function createClickElementToolDefinition(): AgentTool<typeof CLICK_ELEME
         };
       }
 
-      const approved = await requestGate({
+      const approved = await gateForRun({
         kind: 'confirm',
         toolName: 'click_element',
         label: toolLabel('click_element'),

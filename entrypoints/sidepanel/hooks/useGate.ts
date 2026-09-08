@@ -2,18 +2,15 @@ import { useCallback } from 'react';
 import { useAppStore } from '../store';
 
 /**
- * 门控域 hook(store 切片消费层):
- * - activeGate/resolvedGateCount 从 store 读取(useStore selector);
- * - 4 个应答回调 = store action 薄层(签名与重构前一致,App/ApprovalSection 零改动);
- * - dismissPendingGates/resetGates/resetResolvedGateCount 直通 store;
+ * 门控域 hook(store 切片消费层,按会话隔离):
+ * - gates/resolvedGateCounts 从 store 读取(调用方按会话取);
+ * - 4 个应答回调 = store action 薄层,携带归属会话 id;
+ * - dismissPendingGates/resetGates/resetResolvedGateCount 直通 store(可选会话参数);
  * - handler 注册已模块化(store/index.ts 模块级 setGateHandler),本 hook 无 effect。
- *
- * 域服务边界:store=共享状态唯一家(activeGate/resolvedGateCount 在 gateSlice);
- * 编排 hook=纯 selector/薄回调,无异步流程;派生值=消费点就地 useMemo(如 App.gatePagination)。
  */
 export function useGate() {
-  const activeGate = useAppStore((s) => s.activeGate);
-  const resolvedGateCount = useAppStore((s) => s.resolvedGateCount);
+  const gates = useAppStore((s) => s.gates);
+  const resolvedGateCounts = useAppStore((s) => s.resolvedGateCounts);
   const approveGate = useAppStore((s) => s.approveGate);
   const denyGate = useAppStore((s) => s.denyGate);
   const answerGate = useAppStore((s) => s.answerGate);
@@ -22,15 +19,21 @@ export function useGate() {
   const resetGates = useAppStore((s) => s.resetGates);
   const resetResolvedGateCount = useAppStore((s) => s.resetResolvedGateCount);
 
-  // 门控响应回调(store action 薄层);approve 携带会话级 grant 勾选态
-  const handleGateApprove = useCallback((grant?: boolean) => approveGate(grant), [approveGate]);
-  const handleGateDeny = useCallback(() => denyGate(), [denyGate]);
-  const handleGateAnswer = useCallback((answer: string) => answerGate(answer), [answerGate]);
-  const handleGateCancel = useCallback(() => cancelGate(), [cancelGate]);
+  // 门控响应回调(store action 薄层,按会话);approve 携带会话级 grant 勾选态
+  const handleGateApprove = useCallback(
+    (sessionId: string, grant?: boolean) => approveGate(sessionId, grant),
+    [approveGate],
+  );
+  const handleGateDeny = useCallback((sessionId: string) => denyGate(sessionId), [denyGate]);
+  const handleGateAnswer = useCallback(
+    (sessionId: string, answer: string) => answerGate(sessionId, answer),
+    [answerGate],
+  );
+  const handleGateCancel = useCallback((sessionId: string) => cancelGate(sessionId), [cancelGate]);
 
   return {
-    activeGate,
-    resolvedGateCount,
+    gates,
+    resolvedGateCounts,
     handleGateApprove,
     handleGateDeny,
     handleGateAnswer,

@@ -24,7 +24,9 @@ const SCREENSHOT_PAGE_PARAMS = Type.Object({
  */
 export function createScreenshotPageToolDefinition(
   refTabs: RefTab[],
+  sessionId?: string,
 ): AgentTool<typeof SCREENSHOT_PAGE_PARAMS> & { risk: ToolRisk } {
+  const gateForRun = (req: Parameters<typeof requestGate>[0]) => requestGate(req, sessionId ?? '');
   const refTabsById = new Map(refTabs.map((t) => [t.id, t]));
   return {
     name: 'screenshot_page',
@@ -81,7 +83,7 @@ export function createScreenshotPageToolDefinition(
       await browser.tabs.update(tabId, { active: true }).catch(() => {});
       const refInfo = refTabsById.get(tabId);
 
-      const approved = await requestGate({
+      const approved = await gateForRun({
         kind: 'confirm',
         toolName: 'screenshot_page',
         label: toolLabel('screenshot_page'),

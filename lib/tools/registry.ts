@@ -38,6 +38,8 @@ export interface GetToolsOptions {
   webSearch?: WebSearchConfig | null;
   /** agent 开启标签页的运行时注册表(read_page/read_element/execute_js execute 时实时查询;决策 27) */
   dynamicTabs?: ReadonlySet<number>;
+  /** 本次运行的归属会话(门控请求按会话隔离;agent.ts 组装时注入) */
+  sessionId?: string;
 }
 
 /** 页面读取组(safe):read_page + read_element(tab 级白名单;selector 不设白名单) */
@@ -72,12 +74,14 @@ export function createPageDiscoveryTools(options: GetToolsOptions): AgentTool[] 
  *  screenshot_page(confirm+grant)仅 vision 模型注册(非 vision 截图不可见,不占工具面) */
 export function createPageActionTools(options: GetToolsOptions): AgentTool[] {
   const tools: AgentTool[] = [
-    createClickElementToolDefinition(),
-    createFillElementToolDefinition(),
+    createClickElementToolDefinition(options.sessionId),
+    createFillElementToolDefinition(options.sessionId),
     createScrollPageToolDefinition(),
-    createOpenPageToolDefinition(),
+    createOpenPageToolDefinition(options.sessionId),
   ];
-  if (options.canUseImage) tools.push(createScreenshotPageToolDefinition(options.refTabs ?? []));
+  if (options.canUseImage) {
+    tools.push(createScreenshotPageToolDefinition(options.refTabs ?? [], options.sessionId));
+  }
   return tools;
 }
 
@@ -95,14 +99,14 @@ export function createWebSearchTools(config: WebSearchConfig | null | undefined)
 /** 确认型工具组(confirm):execute_js 经 createGatedTool 包装,tab 句柄同 read_page 白名单 */
 export function createGatedTools(options: GetToolsOptions): AgentTool[] {
   // execute_js 无条件注册:同 read 组,动态注册表的 tab 在 execute 时实时检查可达
-  return [createExecuteJsToolDefinition(options.refTabs ?? [], options.dynamicTabs)];
+  return [createExecuteJsToolDefinition(options.refTabs ?? [], options.dynamicTabs, options.sessionId)];
 }
 
 /** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩 */
-export function createUtilityTools(onCompactContext?: () => void): AgentTool[] {
+export function createUtilityTools(onCompactContext?: () => void, sessionId?: string): AgentTool[] {
   return [
     createReadTimeToolDefinition(),
-    createAskUserToolDefinition(),
+    createAskUserToolDefinition(sessionId),
     createCompactContextToolDefinition(onCompactContext ?? (() => {})),
   ];
 }
@@ -110,7 +114,7 @@ export function createUtilityTools(onCompactContext?: () => void): AgentTool[] {
 /** 最终工具数组——唯一组装点(顺序:utility → web → read → discovery → action → fetch → gated) */
 export function getTools(options: GetToolsOptions): AgentTool[] {
   return [
-    ...createUtilityTools(options.onCompactContext),
+    ...createUtilityTools(options.onCompactContext, options.sessionId),
     ...createWebSearchTools(options.webSearch),
     ...createPageReadTools(options),
     ...createPageDiscoveryTools(options),

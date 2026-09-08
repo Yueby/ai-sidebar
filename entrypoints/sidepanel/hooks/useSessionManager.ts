@@ -255,9 +255,9 @@ export function useSessionManager() {
         !!leaving &&
         leaving.messages.length === 0 &&
         !st.queuedMessages.some((q) => q.sessionId === leaving.id) &&
-        !(st.isStreaming && st.inFlight?.sessionId === leaving.id) &&
-        st.preparingSessionId !== leaving.id &&
-        st.activeGate?.sessionId !== leaving.id;
+        !st.runs[leaving.id] &&
+        !st.preparingSessionIds.includes(leaving.id) &&
+        !st.gates[leaving.id];
       // 回收前先摘除离开会话的待发草稿,避免 flush 把它写回后与 deleteSession 竞态复活
       if (recycle) dropPendingDraftSave(leaving!.id);
       // 其余会话的待落盘草稿立即写入(切换是自然 flush 边界)
@@ -286,9 +286,9 @@ export function useSessionManager() {
       !!cur &&
       cur.messages.length === 0 &&
       !st0.queuedMessages.some((q) => q.sessionId === cur.id) &&
-      !(st0.isStreaming && st0.inFlight?.sessionId === cur.id) &&
-      st0.preparingSessionId !== cur.id &&
-      st0.activeGate?.sessionId !== cur.id;
+      !st0.runs[cur.id] &&
+      !st0.preparingSessionIds.includes(cur.id) &&
+      !st0.gates[cur.id];
     if (idleEmpty) {
       setErrorMessage(null);
       return;
@@ -308,8 +308,8 @@ export function useSessionManager() {
     async (id: string) => {
       // 被删会话的遗留物按归属清理:其排队条目;其挂起门控(无论是否当前视图)冲销
       useAppStore.getState().removeQueuedMessagesForSession(id);
-      if (useAppStore.getState().activeGate?.sessionId === id) {
-        resetGates();
+      if (useAppStore.getState().gates[id]) {
+        resetGates(id);
       }
       // 防止被删会话的待发草稿在 flush 时复活它;删除是自然 flush 边界
       dropPendingDraftSave(id);

@@ -36,14 +36,10 @@ export const useAppStore = create<AppStore>()(
  * - 无卸载清理(setGateHandler(null) + flushPendingGates 均省去):面板销毁即整层失效,
  *   清理无观察差异。
  */
-setGateHandler((req: GateRequest) => {
+setGateHandler((req: GateRequest, sessionId: string) => {
   return new Promise<GateResponse>((resolve) => {
-    // 门控归属运行会话(inFlight 在 turn 开始时声明):后台会话的门控不弹当前视图,仅提醒。
-    // 无 inFlight = 非 turn 内调用(异常路径):归属缺失,安全起见归 null(仅提醒,不弹卡)
-    const st = useAppStore.getState();
-    const owner = st.inFlight?.sessionId ?? null;
-    if (!owner) {
-      // 无运行归属(非 turn 内调用/异常):安全拒绝,绝不挂成不可见悬案
+    // 门控归属由工具层透传的 run 会话决定(并发 run 各自独立);无归属 = 异常调用,安全拒绝
+    if (!sessionId) {
       resolve(
         req.kind === 'confirm'
           ? { kind: 'confirm', approved: false }
@@ -51,6 +47,6 @@ setGateHandler((req: GateRequest) => {
       );
       return;
     }
-    st.pushGate(req, resolve, owner);
+    useAppStore.getState().pushGate(req, resolve, sessionId);
   });
 });

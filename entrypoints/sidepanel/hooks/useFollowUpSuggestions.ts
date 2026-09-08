@@ -94,9 +94,9 @@ export function useFollowUpSuggestions({
       const store = useAppStore.getState();
       // 守卫: 流式中 / 有队列积压 / 门控挂起 / 压缩中 / 用户正在输入 时不生成
       if (
-        store.isStreaming ||
-        store.activeGate !== null ||
-        (store.queuedMessages && store.queuedMessages.length > 0) ||
+        store.runs[sessionId] ||
+        store.gates[sessionId] ||
+        store.queuedMessages.some((q) => q.sessionId === sessionId) ||
         draftInputRef.current.trim().length > 0
       ) {
         return;
@@ -161,9 +161,9 @@ export function useFollowUpSuggestions({
 
           const currentStore = useAppStore.getState();
           if (
-            currentStore.isStreaming ||
-            currentStore.activeGate !== null ||
-            (currentStore.queuedMessages && currentStore.queuedMessages.length > 0) ||
+            currentStore.runs[sessionId] ||
+            currentStore.gates[sessionId] ||
+            currentStore.queuedMessages.some((q) => q.sessionId === sessionId) ||
             draftInputRef.current.trim().length > 0
           ) {
             return;

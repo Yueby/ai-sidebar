@@ -19,7 +19,8 @@ const ASK_USER_PARAMS = Type.Object({
  * ask_user 工具定义:经 lib/gate.ts 的 ask 路径向用户提问并等待答复。
  * 挂起期间 agent 工具循环阻塞属预期行为(无超时);无 UI 处理器时快速 cancelled。
  */
-export function createAskUserToolDefinition(): AgentTool<typeof ASK_USER_PARAMS> & { risk: ToolRisk } {
+export function createAskUserToolDefinition(sessionId?: string): AgentTool<typeof ASK_USER_PARAMS> & { risk: ToolRisk } {
+  const gateForRun = (req: Parameters<typeof requestGate>[0]) => requestGate(req, sessionId ?? '');
   return {
     name: 'ask_user',
     label: toolLabel('ask_user'),
@@ -43,7 +44,7 @@ export function createAskUserToolDefinition(): AgentTool<typeof ASK_USER_PARAMS>
             .filter((o): o is string => typeof o === 'string' && o.length > 0)
             .slice(0, 6)
         : undefined;
-      const res = await requestGate({
+      const res = await gateForRun({
         kind: 'ask',
         question,
         options: options && options.length > 0 ? options : undefined,

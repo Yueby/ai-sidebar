@@ -29,7 +29,6 @@ export function useCompact() {
   const [compactingSessionId, setCompactingSessionId] = useState<string | null>(null);
   const compactAbortRef = useRef<AbortController | null>(null);
   // 门控/错误域:store 直读(一期收敛)
-  const hasPendingGate = useAppStore((s) => s.activeGate !== null);
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
   const handleCompact = useCallback(
@@ -37,9 +36,9 @@ export function useCompact() {
       customInstructions,
       targetSessionId,
     }: { customInstructions?: string; targetSessionId?: string } = {}): Promise<boolean> => {
-      // 互斥守卫:流式/挂起门控/压缩中任一 true 则拒绝
+      // 互斥守卫:同一时刻至多一个压缩;目标会话自身在跑/挂门控时拒绝
       const store = useAppStore.getState();
-      if (store.isStreaming || hasPendingGate || isCompacting) return false;
+      if (isCompacting) return false;
       // 压缩目标:后台轮末自动压缩 = 运行会话(targetSessionId);手动压缩 = 当前活跃会话。
       // 按 store 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
       const latestCurrent = selectCurrentSession(store);
@@ -47,6 +46,8 @@ export function useCompact() {
         ? store.sessions.find((s) => s.id === targetSessionId)
         : (store.sessions.find((s) => s.id === latestCurrent?.id) ?? latestCurrent ?? undefined);
       if (!session || session.messages.length === 0) return false;
+      // 目标会话自身在跑或挂门控时拒绝(其他会话的运行不影响压缩)
+      if (store.runs[session.id] || store.gates[session.id]) return false;
       const active = findActiveModel(store.settings);
       if (!active) {
         setErrorMessage(i18n.t('compaction.toast.noModel'));
@@ -113,7 +114,7 @@ export function useCompact() {
         compactAbortRef.current = null;
       }
     },
-    [hasPendingGate, isCompacting, setErrorMessage]
+    [isCompacting, setErrorMessage]
   );
 
   /** 取消进行中的压缩(预留) */

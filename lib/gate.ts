@@ -36,7 +36,7 @@ export type GateResponse =
     }
   | { kind: 'ask'; answer: string; cancelled?: boolean };
 
-export type GateHandler = (req: GateRequest) => Promise<GateResponse>;
+export type GateHandler = (req: GateRequest, sessionId: string) => Promise<GateResponse>;
 
 let activeHandler: GateHandler | null = null;
 
@@ -78,7 +78,7 @@ export function flushPendingGates(): void {
  * 会话级 grant:命中已记录 scope 时直接 approved(不弹卡、不经 handler);
  * 应答携带 grant 时记录 scope,供同类后续调用短路。
  */
-export function requestGate(req: GateRequest): Promise<GateResponse> {
+export function requestGate(req: GateRequest, sessionId: string): Promise<GateResponse> {
   if (req.kind === 'confirm') {
     const scope = req.grantScope;
     if (scope && grantedScopes.has(scope)) {
@@ -90,7 +90,7 @@ export function requestGate(req: GateRequest): Promise<GateResponse> {
   return new Promise<GateResponse>((resolve) => {
     const entry: PendingGate = { req, resolve };
     pending.add(entry);
-    h(req)
+    h(req, sessionId)
       .then((res) => {
         const scope = req.kind === 'confirm' ? req.grantScope : undefined;
         if (res.kind === 'confirm' && res.grant && scope) grantedScopes.add(scope);
@@ -112,6 +112,7 @@ export function createGatedTool<T extends { name: string }>(
   summary: string,
   detail?: string,
   detailFromArgs?: (args: unknown) => string,
+  sessionId?: string,
 ): T & { risk: ToolRisk } {
   const base = tool as unknown as AgentTool;
   return {
@@ -123,14 +124,17 @@ export function createGatedTool<T extends { name: string }>(
       signal?: AbortSignal,
       onUpdate?: AgentToolUpdateCallback,
     ) => {
-      const res = await requestGate({
-        kind: 'confirm',
-        toolName: base.name,
-        label: toolLabel(base.name),
-        summary,
-        detail: (detailFromArgs?.(params) ?? detail) || undefined,
-        toolCallId,
-      });
+      const res = await requestGate(
+        {
+          kind: 'confirm',
+          toolName: base.name,
+          label: toolLabel(base.name),
+          summary,
+          detail: (detailFromArgs?.(params) ?? detail) || undefined,
+          toolCallId,
+        },
+        sessionId ?? '',
+      );
       if (!(res.kind === 'confirm' && res.approved)) {
         return {
           content: [{ type: 'text', text: 'User denied permission to run this tool.' }],
