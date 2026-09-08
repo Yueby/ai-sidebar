@@ -6,6 +6,7 @@ import { createErrorSlice, type ErrorSlice } from './errorSlice';
 import { createSessionSlice, selectCurrentSession, type SessionSlice } from './sessionSlice';
 import { createSettingsSlice, type SettingsSlice } from './settingsSlice';
 import { createChatSlice, type ChatSlice } from './chatSlice';
+import { setRuntimeStateSink } from '@/lib/sessionRuntime';
 
 export type AppStore = GateSlice & ErrorSlice & SessionSlice & SettingsSlice & ChatSlice;
 export { selectCurrentSession };
@@ -36,6 +37,11 @@ export const useAppStore = create<AppStore>()(
  * - 无卸载清理(setGateHandler(null) + flushPendingGates 均省去):面板销毁即整层失效,
  *   清理无观察差异。
  */
+// SessionRuntime 状态出口:runtime 是会话运行态唯一源,store.runs 为渲染镜像
+setRuntimeStateSink((sessionId, snapshot, active) => {
+  useAppStore.getState().syncRun(sessionId, snapshot, active);
+});
+
 setGateHandler((req: GateRequest, sessionId: string) => {
   return new Promise<GateResponse>((resolve) => {
     // 门控归属由工具层透传的 run 会话决定(并发 run 各自独立);无归属 = 异常调用,安全拒绝

@@ -19,6 +19,7 @@ import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
 import { parsePageRefs } from '@/lib/pageRefs';
+import { runtimeFor } from '@/lib/sessionRuntime';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 
@@ -50,20 +51,10 @@ export function useChatTurn(params: {
 
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
-  // ── per-session 临时状态(React ref,不入 store)──────────────────────────
-  /** turn 身份守卫:同会话打断重发后旧 turn 的拆卸链失效(按会话独立) */
-  const turnSeqRef = useRef<Record<string, number>>({});
-  /** 各会话的在途请求(停止按钮按会话中止) */
-  const abortControllersRef = useRef<Record<string, AbortController>>({});
-  // 流式增量节流(token 级增量直推 store 会让长对话全列表重绘卡顿)
+  // per-session 运行状态全部移入 SessionRuntime(lib/sessionRuntime.ts,pi AgentSession 对齐):
+  // turn 序号/在途请求/流式节流/压缩标记/发送锁/队列 由 runtime 按会话持有。
+  // 流式增量节流间隔(token 级增量直推 store 会让长对话全列表重绘卡顿)
   const STREAM_FLUSH_INTERVAL_MS = 50;
-  const streamThrottleRef = useRef<
-    Record<string, { text: string; thinking: string; timer: ReturnType<typeof setTimeout> | null }>
-  >({});
-  /** AI 自主压缩标记(compact_context 工具置位;按会话,轮末消费) */
-  const compactRequestedRef = useRef<Record<string, boolean>>({});
-  /** 同步发送锁(按会话):busy 状态在首个 await 之后才置位,并发调用会双开 turn */
-  const sendingRef = useRef<Set<string>>(new Set());
 
   // 引用稳定的 handleSendMessage 指针(避免循环依赖,供出队延后调用;可指定目标会话后台发送)
   const handleSendMessageRef = useRef<
@@ -74,10 +65,11 @@ export function useChatTurn(params: {
   const isSessionBusy = useCallback(
     (sessionId: string): boolean => {
       const s = useAppStore.getState();
+      const rt = runtimeFor(sessionId);
       return (
-        !!s.runs[sessionId] ||
+        rt.isStreaming ||
         !!s.gates[sessionId] ||
-        sendingRef.current.has(sessionId) ||
+        rt.isSending ||
         (isCompacting && compactingSessionId === sessionId)
       );
     },
@@ -144,21 +136,14 @@ export function useChatTurn(params: {
       } = args;
       const sid = session.id;
 
-      // turn 身份守卫(按会话):自此新 turn 接管,同会话旧 turn 的拆卸链全部失效
-      const seq = (turnSeqRef.current[sid] = (turnSeqRef.current[sid] ?? 0) + 1);
+      // turn 身份守卫(按会话,由 SessionRuntime 持有):自此新 turn 接管,同会话旧 turn 的拆卸链全部失效
+      const rt = runtimeFor(sid);
+      const { seq, signal } = rt.beginRun();
       const st = useAppStore.getState();
-      st.startRun(sid);
       st.resetResolvedGateCount(sid);
       // 只清归属本会话或全局的错误;别的会话的错误保留(分流提醒仍在)
       const errOwner = useAppStore.getState().errorSessionId;
       if (errOwner === null || errOwner === sid) setErrorMessage(null);
-      // 上一轮遗留的节流定时器作废(终值已随 message_end 物化或被轮末清空)
-      const prevThrottle = streamThrottleRef.current[sid];
-      if (prevThrottle?.timer) clearTimeout(prevThrottle.timer);
-      streamThrottleRef.current[sid] = { text: '', thinking: '', timer: null };
-
-      const abortCtrl = new AbortController();
-      abortControllersRef.current[sid] = abortCtrl;
       // AI 自主压缩标记(try 块内置位消费;finally 需访问,故提升到 try 外)
       let autoCompactPending = false;
 
@@ -181,19 +166,18 @@ export function useChatTurn(params: {
           // 用户自定义系统提示词(常驻注入)
           systemPrompt: useAppStore.getState().settings.systemPrompt,
           sessionId: sid,
-          signal: abortCtrl.signal,
+          signal,
           // search_web 工具注册配置:设置里配置了可用搜索源才下发
           webSearch: useAppStore.getState().settings.webSearch,
           // compact_context 工具 execute 只置标记;轮末由本 hook 消费
           onCompactContext: () => {
-            // 同会话旧 run 无权置位新 run 的压缩请求
-            if (seq !== turnSeqRef.current[sid]) return;
-            compactRequestedRef.current[sid] = true;
+            // 同会话旧 run 无权置位新 run 的压缩请求(runtime.isOwner 校验)
+            rt.requestCompaction(seq);
           },
           onEvent: (event) => {
             if (event.type === 'message_update' && event.message.role === 'assistant') {
               // 同会话旧 turn(打断重发)的 aborted partial 事件流必须静默
-              if (seq !== turnSeqRef.current[sid]) return;
+              if (!rt.isOwner(seq)) return;
               const text = event.message.content
                 .filter((b) => b.type === 'text')
                 .map((b) => b.text)
@@ -202,41 +186,22 @@ export function useChatTurn(params: {
                 .filter((b) => b.type === 'thinking')
                 .map((b) => b.thinking)
                 .join('');
-              const th = streamThrottleRef.current[sid] ?? { text: '', thinking: '', timer: null };
-              streamThrottleRef.current[sid] = th;
-              th.text = text;
-              th.thinking = thinking;
-              if (!th.timer) {
-                th.timer = setTimeout(() => {
-                  th.timer = null;
-                  // 旧 run 的迟到冲刷不得写新 run 的流式态
-                  if (seq !== turnSeqRef.current[sid]) return;
-                  useAppStore.getState().patchRun(sid, { content: th.text, thinking: th.thinking });
-                }, STREAM_FLUSH_INTERVAL_MS);
-              }
+              rt.pushStreamDelta(seq, text, thinking, STREAM_FLUSH_INTERVAL_MS);
             } else if (event.type === 'message_end' && event.message.role === 'assistant') {
-              if (seq !== turnSeqRef.current[sid]) return;
+              if (!rt.isOwner(seq)) return;
               if (import.meta.env.DEV) {
                 const prevLen = useAppStore.getState().runs[sid]?.inFlight.length ?? -1;
                 console.log(`[turn:${sid}] msg_end assistant: inFlight ${prevLen}->+1 (seq ${seq})`);
               }
-              // 一条 assistant 完成:整体进 in-flight(思考/toolCall/正文齐全),
-              // 同批重置 live 流式态,准备承载下一 turn —— 交接无闪烁
-              useAppStore.getState().appendRunInFlight(sid, event.message as ChatMessage);
-              const th = streamThrottleRef.current[sid];
-              if (th?.timer) clearTimeout(th.timer);
-              streamThrottleRef.current[sid] = { text: '', thinking: '', timer: null };
-              useAppStore.getState().patchRun(sid, { content: '', thinking: '' });
+              // 一条 assistant 完成:整体进 in-flight,同批重置 live 流式态(交接无闪烁)
+              rt.pushInFlight(seq, event.message as ChatMessage);
             } else if (event.type === 'message_end' && event.message.role === 'toolResult') {
               // 工具结果即时入 in-flight:工具卡立刻显示返回结果,不等整轮结束
-              if (seq !== turnSeqRef.current[sid]) return;
-              useAppStore.getState().appendRunInFlight(sid, event.message as ChatMessage);
+              rt.pushInFlight(seq, event.message as ChatMessage);
             } else if (event.type === 'tool_execution_start') {
-              if (seq !== turnSeqRef.current[sid]) return;
-              useAppStore.getState().addRunTool(sid, event.toolName);
+              rt.addTool(seq, event.toolName);
             } else if (event.type === 'tool_execution_end') {
-              if (seq !== turnSeqRef.current[sid]) return;
-              useAppStore.getState().removeRunTool(sid, event.toolName);
+              rt.removeTool(seq, event.toolName);
             }
           },
         });
@@ -244,13 +209,12 @@ export function useChatTurn(params: {
         // 用完整转录落盘(含 assistant/toolResult,回放零转换;user 消息带 refSnapshot)。
         // 基于该会话的「最新」内存副本:流式期间用户可能已在草稿中添加新引用,不能覆盖。
         // 若会话已被删除(流式中途删掉当前会话),不复活,丢弃本轮转录。
-        if (seq !== turnSeqRef.current[sid]) {
+        if (!rt.isOwner(seq)) {
           // 旧 run 被同会话新 turn 接管:不得触碰新 run 的压缩标记/运行态
           return;
         }
         // AI 自主压缩标记:本 turn 置位的消费归属本 turn
-        autoCompactPending = compactRequestedRef.current[sid] === true;
-        compactRequestedRef.current[sid] = false;
+        autoCompactPending = rt.consumeCompactionRequest();
         const latest = useAppStore.getState().sessions.find((s) => s.id === sid);
         if (import.meta.env.DEV) {
           console.log(
@@ -275,11 +239,11 @@ export function useChatTurn(params: {
             useAppStore.getState().sessions.map((s) => (s.id === sid ? finalizedSession : s)),
           );
           // 完整转录已含 in-flight 各条 assistant → 同批清空该会话 inFlight,避免重复渲染闪烁
-          useAppStore.getState().clearRunInFlight(sid);
+          rt.clearInFlight(seq);
           await saveSession(finalizedSession);
 
           // 首轮对话成功完成:尝试静默自动 AI 命名一次(若失败则保持目前的截断标题)
-          if (shouldTriggerAutoAiTitle && onAutoAiTitle && !abortCtrl.signal.aborted && !result.errorMessage) {
+          if (shouldTriggerAutoAiTitle && onAutoAiTitle && !signal.aborted && !result.errorMessage) {
             setTimeout(() => {
               onAutoAiTitle(finalizedSession.id);
             }, 100);
@@ -289,40 +253,34 @@ export function useChatTurn(params: {
           const hasQueue = useAppStore
             .getState()
             .queuedMessages.some((q) => q.sessionId === finalizedSession.id);
-          if (!abortCtrl.signal.aborted && !result.errorMessage && !hasQueue && onTurnSuccess) {
+          if (!signal.aborted && !result.errorMessage && !hasQueue && onTurnSuccess) {
             setTimeout(() => {
               onTurnSuccess(finalizedSession.id, finalizedSession);
             }, 50);
           }
         } else {
-          useAppStore.getState().clearRunInFlight(sid);
+          rt.clearInFlight(seq);
         }
-        if (abortCtrl.signal.aborted) {
-          useAppStore.getState().patchRun(sid, { cancelled: true });
+        if (signal.aborted) {
+          rt.markCancelled(seq);
         } else if (result.errorMessage) {
           setErrorMessage(result.errorMessage, sid);
         }
       } catch (err: unknown) {
-        if (seq !== turnSeqRef.current[sid]) {
+        if (!rt.isOwner(seq)) {
           return;
         }
         autoCompactPending = false;
         // 异常路径不落盘转录,in-flight 无处可归 → 清空避免残留悬空气泡
-        useAppStore.getState().clearRunInFlight(sid);
-        if (abortCtrl.signal.aborted) {
-          useAppStore.getState().patchRun(sid, { cancelled: true });
+        rt.clearInFlight(seq);
+        if (signal.aborted) {
+          rt.markCancelled(seq);
         } else {
           setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置', sid);
         }
       } finally {
         // 仅当前 turn 的所有者才能拆卸本会话运行态(不弄坏同会话新 turn)
-        if (seq === turnSeqRef.current[sid]) {
-          const teardown = useAppStore.getState();
-          teardown.endRun(sid);
-          delete abortControllersRef.current[sid];
-          const th = streamThrottleRef.current[sid];
-          if (th?.timer) clearTimeout(th.timer);
-          delete streamThrottleRef.current[sid];
+        if (rt.endRun(seq)) {
           // 轮末自主压缩:清理完成后再触发(endRun 已复位,互斥守卫可通过)
           if (autoCompactPending) {
             setTimeout(() => onAutoCompact(sid), 0);
@@ -366,7 +324,7 @@ export function useChatTurn(params: {
 
       // 1. 目标会话自身忙(有 run/门控/准备中/压缩中)或发送竞态 = 入队。
       // 其他会话的 run 与本会话无关(并发隔离):B 在 A 流式期间发送会立即执行
-      if (isSessionBusy(target.id) || sendingRef.current.has(target.id)) {
+      if (isSessionBusy(target.id) || !runtimeFor(target.id).tryAcquireSendLock()) {
         const owner = target.id;
         const ownerSession = store.sessions.find((s) => s.id === owner);
         const draftAtEnqueue = ownerSession?.draft ?? EMPTY_DRAFT;
@@ -398,7 +356,6 @@ export function useChatTurn(params: {
         return;
       }
 
-      sendingRef.current.add(target.id);
       useAppStore.getState().setPreparing(target.id, true);
       try {
         await activeSessionIdItem.setValue(target.id);
@@ -502,7 +459,7 @@ export function useChatTurn(params: {
           active,
         });
       } finally {
-        sendingRef.current.delete(target.id);
+        runtimeFor(target.id).releaseSendLock();
         useAppStore.getState().setPreparing(target.id, false);
       }
     },
@@ -585,7 +542,7 @@ export function useChatTurn(params: {
         delete updatedSession.compaction;
       }
 
-      sendingRef.current.add(session.id);
+      runtimeFor(session.id).tryAcquireSendLock();
       useAppStore.getState().setPreparing(session.id, true);
       try {
         const nextSessions = useAppStore
@@ -627,7 +584,7 @@ export function useChatTurn(params: {
           active,
         });
       } finally {
-        sendingRef.current.delete(session.id);
+        runtimeFor(session.id).releaseSendLock();
         useAppStore.getState().setPreparing(session.id, false);
       }
     },
@@ -638,7 +595,7 @@ export function useChatTurn(params: {
   const handleStopGeneration = useCallback((sessionId?: string) => {
     const sid = sessionId ?? useAppStore.getState().activeSessionId;
     if (!sid) return;
-    abortControllersRef.current[sid]?.abort();
+    runtimeFor(sid).abort();
     useAppStore.getState().dismissPendingGates(sid);
   }, []);
 

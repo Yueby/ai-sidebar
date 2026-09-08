@@ -45,6 +45,8 @@ export interface ChatSlice {
   appendRunInFlight: (sessionId: string, message: ChatMessage) => void;
   clearRunInFlight: (sessionId: string) => void;
   setPreparing: (sessionId: string, preparing: boolean) => void;
+  /** 由 SessionRuntime 状态出口同步渲染镜像(active=false 时移除该会话运行态) */
+  syncRun: (sessionId: string, snapshot: SessionRun, active: boolean) => void;
 
   enqueueMessage: (item: QueuedMessage) => void;
   /** 取队首(全局 FIFO);出队方按 item.sessionId 调度 */
@@ -122,6 +124,17 @@ export function createChatSlice(set: SliceSet): ChatSlice {
             : [...s.preparingSessionIds, sessionId]
           : s.preparingSessionIds.filter((id) => id !== sessionId),
       })),
+
+    syncRun: (sessionId, snapshot, active) =>
+      set((s) => {
+        if (!active) {
+          if (!(sessionId in s.runs)) return s;
+          const next = { ...s.runs };
+          delete next[sessionId];
+          return { runs: next };
+        }
+        return { runs: { ...s.runs, [sessionId]: snapshot } };
+      }),
 
     enqueueMessage: (item) => set((s) => ({ queuedMessages: [...(s.queuedMessages ?? []), item] })),
     dequeueMessage: () => {
