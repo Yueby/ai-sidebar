@@ -1166,8 +1166,33 @@ export default defineContentScript({
       return null;
     }
 
-    /** 滚动:无定位 = 主视口滚,失败降级内嵌滚动容器(SPA/面板页);有定位 = scrollIntoView 居中(+高亮,验证可见) */
-    function performScroll(el: Element | null, direction: string, amount: number | undefined): string[] {
+    /** 滚动劫持页兜底:派发合成 wheel 事件。合成事件不触发浏览器默认滚动(no isTrusted),
+     *  但页面自身的 wheel 监听器(翻页/切 view 的劫持逻辑)照常收到——对原生滚动页零副作用。 */
+    async function dispatchWheelScroll(center: Element | null, vertical: boolean, signed: number): Promise<string> {
+      const targetEl = center instanceof Element ? center : document.documentElement;
+      const before = center instanceof Element ? center.getBoundingClientRect().top : null;
+      targetEl.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaX: vertical ? 0 : signed,
+          deltaY: vertical ? signed : 0,
+          deltaMode: 0,
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        }),
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 300));
+      if (before !== null && center instanceof Element) {
+        const after = center.getBoundingClientRect().top;
+        if (Math.abs(after - before) > 8) {
+          return 'Dispatched wheel event; page content moved (scroll hijacking detected).';
+        }
+      }
+      return 'Dispatched wheel event to the page; content did not move measurably.';
+    }
+
+    /** 滚动:无定位 = 主视口滚,失败依次降级内嵌滚动容器(SPA/面板页)与 wheel 事件(劫持翻页页) */
+    async function performScroll(el: Element | null, direction: string, amount: number | undefined): Promise<string[]> {
       if (el) {
         el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
         highlightElement(el);
@@ -1195,18 +1220,24 @@ export default defineContentScript({
       // 2) 视口中心元素的最近可滚容器(覆盖 main/面板/聊天窗等内嵌滚动)
       const center = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
       const container = findScrollableAncestor(center instanceof Element ? center : null, vertical);
+      let containerEdge = false;
       if (container) {
         if (applyScroll(container, dx, dy) > 2) {
           return [`Scrolled ${direction} by ${delta}px inside a scrollable container.`];
         }
-        return [`Viewport is not scrollable in this direction; the scrollable container is at its edge.`];
+        containerEdge = true;
       }
       // 3) 全页兜底(页首 off-screen 容器等边缘情况)
       const anyContainer = tryScrollAnyContainer(vertical, dx, dy);
       if (anyContainer) {
         return [`Scrolled ${direction} by ${delta}px inside a scrollable container.`];
       }
-      return [`Viewport is not scrollable in this direction; no scrollable content found in the page.`];
+      // 4) 劫持页兜底:合成 wheel(翻页型页面鼠标滚动即切页,原生 scrollTop 不动)
+      const wheelNote = await dispatchWheelScroll(center instanceof Element ? center : null, vertical, signed);
+      if (containerEdge) {
+        return [`Viewport is not scrollable in this direction; the scrollable container is at its edge.`, wheelNote];
+      }
+      return [wheelNote];
     }
 
     async function runPageAction(message: {
@@ -1238,7 +1269,7 @@ export default defineContentScript({
           target = res.hit.el;
           summary = elementSummary(res.hit);
         }
-        const notes = performScroll(target, direction, amount);
+        const notes = await performScroll(target, direction, amount);
         notes.push(...(await waitForSettle(1500)));
         return { ok: true, url: location.href, title: document.title, element: summary, notes };
       }
