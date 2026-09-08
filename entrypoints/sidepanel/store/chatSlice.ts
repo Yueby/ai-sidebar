@@ -6,6 +6,12 @@ export interface InFlightRun {
   messages: ChatMessage[];
 }
 
+/** 排队消息:归属目标会话(切换会话不影响,轮末自动发往归属会话) */
+export interface QueuedMessage {
+  sessionId: string;
+  text: string;
+}
+
 export interface ChatSlice {
   isStreaming: boolean;
   streamingContent: string;
@@ -13,8 +19,8 @@ export interface ChatSlice {
   activeToolNames: string[];
   isCancelled: boolean;
   inFlight: InFlightRun | null;
-  /** 消息队列:流式期间用户排队发送的消息列表(仅内存,FIFO) */
-  queuedMessages: string[];
+  /** 消息队列:繁忙期间用户排队发送的消息(仅内存,FIFO;按目标会话归属,跨会话隔离) */
+  queuedMessages: QueuedMessage[];
 
   setIsStreaming: (value: boolean) => void;
   setStreamingContent: (value: string) => void;
@@ -24,9 +30,11 @@ export interface ChatSlice {
   setInFlight: (
     value: InFlightRun | null | ((prev: InFlightRun | null) => InFlightRun | null),
   ) => void;
-  enqueueMessage: (text: string) => void;
-  dequeueMessage: () => string | undefined;
-  removeQueuedMessage: (index: number) => void;
+  enqueueMessage: (item: QueuedMessage) => void;
+  dequeueMessage: () => QueuedMessage | undefined;
+  removeQueuedMessage: (sessionId: string, index: number) => void;
+  /** 删除指定会话的排队条目(会话删除时) */
+  removeQueuedMessagesForSession: (sessionId: string) => void;
   clearQueue: () => void;
 }
 
@@ -52,10 +60,10 @@ export function createChatSlice(set: SliceSet): ChatSlice {
     setIsCancelled: (isCancelled) => set({ isCancelled }),
     setInFlight: (value) =>
       set((s) => ({ inFlight: typeof value === 'function' ? value(s.inFlight) : value })),
-    enqueueMessage: (text) =>
-      set((s) => ({ queuedMessages: [...(s.queuedMessages ?? []), text] })),
+    enqueueMessage: (item) =>
+      set((s) => ({ queuedMessages: [...(s.queuedMessages ?? []), item] })),
     dequeueMessage: () => {
-      let item: string | undefined;
+      let item: QueuedMessage | undefined;
       set((s) => {
         const queue = s.queuedMessages ?? [];
         if (queue.length === 0) return s;
@@ -65,9 +73,15 @@ export function createChatSlice(set: SliceSet): ChatSlice {
       });
       return item;
     },
-    removeQueuedMessage: (index) =>
+    removeQueuedMessage: (sessionId, index) =>
       set((s) => ({
-        queuedMessages: (s.queuedMessages ?? []).filter((_, i) => i !== index),
+        queuedMessages: (s.queuedMessages ?? []).filter(
+          (q, i) => !(q.sessionId === sessionId && i === index),
+        ),
+      })),
+    removeQueuedMessagesForSession: (sessionId) =>
+      set((s) => ({
+        queuedMessages: (s.queuedMessages ?? []).filter((q) => q.sessionId !== sessionId),
       })),
     clearQueue: () => set({ queuedMessages: [] }),
   };

@@ -31,14 +31,19 @@ export function useCompact() {
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
 
   const handleCompact = useCallback(
-    async ({ customInstructions }: { customInstructions?: string } = {}): Promise<boolean> => {
+    async ({
+      customInstructions,
+      targetSessionId,
+    }: { customInstructions?: string; targetSessionId?: string } = {}): Promise<boolean> => {
       // 互斥守卫:流式/挂起门控/压缩中任一 true 则拒绝
       const store = useAppStore.getState();
       if (store.isStreaming || hasPendingGate || isCompacting) return false;
+      // 压缩目标:后台轮末自动压缩 = 运行会话(targetSessionId);手动压缩 = 当前活跃会话。
       // 按 store 取最新会话副本(压缩发起与落盘间可能有切换/同步,避免 stale 覆盖)
       const latestCurrent = selectCurrentSession(store);
-      const session: Session | undefined =
-        store.sessions.find((s) => s.id === latestCurrent?.id) ?? latestCurrent ?? undefined;
+      const session: Session | undefined = targetSessionId
+        ? (store.sessions.find((s) => s.id === targetSessionId) ?? latestCurrent ?? undefined)
+        : (store.sessions.find((s) => s.id === latestCurrent?.id) ?? latestCurrent ?? undefined);
       if (!session || session.messages.length === 0) return false;
       const active = findActiveModel(store.settings);
       if (!active) {

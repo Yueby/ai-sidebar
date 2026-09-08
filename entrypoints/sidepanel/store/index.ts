@@ -38,6 +38,8 @@ export const useAppStore = create<AppStore>()(
  */
 setGateHandler((req: GateRequest) => {
   return new Promise<GateResponse>((resolve) => {
-    useAppStore.getState().pushGate(req, resolve);
+    // 门控归属运行会话(inFlight 在 turn 开始时声明):后台会话的门控不弹当前视图,仅提醒
+    const st = useAppStore.getState();
+    st.pushGate(req, resolve, st.inFlight?.sessionId ?? st.activeSessionId ?? null);
   });
 });

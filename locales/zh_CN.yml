@@ -29,6 +29,7 @@ refBar:
 
 header:
   newSession: 新建会话
+  runningInBackground: 后台运行中
   history: 历史会话
   historyCount: 历史会话 ({count})
   emptyHistory: 暂无历史会话
@@ -170,6 +171,8 @@ gate:
 
 app:
   loading: 加载中...
+  gatePendingElsewhere: 会话「{title}」正在等待你的确认
+  errorElsewhere: 会话「{title}」运行出错
   overflowSuggest: 当前上下文超出模型窗口，建议压缩
   compact: 压缩
   ignoreSuggest: 忽略建议
@@ -178,6 +181,7 @@ app:
   helpTitle: 可用快捷命令
   close: 关闭
   settingsSr: 设置
+  gateSwitchTo: 切换过去
   settingsDesc: 配置 AI 提供商、搜索、权限与偏好设置
 
 

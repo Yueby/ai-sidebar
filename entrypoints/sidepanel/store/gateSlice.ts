@@ -4,6 +4,8 @@ import { flushPendingGates, type GateRequest, type GateResponse } from '../gateA
 export interface ActiveGate {
   request: GateRequest;
   resolve: (res: GateResponse) => void;
+  /** 归属运行会话(turn 内产生):非当前会话的门控不弹卡,仅提醒用户切回 */
+  sessionId: string | null;
 }
 
 export interface GateSlice {
@@ -11,7 +13,7 @@ export interface GateSlice {
   /** 本轮已应答门控数(分页 1/N 用;冲销路径不计数) */
   resolvedGateCount: number;
   /** lib/gate handler 入口(模块级注册一次) */
-  pushGate: (request: GateRequest, resolve: (res: GateResponse) => void) => void;
+  pushGate: (request: GateRequest, resolve: (res: GateResponse) => void, sessionId: string | null) => void;
   /** 四类应答:计数 +1、resolve、收卡;confirm 可携带会话级 grant */
   approveGate: (grant?: boolean) => void;
   denyGate: () => void;
@@ -42,7 +44,8 @@ export function createGateSlice(set: SliceSet, get: SliceGet): GateSlice {
     activeGate: null,
     resolvedGateCount: 0,
 
-    pushGate: (request, resolve) => set({ activeGate: { request, resolve } }),
+    pushGate: (request, resolve, sessionId) =>
+      set({ activeGate: { request, resolve, sessionId } }),
 
     approveGate: (grant?: boolean) =>
       respond(get, set, grant ? { kind: 'confirm', approved: true, grant } : { kind: 'confirm', approved: true }),

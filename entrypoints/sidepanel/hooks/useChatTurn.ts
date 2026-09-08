@@ -63,21 +63,21 @@ export function useChatTurn(params: {
   // AI 自主压缩标记:compact_context 工具 execute 只置位;轮末由本 hook 消费
   const compactRequestedRef = useRef(false);
 
-  // 引用稳定的 handleSendMessage 指针(避免循环依赖,供出队延后调用)
-  const handleSendMessageRef = useRef<(text: string) => Promise<void>>(async () => {});
+  // 引用稳定的 handleSendMessage 指针(避免循环依赖,供出队延后调用;可指定目标会话后台发送)
+  const handleSendMessageRef = useRef<(text: string, targetSessionId?: string) => Promise<void>>(async () => {});
 
-  // 检查并出队发送下一条排队消息
+  // 检查并出队发送下一条排队消息(按条目归属会话后台发送,不切换当前视图)
   const checkAndDispatchQueue = useCallback(() => {
     const s = useAppStore.getState();
     if (s.queuedMessages.length === 0) return;
     // 若当前正在流式/门控挂起/压缩中，暂缓出队
     if (s.isStreaming || s.activeGate !== null || isCompacting) return;
-    const nextText = s.dequeueMessage();
-    if (nextText) {
+    const next = s.dequeueMessage();
+    if (next) {
       if (import.meta.env.DEV) {
-        console.log(`[turn] dispatch queued message: "${nextText.slice(0, 30)}..."`);
+        console.log(`[turn] dispatch queued message -> session ${next.sessionId}: "${next.text.slice(0, 30)}..."`);
       }
-      void handleSendMessageRef.current(nextText);
+      void handleSendMessageRef.current(next.text, next.sessionId);
     }
   }, [isCompacting]);
 
@@ -292,7 +292,8 @@ export function useChatTurn(params: {
         if (abortCtrl.signal.aborted) {
           useAppStore.getState().setIsCancelled(true);
         } else if (result.errorMessage) {
-          setErrorMessage(result.errorMessage);
+          // 后台会话错误归属该会话(App 按当前视图分流: here 弹横幅 toast,否则后台提醒)
+          setErrorMessage(result.errorMessage, session.id);
         }
       } catch (err: unknown) {
         // 旧 turn 已被接管时不清理新 turn 的 in-flight;
@@ -307,7 +308,7 @@ export function useChatTurn(params: {
         if (abortCtrl.signal.aborted) {
           useAppStore.getState().setIsCancelled(true);
         } else {
-          setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置');
+          setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置', session.id);
         }
       } finally {
         // 仅当前 turn 的所有者才能拆卸 streaming/abort 状态(不弄坏新 turn 的停止按钮)
@@ -335,20 +336,24 @@ export function useChatTurn(params: {
     [onAutoCompact, onAutoAiTitle, onTurnSuccess, resetResolvedGateCount, setErrorMessage, checkAndDispatchQueue]
   );
 
-  // AI Chat & Agent Loop (新消息发送入口)
+  // AI Chat & Agent Loop (新消息发送入口;targetSessionId = 跨会话队列出队的归属会话,
+  // 后台发送不切换当前视图)
   const handleSendMessage = useCallback(
-    async (userText: string) => {
+    async (userText: string, targetSessionId?: string) => {
       const trimmed = userText.trim();
       if (!trimmed) return;
 
       const store = useAppStore.getState();
 
-      // 1. 流式期间或门控挂起时发送 = 入队(不再打断; 停止按钮 Square 仍是唯一打断入口)
+      // 1. 流式期间或门控挂起时发送 = 入队(不再打断; 停止按钮 Square 仍是唯一打断入口)。
+      // 条目归属目标会话:后台轮末自动发往归属会话,与当前视图无关(完全隔离)
       if (store.isStreaming || store.activeGate !== null) {
+        const owner = targetSessionId ?? store.activeSessionId;
+        if (!owner) return;
         if (import.meta.env.DEV) {
-          console.log(`[turn] enqueue message while busy: "${trimmed.slice(0, 30)}..."`);
+          console.log(`[turn] enqueue message -> session ${owner}: "${trimmed.slice(0, 30)}..."`);
         }
-        store.enqueueMessage(trimmed);
+        store.enqueueMessage({ sessionId: owner, text: trimmed });
         return;
       }
 
@@ -369,15 +374,17 @@ export function useChatTurn(params: {
         return;
       }
 
-      let session = selectCurrentSession(store);
-      let allSessions = [...store.sessions];
-
+      // 目标会话:显式指定(跨会话队列出队)优先,否则当前活跃会话;目标不存在(已删)则丢弃
+      const session = targetSessionId
+        ? store.sessions.find((s) => s.id === targetSessionId)
+        : selectCurrentSession(store);
       if (!session) {
-        session = createSession(titleFromText(trimmed));
-        allSessions = [session, ...allSessions];
-        useAppStore.getState().setActiveSessionId(session.id);
-        await activeSessionIdItem.setValue(session.id);
+        if (targetSessionId && import.meta.env.DEV) {
+          console.log(`[turn] queued target session ${targetSessionId} was deleted; drop`);
+        }
+        return;
       }
+      let allSessions = [...store.sessions];
 
       const isFirstMessage = session.messages.length === 0 || session.title === '新会话';
       // 发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。

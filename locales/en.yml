@@ -29,6 +29,7 @@ refBar:
 
 header:
   newSession: New chat
+  runningInBackground: Running in background
   history: History
   historyCount: History ({count})
   emptyHistory: No chats yet
@@ -170,6 +171,8 @@ gate:
 
 app:
   loading: Loading...
+  gatePendingElsewhere: Session "{title}" is waiting for your confirmation
+  errorElsewhere: Session "{title}" hit an error
   overflowSuggest: Context exceeds the model window — compaction recommended
   compact: Compact
   ignoreSuggest: Dismiss
@@ -178,6 +181,7 @@ app:
   helpTitle: Available quick commands
   close: Close
   settingsSr: Settings
+  gateSwitchTo: Switch there
   settingsDesc: Configure AI providers, search, permissions and preferences
 
 

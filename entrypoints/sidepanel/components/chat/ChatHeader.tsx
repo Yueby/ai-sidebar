@@ -35,6 +35,8 @@ interface ChatHeaderProps {
   sessions: Session[];
   activeSessionId: string | null;
   titlingSessionIds?: Set<string>;
+  /** 后台运行中的会话 id(历史列表显示运行指示) */
+  runningSessionId?: string | null;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
   onRenameSession?: (id: string, newTitle: string) => void;
@@ -47,6 +49,7 @@ export function ChatHeader({
   sessions,
   activeSessionId,
   titlingSessionIds,
+  runningSessionId,
   onSelectSession,
   onDeleteSession,
   onRenameSession,
@@ -150,6 +153,7 @@ export function ChatHeader({
                   const isActive = s.id === activeSessionId;
                   const isEditing = editingId === s.id;
                   const isAiTitling = titlingSessionIds?.has(s.id);
+                  const isRunning = s.id === runningSessionId;
 
                   if (isEditing) {
                     return (
@@ -225,6 +229,9 @@ export function ChatHeader({
                       )}
                       onClick={() => onSelectSession(s.id)}
                     >
+                      {isRunning && (
+                        <Spinner className="size-3 shrink-0 text-primary animate-spin" aria-label={i18n.t('header.runningInBackground')} />
+                      )}
                       <Tooltip>
                         <TooltipTrigger
                           render={

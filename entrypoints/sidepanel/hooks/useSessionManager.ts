@@ -245,9 +245,7 @@ export function useSessionManager() {
     async (id: string) => {
       const { sessions, activeSessionId: leavingId } = useAppStore.getState();
       if (leavingId === id) return;
-      // 切换会话冲销所有 pending 门控(安全拒绝)并清空排队消息
-      resetGates();
-      useAppStore.getState().clearQueue();
+      // 会话隔离:切换仅切换视图。后台运行/门控/队列按会话归属继续,不冲销不清空
       const leaving = leavingId
         ? sessions.find((s) => s.id === leavingId) ?? null
         : null;
@@ -278,9 +276,7 @@ export function useSessionManager() {
       setErrorMessage(null);
       return;
     }
-    // 新建会话冲销所有 pending 门控并清空排队消息
-    resetGates();
-    useAppStore.getState().clearQueue();
+    // 会话隔离:新建仅新增视图,后台门控/队列按会话归属保留
     flushDraftSaves();
     // 删空后自动补一个新会话(当前页由发送时聚焦注入承载)
     const newSess = createSession('新会话');
@@ -294,10 +290,10 @@ export function useSessionManager() {
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
-      // 若删除当前会话，冲销 pending 门控并清空排队消息
-      if (useAppStore.getState().activeSessionId === id) {
+      // 被删会话的遗留物按归属清理:其排队条目;其挂起门控(无论是否当前视图)冲销
+      useAppStore.getState().removeQueuedMessagesForSession(id);
+      if (useAppStore.getState().activeGate?.sessionId === id) {
         resetGates();
-        useAppStore.getState().clearQueue();
       }
       // 防止被删会话的待发草稿在 flush 时复活它;删除是自然 flush 边界
       dropPendingDraftSave(id);

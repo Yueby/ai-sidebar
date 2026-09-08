@@ -45,6 +45,7 @@ export default function App() {
   const updateSettings = useAppStore((s) => s.updateSettings);
   const errorMessage = useAppStore((s) => s.errorMessage);
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
+  const errorSessionId = useAppStore((s) => s.errorSessionId);
   const sessions = useAppStore((s) => s.sessions);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
   const loaded = useAppStore((s) => s.loaded);
@@ -321,6 +322,12 @@ export default function App() {
   );
   const latestLocalSessionAt = sessions.reduce((max, s) => Math.max(max, s.updatedAt), 0);
 
+  // 会话隔离派生:运行/门控归属 = in-flight 声明的会话;仅当与当前视图一致才在视图内呈现
+  // (live 流式气泡/停止按钮/队列条/门控卡),否则后台运行——当前会话完全不受影响
+  const runningSessionId = isStreaming ? (inFlight?.sessionId ?? null) : null;
+  const isStreamingHere = runningSessionId !== null && runningSessionId === currentSession?.id;
+  const isGateHere = gate.activeGate != null && gate.activeGate.sessionId === currentSession?.id;
+
   // 渲染源 = 会话转录 + 本次运行的 in-flight assistant 消息(仅当归属当前会话;
   // 流式中途切到别的会话时不串显)。live 气泡仍由 MessageList 追加在最后。
   const displayedMessages =
@@ -334,17 +341,44 @@ export default function App() {
       ? inFlight.messages.filter((m) => m.role !== 'toolResult').length
       : 0;
   // 编辑重发使能:非流式、非门控、非压缩时允许用户编辑已发送消息
-  const canEditMessage = !isStreaming && !gate.activeGate && !compact.isCompacting;
+  const canEditMessage = !isStreamingHere && !isGateHere && !compact.isCompacting;
 
   // 新会话快捷指令:空会话展示时异步生成(模型失败静默回退静态四条)
   const quickPrompts = useQuickPrompts(
     settings,
-    displayedMessages.length === 0 && !isStreaming,
+    displayedMessages.length === 0 && !isStreamingHere,
   );
 
-  // 错误状态收敛至 toast: errorMessage 变化且非空时触发常驻通知
+  // 后台会话门控提醒:运行中会话的确认卡不在当前视图弹出(toast 点击切回),
+  // 切回后该视图内正常渲染门控卡;离开时提醒重新挂起
+  const pendingElsewhereGate = gate.activeGate != null && gate.activeGate.sessionId !== currentSession?.id;
   useEffect(() => {
-    if (errorMessage) {
+    const g = gate.activeGate;
+    if (pendingElsewhereGate && g?.sessionId) {
+      const target = sessions.find((x) => x.id === g.sessionId);
+      toast.add({
+        id: 'gate-elsewhere',
+        type: 'warning',
+        description: i18n.t('app.gatePendingElsewhere', {
+          title: target?.title || i18n.t('header.untitled'),
+        }),
+        timeout: 0,
+        actionProps: {
+          children: i18n.t('app.gateSwitchTo'),
+          onClick: () => {
+            session.handleSelectSession(g.sessionId as string);
+          },
+        },
+      });
+    } else {
+      toast.close('gate-elsewhere');
+    }
+  }, [pendingElsewhereGate, gate.activeGate, sessions, currentSession?.id, session.handleSelectSession]);
+
+  // 错误状态收敛至 toast: 按归属分流——当前会话错误 = error 横幅;后台会话错误 = 提醒切回(不关闭)
+  const isErrorHere = errorSessionId === null || errorSessionId === currentSession?.id;
+  useEffect(() => {
+    if (errorMessage && isErrorHere) {
       toast.add({
         id: 'chat-error',
         type: 'error',
@@ -352,8 +386,24 @@ export default function App() {
         timeout: 0,
         onClose: () => setErrorMessage(null),
       });
+    } else if (errorMessage && !isErrorHere) {
+      const target = sessions.find((x) => x.id === errorSessionId);
+      toast.add({
+        id: 'chat-error',
+        type: 'warning',
+        description: i18n.t('app.errorElsewhere', {
+          title: target?.title || i18n.t('header.untitled'),
+        }),
+        timeout: 0,
+        actionProps: {
+          children: i18n.t('app.gateSwitchTo'),
+          onClick: () => {
+            if (errorSessionId) session.handleSelectSession(errorSessionId);
+          },
+        },
+      });
     }
-  }, [errorMessage, setErrorMessage]);
+  }, [errorMessage, isErrorHere, errorSessionId, sessions, session.handleSelectSession, setErrorMessage]);
 
   // 溢出建议收敛至 toast: 条件 false → true 跳变时触发一次常驻警告(带压缩动作与关闭忽略)
   const prevOverflowSuggestRef = useRef(false);
@@ -436,11 +486,11 @@ export default function App() {
           {/* Messages */}
           <MessageList
             messages={displayedMessages}
-            isStreaming={isStreaming}
+            isStreaming={isStreamingHere}
             streamingContent={streamingContent}
             streamingThinking={streamingThinking}
             activeToolLabels={activeToolNames}
-            gateRequest={gate.activeGate?.request ?? null}
+            gateRequest={isGateHere ? (gate.activeGate?.request ?? null) : null}
             pendingGateTotal={gatePagination.total}
             quietTailCount={quietTailCount}
             sessionKey={currentSession?.id ?? 'empty'}
@@ -528,15 +578,17 @@ export default function App() {
           {/* Composer:按会话重挂载(key),草稿输入/引用派生自当前会话 draft */}
           <ChatInput
             key={`${activeSessionId ?? 'none'}#${composerNonce}`}
-            overlap={!gate.activeGate && !slashHelpOpen}
+            overlap={!isGateHere && !slashHelpOpen}
             onSend={(text) => {
               followUps.clearSuggestions();
               void chat.handleSendMessage(text);
             }}
             onStop={chat.handleStopGeneration}
-            isStreaming={isStreaming}
-            queuedMessages={queuedMessages}
-            onRemoveQueuedMessage={removeQueuedMessage}
+            isStreaming={isStreamingHere}
+            queuedMessages={queuedMessages
+              .filter((q) => q.sessionId === currentSession?.id)
+              .map((q) => q.text)}
+            onRemoveQueuedMessage={(index) => removeQueuedMessage(currentSession?.id ?? '', index)}
             followUpSuggestions={followUps.suggestions}
             onSelectFollowUp={handleSelectPrompt}
             settings={settings}
