@@ -324,3 +324,12 @@ export function disposeRuntime(sessionId: string): void {
 export function existingRuntime(sessionId: string): SessionRuntime | undefined {
   return runtimes.get(sessionId);
 }
+
+/** 全量释放(恢复/导入替换全部会话数据时调用) */
+export function disposeAllRuntimes(): void {
+  for (const [id, rt] of runtimes) {
+    rt.dispose();
+    runtimeStateSink?.(id, { ...EMPTY_SNAPSHOT }, false);
+  }
+  runtimes.clear();
+}

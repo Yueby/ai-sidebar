@@ -19,6 +19,8 @@ import { useQuickPrompts } from './hooks/useQuickPrompts';
 import { useFollowUpSuggestions } from './hooks/useFollowUpSuggestions';
 import { clearPendingDraftSaves } from './store/sessionSlice';
 import { replaceAllSessions } from '@/lib/sessionStore';
+import { disposeAllSessionAgents } from '@/lib/agent';
+import { disposeAllRuntimes } from '@/lib/sessionRuntime';
 import { activeSessionIdItem, sanitizeSessions, sanitizeSettings } from '@/lib/storage';
 import type { SyncBundle } from '@/lib/syncPayload';
 import { useAppStore, selectCurrentSession } from './store';
@@ -340,6 +342,9 @@ export default function App() {
       const store = useAppStore.getState();
       // 远端文件可能被手改/损坏:入库前与本地入口同标准清洗
       const sessions = sanitizeSessions(bundle.sessions);
+      // 全部会话数据被替换:释放旧的自持 Agent 与运行时实例(陈旧转录不得残留)
+      disposeAllSessionAgents();
+      disposeAllRuntimes();
       await replaceAllSessions(sessions);
       store.setSessions(sessions);
       await store.updateSettings(sanitizeSettings(bundle.settings));

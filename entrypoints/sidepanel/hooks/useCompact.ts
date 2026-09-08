@@ -6,7 +6,7 @@ import { findActiveModel } from '@/lib/providers';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { findCutIndex, runCompact } from '@/lib/compaction';
-import { buildProvider } from '@/lib/agent';
+import { buildProvider, disposeSessionAgent } from '@/lib/agent';
 import { collectPageRefs, renderPageRefsBlock } from '@/lib/pageRefs';
 import { existingRuntime } from '@/lib/sessionRuntime';
 import { useAppStore, selectCurrentSession } from '../store';
@@ -112,6 +112,8 @@ export function useCompact() {
         );
         dropPendingDraftSave(session.id);
         await saveSession(updated);
+        // 压缩改变了转录(追加摘要消息):释放自持 Agent,下次发送以最新 store 转录重建
+        disposeSessionAgent(session.id);
         return true;
       } catch (err: unknown) {
         if (abortCtrl.signal.aborted) return false; // 中止:静默,不落盘

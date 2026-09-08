@@ -14,7 +14,7 @@ import type {
 import { activeSessionIdItem, createSession, createUserMessage, titleFromText } from '@/lib/storage';
 import { saveSession } from '@/lib/sessionStore';
 import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
-import { runAgentTurn } from '@/lib/agent';
+import { hasSessionAgent, runAgentTurn } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
@@ -125,21 +125,23 @@ export function useChatTurn(params: {
   const executeTurn = useCallback(
     async (args: {
       session: Session;
-      historyBeforeUser: ChatMessage[];
+      /** 覆盖 Agent 自持转录(可选):首次初始化 / 编辑重发截断 / 恢复导入 */
+      replaceHistory?: ChatMessage[];
       userMessage: UserMessage;
       refTabs?: RefTab[];
       pickedElements?: PickedElement[];
-      effectiveCompaction?: SessionCompaction;
+      /** 压缩元数据:请求面裁剪(transformContext),转录本体不变 */
+      compaction?: SessionCompaction;
       shouldTriggerAutoAiTitle: boolean;
       active: { provider: ProviderConfig; model: ModelConfig };
     }) => {
       const {
         session,
-        historyBeforeUser,
+        replaceHistory,
         userMessage,
         refTabs,
         pickedElements,
-        effectiveCompaction,
+        compaction,
         shouldTriggerAutoAiTitle,
         active,
       } = args;
@@ -167,9 +169,10 @@ export function useChatTurn(params: {
         const result = await runAgentTurn({
           provider: active.provider,
           modelId: active.model.id,
-          // 发送消费「生效历史」(压缩过 = [摘要]+之后),否则压缩对对话零效果;
-          // messagesWithUser 预落盘保持全量(非破坏契约,见 finalize)
-          history: effectiveMessages(historyBeforeUser, effectiveCompaction),
+          // 转录真源 = Agent 自持(见 lib/agent.ts ensureSessionAgent);
+          // replaceHistory 仅覆盖(首次/编辑重发);压缩经 transformContext 裁剪请求面
+          history: replaceHistory,
+          compaction,
           userMessage,
           // 实时引用(含 tabId)供本轮 read_page/read_element 工具用;agent 侧再并入历史块
           refTabs,
@@ -242,9 +245,8 @@ export function useChatTurn(params: {
           // 直接落 result.messages 会丢被压缩截断的前缀消息)
           const finalizedSession: Session = {
             ...latest,
-            // 落盘用原始 userMessage(newMessages[0] 是 toLlmMessage 剥过
-            // elements 的请求副本,泄入存储会丢 refs.elements——引用列表消失+白名单退化)
-            messages: [...historyBeforeUser, userMessage, ...result.newMessages.slice(1)],
+            // Agent 自持转录 = 原始全量(含 refs 块与本轮全部消息);直接落库,非破坏
+            messages: [...result.messages],
             updatedAt: Date.now(),
           };
           // 草稿以内存最新副本为准(后台出队落盘期间用户可能已在编辑该会话草稿)
@@ -474,11 +476,12 @@ export function useChatTurn(params: {
 
         await executeTurn({
           session: updatedSession,
-          historyBeforeUser: session.messages,
+          // 首次(尚无自持 Agent)以会话转录初始化;已有 Agent 则自持,不再每轮覆盖
+          replaceHistory: hasSessionAgent(session.id) ? undefined : session.messages,
           userMessage,
           refTabs: refreshedTabs,
           pickedElements: snapElements,
-          effectiveCompaction: session.compaction,
+          compaction: session.compaction,
           shouldTriggerAutoAiTitle: isFirstMessage && !session.customTitle,
           active,
         });
@@ -599,11 +602,12 @@ export function useChatTurn(params: {
         // 8. 触发重发链路
         await executeTurn({
           session: updatedSession,
-          historyBeforeUser,
+          // 编辑重发:截断后的转录覆盖 Agent 自持转录(丢弃被截断部分)
+          replaceHistory: truncatedMessages,
           userMessage,
           refTabs: refreshedTabs,
           pickedElements,
-          effectiveCompaction: updatedSession.compaction,
+          compaction: updatedSession.compaction,
           shouldTriggerAutoAiTitle: isFirstUserMessage && !session.customTitle,
           active,
         });

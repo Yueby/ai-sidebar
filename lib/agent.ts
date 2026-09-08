@@ -10,7 +10,8 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
-import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, UserMessage, UserRule, WebSearchConfig } from './types';
+import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, SessionCompaction, UserMessage, UserRule, WebSearchConfig } from './types';
+import { effectiveMessages } from './contextTokens';
 import { normalizeBaseUrl } from './providers';
 import type { RefTab } from './pageContext';
 import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
@@ -155,7 +156,10 @@ export interface RunAgentOptions {
   provider: ProviderConfig;
   modelId: string;
   /** 本轮之前的会话历史(不含本轮用户消息);user 消息 content 可含 <page-refs> 块,参与工具白名单聚合 */
-  history: ChatMessage[];
+  /** 覆盖转录(可选):提供=覆盖 Agent 现有转录(首次初始化/编辑重发截断/恢复导入);省略=用 Agent 自持转录 */
+  history?: ChatMessage[];
+  /** 压缩元数据:非破坏裁剪请求面(transformContext),不改转录(可选) */
+  compaction?: SessionCompaction;
   /** 本轮用户消息(content 已内嵌 <page-refs> 块);与历史同形状,无任何自定义字段 */
   userMessage: UserMessage;
   /** 当前草稿中被引用的标签页(App 侧已按 includePageContext 门槛过滤) */
@@ -202,7 +206,7 @@ export interface RunAgentResult {
 const sessionAgents = new Map<string, Agent>();
 
 /** 构造每轮可变的 Agent 输入(provider/模型/工具白名单/系统提示词;并发 run 各自独立) */
-function buildAgentInputs(options: RunAgentOptions): {
+function buildAgentInputs(options: RunAgentOptions, transcript: ChatMessage[]): {
   models: ReturnType<typeof createModels>;
   model: NonNullable<ReturnType<ReturnType<typeof createModels>['getModel']>>;
   tools: ReturnType<typeof getTools>;
@@ -218,7 +222,7 @@ function buildAgentInputs(options: RunAgentOptions): {
   // 后者保证「追问旧页面」时(草稿已清空)工具句柄仍在,LLM 能读此前引用的标签页/元素。
   const currentTabs = options.refTabs ?? [];
   const currentElements = options.pickedElements ?? [];
-  const historical = collectPageRefs(options.history);
+  const historical = collectPageRefs(transcript);
 
   const tabById = new Map<number, RefTab>();
   for (const t of historical.tabs) {
@@ -271,34 +275,45 @@ function buildAgentInputs(options: RunAgentOptions): {
   return { models, model, tools, systemPrompt };
 }
 
-/** 获取或创建会话 Agent:复用则刷新每轮可变配置(provider/工具/模型/思考档) */
+/** 会话是否已有自持 Agent 实例(调用方据此决定是否传 history 初始化) */
+export function hasSessionAgent(sessionId: string): boolean {
+  return sessionAgents.has(sessionId);
+}
+
+/**
+ * 获取或创建会话 Agent(pi 设计:每会话一个实例,**自持转录**)。
+ * - 转录真源 = agent.state.messages(原始格式,含 refs 块;请求经 convertToLlm 展开);
+ * - 复用轮刷新每轮可变配置(provider/工具/系统提示词/模型/思考档/压缩裁剪);
+ * - options.history 提供时覆盖转录(首次初始化/编辑重发截断/恢复导入)。
+ */
 function ensureSessionAgent(options: RunAgentOptions): Agent {
-  const { models, model, tools, systemPrompt } = buildAgentInputs(options);
-  const streamFn = (m: Parameters<typeof models.streamSimple>[0], ctx: Parameters<typeof models.streamSimple>[1], o: Parameters<typeof models.streamSimple>[2]) =>
-    models.streamSimple(m, ctx, o);
   const sid = options.sessionId;
-  if (!sid) {
-    // 无会话 id(理论不可达):退化为一次性实例,不进注册表
-    return new Agent({
-      initialState: {
-        systemPrompt,
-        model,
-        thinkingLevel: options.thinkingLevel,
-        tools,
-        messages: options.history.map(toLlmMessage),
-      },
-      streamFn,
-      sessionId: sid,
-      toolExecution: 'sequential',
-    });
-  }
-  const existing = sessionAgents.get(sid);
+  const existing = sid ? sessionAgents.get(sid) : undefined;
+  // 白名单/初始化的转录来源:显式覆盖 > Agent 自持
+  const transcript = (options.history ?? existing?.state.messages ?? []) as ChatMessage[];
+  const { models, model, tools, systemPrompt } = buildAgentInputs(options, transcript);
+  const streamFn = (
+    m: Parameters<typeof models.streamSimple>[0],
+    ctx: Parameters<typeof models.streamSimple>[1],
+    o: Parameters<typeof models.streamSimple>[2],
+  ) => models.streamSimple(m, ctx, o);
+  // 压缩裁剪(非破坏):请求面 = [摘要]+之后,转录本体不变
+  const transformContext = options.compaction
+    ? (msgs: Parameters<NonNullable<Agent['transformContext']>>[0]) =>
+        effectiveMessages(msgs as ChatMessage[], options.compaction) as never
+    : undefined;
+  const convertToLlm = (msgs: Parameters<NonNullable<Agent['convertToLlm']>>[0]) =>
+    msgs.map((m) => toLlmMessage(m as ChatMessage)) as never;
+
   if (existing) {
     existing.streamFunction = streamFn;
+    existing.transformContext = transformContext;
     existing.state.tools = tools;
     existing.state.systemPrompt = systemPrompt;
     existing.state.model = model;
     existing.state.thinkingLevel = options.thinkingLevel;
+    // 显式覆盖转录(编辑重发截断 / 恢复导入后重同步)
+    if (options.history) existing.state.messages = options.history;
     return existing;
   }
   const agent = new Agent({
@@ -307,19 +322,27 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
       model,
       thinkingLevel: options.thinkingLevel,
       tools,
-      messages: options.history.map(toLlmMessage),
+      // 原始转录(含 refs 块);请求时经 convertToLlm 展开元素
+      messages: transcript,
     },
     streamFn,
+    convertToLlm,
+    transformContext,
     sessionId: sid,
     toolExecution: 'sequential',
   });
-  sessionAgents.set(sid, agent);
+  if (sid) sessionAgents.set(sid, agent);
   return agent;
 }
 
 /** 会话删除时释放 Agent 实例 */
 export function disposeSessionAgent(sessionId: string): void {
   sessionAgents.delete(sessionId);
+}
+
+/** 全量释放(恢复/导入替换全部会话数据时调用,防陈旧转录残留) */
+export function disposeAllSessionAgents(): void {
+  sessionAgents.clear();
 }
 
 /**
@@ -329,8 +352,6 @@ export function disposeSessionAgent(sessionId: string): void {
  */
 export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentResult> {
   const agent = ensureSessionAgent(options);
-  // 阶段①兼容语义:每轮以调用方传入的 history 为准(与每轮重建 Agent 等价)
-  agent.state.messages = options.history.map(toLlmMessage);
 
   let newMessages: ChatMessage[] = [];
   const unsubscribe = agent.subscribe((event) => {
@@ -345,8 +366,8 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
-    // 请求副本:本轮 user 消息同样经 toLlmMessage 展开(元素内容内嵌;悬空标记剥除)
-    await agent.prompt(toLlmMessage(options.userMessage) as UserMessage);
+    // 原始 user 消息入转录;请求面由 convertToLlm 展开元素(单一表示,存储与请求同源)
+    await agent.prompt(options.userMessage as UserMessage);
   } finally {
     unsubscribe();
     signal?.removeEventListener('abort', onAbort);

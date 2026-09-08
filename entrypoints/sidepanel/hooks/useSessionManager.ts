@@ -267,6 +267,8 @@ export function useSessionManager() {
       if (recycle) {
         const remaining = useAppStore.getState().sessions.filter((s) => s.id !== leaving!.id);
         setSessions(remaining);
+        disposeRuntime(leaving!.id);
+        disposeSessionAgent(leaving!.id);
         await deleteSession(leaving!.id);
       }
       setActiveSessionId(id);
