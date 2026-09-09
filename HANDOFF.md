@@ -5,7 +5,7 @@
 ## 0. 三句话速读
 
 1. **UI 已全部实现,agent 运行时为 pi-agent-core,引用架构 = `<page-refs>` 元数据块(tabs)+ 消息文本内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ `read_page`/`read_element`/`search_element`/`search_page`/`click_element`/`fill_element`/`scroll_page`/`screenshot_page`/`open_page`/`activate_page`/`close_page`/`fetch_url`/`search_web`/`execute_js`/`compact_context`/`read_time`/`ask_user` 工具**;聊天组件在 `entrypoints/sidepanel/components/chat/`,设置组件在 `components/settings/`(提供商/搜索/权限/备份/关于五视图,以全高 Drawer 滑出),务必先做用户手动回归(见 §8)。
-2. **AI 通信一律走 `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(同版本 ^0.84.4),严禁手写 SSE/协议适配;`lib/agent.ts` 的 `runAgentTurn()` 是唯一发送入口;唯一例外是"拉模型列表"两个 GET(已在 `lib/models.ts`)。
+2. **AI 通信一律走 `@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(同版本 ^0.84.4),严禁手写 SSE/协议适配;会话运行时 = pi-agent-core 的 `Agent`(决策 36,每会话一实例自持转录),发送入口 `runAgentTurn()`/`continueAgentTurn()`;唯一例外是"拉模型列表"两个 GET(已在 `lib/models.ts`)。
 3. 每步验收:`pnpm compile && pnpm build` 必须全绿;改 content.ts/消息协议/权限后必须完整重启 `pnpm dev` 并刷新页面(见 §9)。
 
 ## 1. 项目定位
@@ -36,7 +36,7 @@
 | 加 shadcn 组件 | `pnpm dlx shadcn@latest add <name> -y -o`;已装:alert-dialog/badge/button/checkbox/dialog/drawer/dropdown-menu/input/label/scroll-area/select/separator/switch/textarea/tooltip/toast;**`components/ui/` 保持官方原样,严禁自定义组件/样式/变体** |
 | 抽屉 | 设置页 = 全高 Drawer(vaul ^1.1.2,93dvh,聊天常驻挂载);删确认 = AlertDialog(会话/提供商) |
 | AI 请求 | **`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`**(见 §6/§7),sidepanel 直连,BYOK |
-| 存储 | 设置/API Key → chrome.storage.local(`local:settings`);会话历史+草稿 → **IndexedDB**(`lib/sessionStore.ts`,`idb` 封装,旧 `local:sessions` 启动时一次性迁移);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat;devtools 仅 DEV 构建),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化 |
+| 存储 | 设置/API Key → chrome.storage.local(`local:settings`);会话历史+草稿 → **IndexedDB JSONL 记录**(`lib/sessionStore.ts` 库 `ai-sidebar-sessions` v1 单 store + `lib/sessionRecord.ts` 序列化,决策 38 零旧版兼容);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat;devtools 仅 DEV 构建),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化 |
 | 页面引用 | **元素引用单一表示 = 自闭合 `<picked-element elementId tabId selector tagName label />` 块**,草稿(TipTap 原子徽章节点)/存储消息/LLM 视图三处同串(属性值经 `&quot;` 转义);`<page-refs>{JSON}</page-refs>` 块仅承载 tabs 元数据(LLM 视图剥 elements 留 tabs,存储层保留供 UI chip 查表),两块皆在发送时序列化进 user content 此后不可变(`lib/pageRefs.ts`);元素内容按需经 `read_element`(块属性 tabId+selector 即句柄)获取 |
 | manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts` + host_permissions **`<all_urls>`**(截图 captureVisibleTab 硬要求,Chrome 只认 <all_urls>/activeTab;content_scripts 的 http/https 宿主访问随安装授予);`minimum_chrome_version: "135"`(userScripts.execute 门槛;Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts,无 API 可代开仅能引导) |
 | Markdown | react-markdown + remark-gfm + rehype-highlight + highlight.js(样式已在 style.css 引入) |
@@ -85,6 +85,9 @@
 35. **CDP 特权层 = 滚动可信输入兜底**(2026-09,`lib/cdp.ts`):scroll_page 的 JS 链(主滚动/容器探测/合成 wheel)全部无位移时才 attach chrome.debugger,`Input.dispatchMouseEvent(mouseWheel)` 派发可信滚轮(同时驱动原生滚动与滚动劫持监听,Playwright 底层同机制);**白名单仅此一个 CDP 方法**;按需 attach + 60s 闲置自动 detach,不留常驻附加;attach 失败(浏览器内页/DevTools 占用)静默回退并注明;`debugger` 权限随安装授予,权限页签文案已注明。
 36. **会话运行时直接采用 pi-agent-core 的 Agent**(2026-09,拍板;取代自研 SessionRuntime):调查确认 `@earendil-works/pi-agent-core` 的 `Agent` 本身就是会话运行时——`state{systemPrompt,model,thinkingLevel,tools,messages,isStreaming,streamingMessage,pendingToolCalls,errorMessage}` + `prompt()/continue()/steer()/followUp()/clearSteeringQueue()/clearFollowUpQueue()/hasQueuedMessages()/steeringMode/followUpMode/abort()/signal/waitForIdle()/subscribe()/reset()` + `convertToLlm`/`transformContext`/`sessionId`/`toolExecution` 选项。pi-coding-agent 的 AgentSession 只是在其上加持久化/扩展/压缩/重试。**迁移计划**(分步可提交):①`lib/agent.ts` 会话 Agent 工厂(✅ 已完成 2026-09 `db6db42`:`buildAgentInputs` + `ensureSessionAgent` 每会话一实例、复用轮刷新 streamFunction/tools/systemPrompt/model;`runAgentTurn` 对外签名不变、仍以调用方 history 覆盖 `state.messages`——行为等价于重建;`disposeSessionAgent` 接入会话删除)→ ②**Agent 自持转录**(✅ 已完成 2026-09 `98f685b`:`ensureSessionAgent` 存**原始转录** + `convertToLlm: toLlmMessage` 请求时展开;`RunAgentOptions.history` 可选(提供=覆盖:首次初始化/编辑重发截断/恢复导入;省略=用 Agent 自持),`hasSessionAgent()` 供调用方判定;压缩改 `transformContext` 裁剪(非破坏,不动转录)+ 压缩后 `disposeSessionAgent` 下次以最新 store 重建;finalize 直接落 `result.messages`;工具白名单 = Agent 转录 ∪ 当前草稿 refs ∪ openedTabs;恢复/导入 `disposeAllSessionAgents/disposeAllRuntimes`、空会话回收同步释放)→ ③队列改用 `agent.followUp/steer`(**✅ 已完成 2026-09**:入队即 `agent.followUp`(构造完整 user 消息含 refs 块)、store 仅存展示镜像(按对象身份在 message_end 移除)、空闲窗口 `continueAgentTurn` 消费、stop→`clearAllQueues`、followUpMode 显式 one-at-a-time;前置 2026-09:continue 泵 + newMessages 累加 `58558fb`、每轮工具重建 `prepareNextTurn` `5a106a4`、31 测试;核实限制:prepareNextTurn 在 followUp 注入**之前**调用(agent-loop.js:90 vs :112)→ queued 消息的 refs 白名单滞后一轮,tabs 由入队保留的草稿 refTabs 兜底、**elements 需入队时预聚合**;**剩余**:生产入队改 followUp、UI 只读镜像、逐条删除受控适配、stop→clearAllQueues、followUpMode 显式 one-at-a-time;pi 语义:steer = 当前 assistant turn 结束后注入、**不等于 abort**,停止按钮仍是显式 abort)→ ④**精简 `lib/sessionRuntime.ts`**(✅ 已完成 2026-09):实测**不能整体删除**——它是 React 的 UI 投影层(Agent 事件 → 可渲染快照,经 sink 同步 store.runs)+ 同步发送锁 + turn 所有权守卫;Agent 只提供事件流与 state(上游 TUI 直消费事件,无 React 快照层)。已删除的是**队列骨架死代码**(followUp/steer/shiftPending/pendingMessageCount/clearPending——队列归 Agent 原生持有)。**收益**:删掉流式循环/事件桥接/节流/in-flight/所有权守卫等自研代码,行为与 pi 一致。
 37. **sidebar 不需要回溯/分支/fork;JSONL 保留线性 id/parentId**(2026-09,目标 mttk9xo5 论证,待用户确认):pi-coding-agent 的 `/tree`(树形回溯并分支)、`/fork`(从历史消息建新会话)、`/clone`(复制活动分支)面向**探索式编码工作流**;sidebar 是“随手问/页面辅助”场景——①「改了再问」高频需求已由**编辑重发**(截断该消息之后+重发,丢弃旧分支)覆盖;②「另起话题」由**新建会话**覆盖;③「保留两条分支做对比」无对应 sidebar 工作流;④ JSONL 会话记录仍保留 `id/parentId` **线性**结构——与 pi 格式一致、零交互成本、未来若要分支数据已就绪(编辑重发后 parentId 重连即可)。**边界**:不做分支/fork/clone 的 UI 与交互(目标 Out scope)。
+38. **开发阶段零旧版兼容**(2026-09,用户拍板「所有东西不做任何旧版兼容,直接重构」):删除全部旧格式迁移链——`local:sessions` 旧 key 步骤、对象 store→v2 迁移、格式 flag、`migrateAllSessions`/`migrateSessionToJsonl`、sanitize 的旧扁平消息/refSnapshot/共享 auxThinking 分支。会话存储 = 全新 IndexedDB 库 `ai-sidebar-sessions` v1 单 store(JSONL 行);`sanitizeSessions` 只保留防御清洗(非法形状丢弃、pi 形状透传);WebDAV bundle 仍 `Session[]` 形状天然兼容。**代价如实**:旧会话数据不带过来(开发阶段可接受,回归用新数据)。
+39. **压缩预算随窗口自适应**(2026-09,回归发现 8k 模型压缩永报 Nothing to compact):固定 keepRecentTokens=12000 在小窗口下切点永远落在首条(可压缩前缀恒空)。`runCompact` 改:保留预算 = min(12000, 窗口×15%) 下限 2000;摘要输入序列化截断至窗口 45%(头部截+显式标注);生成上限加窗口 35% 约束。pi 固定值假设大窗口,BYOK 小模型必须本地化(语义不变:历史太小不值得压缩仍报 Nothing to compact)。
+40. **聊天视觉改版**(2026-09,用户验收驱动,全走官方语义):①AI 回复**去气泡平铺**(官方 `MessageContent`,主流 agent 形态;错误气泡 destructive 保留);②**头像行在内容上方**(垂直布局;官方 `self-end` 与 Nova `-translate-y-8` 是水平布局残留,消费处 className `self-start min-w-6` 经 tailwind-merge 去重覆盖);③用户气泡 `Bubble variant="secondary"`(亮浅灰/暗深灰;内嵌 chip 前景层级换算为 foreground 系);④**亮色 `--primary` 调柔** oklch 0.205→0.4(主题层,所有 default 按钮同步变中灰;暗色不动——官方 primary 翻转在亮色聊天面过硬);⑤**代码块换 shiki**(VS Code 引擎,github-light/github-dark 双主题 `--shiki-*` 变量跟随 `.dark`;`lib/shiki.ts` 模块级懒初始化 + 同步访问 + 就绪订阅重渲染,未就绪/未知语言降级纯文本;`--code-background` 补亮色浅灰值;产物 12.5MB 全懒加载 chunk 主包不变);⑥**composer 四层堆叠**(自上而下:推荐 chips 轻量文本 → 队列卡 → 引用栏 → 输入框;卡片族同构 `rounded-t-lg border-b-0 bg-muted/40`+官方 Badge 列表行,下层 `-mt-2` 压上层、z 0/10/20,输入框位置永不动;引用卡半透明叠压发黑 → `color-mix` 实色等效修)。设置页:新增**外观 tab**(`Settings.appearance` system/light/dark,theme.ts 双轨 + settingsSlice 全链路应用)、**删权限 tab**(视图文件删,lib/permissions.ts 留引导弹窗用)、**Toast z-60**(style.css 覆盖,浮于全高 Drawer)。队列卡折叠与引用栏同构(默认收起,grid-rows 动画,composer.expandQueue/collapseQueue 双语 key)。
 
 ## 4. 当前代码状态
 
@@ -92,16 +95,19 @@ lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_elem
 
 | 文件 | 状态 | 说明 |
 |---|---|---|
-| `lib/types.ts` | ✅ 完成 | `ApiType`/`ModelConfig`(含 `reasoningLevels`)/`ReasoningLevel`(`REASONING_LEVELS`/`REASONING_LEVEL_LABELS`,i18n-ready 唯一标签源)/`AuxThinkingLevel`+`AUX_THINKING_LEVELS`/`TOOL_LABELS`+`toolLabel`(中文单一来源)/`WebSearchProvider`+`WebSearchConfig`/`Settings`(含 `language`+`reasoningLevel`+`titleThinking`/`quickPromptThinking`+`webSearch`)/`AuxModelRef`(辅助模型引用,null = 跟随对话模型)/`RefTabMeta`/`RefElementMeta`(id/tabId/selector/tagName/preview)/`PageRefs`/`ChatMessage`(纯 pi 联合)/`SessionDraft`/`Session`(含 draft+compaction)/`PickedElement`(含 elementId)/消息协议常量单一来源 |
-| `lib/providers.ts` | ✅ 完成 | `API_TYPE_OPTIONS`(三协议+默认 baseUrl)、`normalizeBaseUrl`(anthropic 剥尾 /v1)、`apiTypeLabel`、`createProviderDraft`、`findActiveModel`、`resolveAuxModel`(辅助模型解析,null/失效回退对话模型)、`getModelReasoningLevels`(空回退 low/medium/high)、`resolveReasoningLevel`、`DEFAULT_SETTINGS`(含 language/titleThinking/quickPromptThinking 默认) |
-| `lib/storage.ts` | ✅ 完成 | `settingsItem`/`activeSessionIdItem` + `sanitizeSettings`(含 `sanitizeWebSearch`/`sanitizeAuxModelRef`/语言与思考档校验;旧共享 auxThinking 迁移到 titleThinking/quickPromptThinking)/`sanitizeSessions`(旧扁平消息结构按 pi 形状迁移)+ `uid/createSession(含 draft)/createUserMessage(text, refs?)/messageText/titleFromText/EMPTY_USAGE`;sanitizeDraft 丢弃无 elementId 的旧格式元素 |
-| `lib/sessionStore.ts` | ✅ 完成 | 会话历史唯一读写层(IndexedDB,`idb` 封装):`listSessions`(按 updatedAt 降序)/`saveSession`/`deleteSession`/`migrateLegacySessions`(旧 `local:sessions` 一次性迁移后删除旧 key);草稿随 Session 一起存 |
+| `lib/types.ts` | ✅ 完成 | `ApiType`/`ModelConfig`(含 `reasoningLevels`)/`ReasoningLevel`(`REASONING_LEVELS`/`REASONING_LEVEL_LABELS`,i18n-ready 唯一标签源)/`AuxThinkingLevel`+`AUX_THINKING_LEVELS`/`TOOL_LABELS`+`toolLabel`(中文单一来源)/`WebSearchProvider`+`WebSearchConfig`/`Settings`(含 `language`+`reasoningLevel`+`appearance`(system/light/dark,`APPEARANCE_MODES`)+`titleThinking`/`quickPromptThinking`+`webSearch`)/`AuxModelRef`(辅助模型引用,null = 跟随对话模型)/`RefTabMeta`/`RefElementMeta`(id/tabId/selector/tagName/preview)/`PageRefs`/`ChatMessage`(纯 pi 联合)/`SessionDraft`/`Session`(含 draft+compaction)/`PickedElement`(含 elementId)/消息协议常量单一来源 |
+| `lib/providers.ts` | ✅ 完成 | `API_TYPE_OPTIONS`(三协议+默认 baseUrl)、`normalizeBaseUrl`(anthropic 剥尾 /v1)、`apiTypeLabel`、`createProviderDraft`、`findActiveModel`、`resolveAuxModel`(辅助模型解析,null/失效回退对话模型)、`getModelReasoningLevels`(空回退 low/medium/high)、`resolveReasoningLevel`、`DEFAULT_SETTINGS`(含 language/appearance/titleThinking/quickPromptThinking 默认) |
+| `lib/storage.ts` | ✅ 完成 | `settingsItem`/`activeSessionIdItem` + `sanitizeSettings`(含 `sanitizeWebSearch`/`sanitizeAuxModelRef`/`sanitizeAppearance`/语言与思考档校验)/`sanitizeSessions`(**纯防御清洗**,决策 38:非法形状丢弃、pi 形状原样透传)+ `uid/createSession(含 draft)/createUserMessage(text, refs?)/messageText/titleFromText/EMPTY_USAGE`;sanitizeDraft 丢弃无 elementId 的结构元素 |
+| `lib/sessionRecord.ts` | ✅ 完成 | JSONL 会话记录格式层(对齐 pi session-format v3 线性链):header/compaction/消息/标题/草稿 entry 类型,`sessionToJsonl`(幂等序列化,compaction 摘要按 summaryTimestamp 转 compaction entry 只认第一条)/`jsonlToSession`(解析重建,摘要=content+summaryTimestamp+firstKeptEntryId 消费键保留)/`SESSION_RECORD_VERSION`;格式文档 `docs/session-jsonl-format.md` |
+| `lib/sessionStore.ts` | ✅ 完成 | 会话历史唯一读写层(IndexedDB,`idb` 封装,库 `ai-sidebar-sessions` v1 单 store `sessions`,JSONL 文本行 + 冗余 updatedAt 排序列):`listSessions`(逐行容错跳坏行,按 updatedAt 降序)/`saveSession`/`deleteSession`/`replaceAllSessions`(WebDAV 恢复,单事务 clear+put);**零迁移链**(决策 38);消费方面对 Session 对象,序列化封在本层 |
+| `lib/sessionRuntime.ts` | ✅ 完成 | React UI 投影层(决策 36 ④,非 Agent 替代品):Agent 事件→可渲染快照(`bridgeAgentEvent` 常驻订阅经 sink 同步 `store.runs[sessionId]`,流式 50ms 节流)+ 同步发送锁(`tryAcquireSendLock`)+ turn 所有权守卫(`isOwner(seq)` 旧 run 迟到事件丢弃);`disposeRuntime`/`disposeAllRuntimes`/`activeRuntimeSessionIds` |
 | `lib/pageRefs.ts` | ✅ 完成 | `<page-refs>` 块纯函数:`renderPageRefsBlock`(序列化拼进 user content;elements 含 id/preview)/`parsePageRefs`(UI 解析渲染,旧消息无 id 按数组序补齐)/`stripPageRefs`(展示时剥块)/`collectPageRefs`(聚合历史块引用,做工具白名单);`ELEMENT_PREVIEW_LIMIT` 常量 |
-| `lib/agent.ts` | ✅ 完成 | pi-agent-core 桥接:`runAgentTurn()`(唯一发送入口:工具循环/abort/事件透出;白名单=草稿∪历史块;工具数组经 `tools/registry.ts` 的 `getTools` 组装;**LLM 请求副本 `toLlmMessage` 把 refs 块剥 elements 留 tabs** —— `<picked-element>` 块已是元素内容载体,存储/LLM 同串)、`toPiModel`、`buildSystemPrompt()`(身份 + 本地日期时间行 + 压缩版 `<page-refs>` 协议规则,不注入引用目录);工具工厂已全部移至 `lib/tools/` |
+| `lib/agent.ts` | ✅ 完成 | pi-agent-core 桥接(决策 36):**会话 Agent 工厂** `ensureSessionAgent`(每会话一实例 Map 持有,长期存活支持多会话并发;自持原始转录 + `convertToLlm: toLlmMessage` 请求展开 + `transformContext` 压缩裁剪 + `prepareNextTurn` 每轮工具重建;`followUpMode/steeringMode: one-at-a-time`);常驻订阅 `setAgentEventSink` 事件→投影层;`runAgentTurn()`/`continueAgentTurn()`(发送/队列泵内核,白名单=Agent 转录∪草稿∪openedTabs;**LLM 请求副本 `toLlmMessage` 剥 elements 留 tabs**)、`sessionAgentFor`/`hasSessionAgent`/`disposeSessionAgent`/`disposeAllSessionAgents`、`toPiModel`、`buildSystemPrompt()`;工具工厂已全部移至 `lib/tools/` |
+| `lib/shiki.ts` | ✅ 完成 | 代码高亮引擎单例(决策 40 ⑤):模块级后台 `import('shiki')` 懒初始化(29 语言+github-light/dark 全 code-split),`highlightToHtml` 同步双主题 CSS 变量输出(未就绪/未知语言 null 降级),`onShikiReady` 订阅重渲染,`normalizeShikiLang` 别名归一;消费方 `MarkdownView` |
 | `lib/models.ts` | ✅ 完成 | `fetchProviderModels`(openai 兼容 Bearer / anthropic x-api-key+version,路径 openai=`/models`、anthropic=`/v1/models`)、`fetchModelsDevMeta`、`applyModelMeta`、`syncModelsWithModelsDev`(「同步」按钮:为已有模型补全参数)、`testConnection` |
 | `lib/pageContext.ts` | ✅ 完成 | tab 级读取原语(仅读取,不含工具工厂):`getActiveTabMeta`/`getTabMeta`/`listCandidateTabs`/`findTabByUrl`(hash 不敏感,open_page 复用)/`extractFromTab`/`renderPageContext`(content.ts 截 12000 字,本层透传);框选与元素解析:`startPickElement`(`ai-sidebar/pick-element`)、`resolveElement`(复用 `ai-sidebar/pick-element` + `action:'resolve'`,返回 outerHTML+truncated+preview+images+dpr);交互元素发现:`searchElementsInTab`(`ai-sidebar/search-element`,search_element 底层,无 content script 时补注入重试一次)+ 类型;页面动作原语:`performPageAction`(`ai-sidebar/page-action`,resolve/click/fill/scroll,http 守卫+**8s 看门狗竞速(超时/reject 分流:URL 变化 = 导航降级成功绝不重发;未变 = 补注入重试)**)+ `ActionLocator`/`ResolvedActionElement`/`PageActionResult` 类型;tab 变化报告:`snapshotTabs`/`describeTabChanges`(click_element 前后对比,新开 tab/焦点切换注记);可读性错误:`buildUnreadableTabError`(read_page/read_element/execute_js 共用:非数字/tab 已关闭/存在但不在可读集三分支,可行动文本,noun 参数区分 readable/executable);agent 开启注册表:`openTab`/`registerAgentOpenedTab`/`getAgentOpenedTabs`/`unregisterAgentOpenedTab`(决策 27) |
 | `lib/imageFetch.ts` | ✅ 完成 | read_element 取图管道:`fetchImageForModel`(fetch 主取)→ `captureCropForModel`(captureVisibleTab 按 rect×DPR 裁剪兜底,防盗链/403);canvas 降采样对齐 pi 上游:≤2000×2000、JPEG q0.8 起逐级降质、PNG/JPEG 取小、base64 ≤4.5MB |
-| `lib/permissions.ts` | ✅ 完成 | 权限声明与展示(设置「权限」页签数据层):INSTALL_PERMISSIONS(6 项安装权限用途说明;userScripts 行状态徽章 + 可选增强文案)/ WEB_ACCESS_PERMISSION(host <all_urls> 随安装授予,截图与取图兜底的硬依赖)/ `openExtensionDetails`(直达详情页,设置页签与引导弹窗共用);无运行时授权流程(决策 25) |
+| `lib/permissions.ts` | ✅ 完成 | 权限声明与展示(设置权限 tab 已删,决策 40;本层供 userScripts 强引导弹窗):INSTALL_PERMISSIONS(6 项安装权限用途说明;userScripts 行状态徽章 + 可选增强文案)/ WEB_ACCESS_PERMISSION(host <all_urls> 随安装授予,截图与取图兜底的硬依赖)/ `openExtensionDetails`(直达详情页,引导弹窗用);无运行时授权流程(决策 25) |
 | `lib/quickPrompts.ts` | ✅ 完成 | 新会话快捷指令生成(参考 rikkahub suggestionModel):`QuickPrompt`/`FALLBACK_PROMPTS`(静态四条兜底)/`isPromptWorthyUrl`(仅 http(s) 算正常页)/`generateQuickPrompts(settings, {pageTitle,url}, signal)`(辅助模型 completeSimple,JSON 数组解析 + 形状校验截 4 条,失败 throw 由 hook 回退);消费方 hooks/useQuickPrompts |
 | `lib/gate.ts` | ✅ 完成 | 工具门控契约:`GateRequest`(confirm/ask)/`GateResponse`、`setGateHandler`(未注册=快速 deny/cancelled,安全默认)、`flushPendingGates`(停止/中止冲销 pending)、`requestGate`(handler 异常按 deny)、`createGatedTool`(confirm 包装,detail 支持按参数动态生成,denied 英文拒绝文本;execute_js 已用) |
 | `lib/pageScripting.ts` | ✅ 完成 | execute_js 注入原语:`isUserScriptsAvailable`(userScripts 存在 + getScripts() 探测不 throw)、`executePageScript(tabId, code, world)`(userScripts.execute 主路线 → scripting.executeScript MAIN world func 包装兜底,JSON.stringify 后 8000 字符截断,降级在返回文本注明,一切错误转英文不 throw) |
@@ -344,7 +350,7 @@ resolveReasoningLevel(m: ModelConfig, level: ReasoningLevel): ReasoningLevel
 settingsItem        // 'local:settings',fallback DEFAULT_SETTINGS(含 webSearch)
 activeSessionIdItem // 'local:activeSessionId'
 sanitizeSettings(unknown): Settings                // 含 sanitizeWebSearch(provider 白名单 11 值)
-sanitizeSessions(unknown): Session[]            // 旧扁平消息 {id,role,content} → pi 形状(sessionStore 迁移用)
+sanitizeSessions(unknown): Session[]            // 纯防御清洗(非法形状丢弃,pi 形状原样透传;决策 38 无旧格式迁移)
 uid(): string; createSession(title?, draft?); createUserMessage(text, refs?): UserMessage  // refs 序列化进 <page-refs> 块
 messageText(m: ChatMessage): string             // 提取纯文本(各消息类型归一;UI 展示文本用 stripPageRefs 再剥块)
 titleFromText(text): string; EMPTY_USAGE
@@ -360,24 +366,24 @@ collectPageRefs(messages): PageRefs             // 聚合历史块引用(同字�
 // 属性值经 &quot;/&lt;/&gt; 转义;序列化 = extensions/editorSerialize.ts serializePickedElementBlock
 // LLM 请求副本(agent.ts toLlmMessage)把 refs 块剥 elements 留 tabs,块原样保留(存储/LLM 同串)
 
-// lib/sessionStore.ts —— 会话历史唯一读写层(IndexedDB 'ai-sidebar' / store 'sessions',idb 封装;草稿随 Session 存)
-listSessions(): Promise<Session[]>              // getAll,按 updatedAt 降序
-saveSession(s: Session)                         // put
+// lib/sessionStore.ts —— 会话历史唯一读写层(IndexedDB 'ai-sidebar-sessions' v1 / store 'sessions',idb 封装;JSONL 文本行 + 冗余 updatedAt;草稿随 Session 存)
+listSessions(): Promise<Session[]>              // getAll 逐行容错跳坏行,按 updatedAt 降序
+saveSession(s: Session)                         // put(JSONL 序列化在本层,消费方只见 Session 对象)
 deleteSession(id: string)                       // delete
-migrateLegacySessions(): Promise<Session[]>     // 旧 local:sessions 非空则清洗写入后删旧 key(只迁一次)
-// 注意:IndexedDB 无跨上下文 watch;sidepanel 是会话历史唯一写方
+replaceAllSessions(sessions: Session[])         // WebDAV 恢复:单事务 clear+put
+// 零迁移链(决策 38);注意:IndexedDB 无跨上下文 watch;sidepanel 是会话历史唯一写方
 
-// lib/agent.ts —— 发消息唯一入口(工具组装已移至 lib/tools/registry.ts)
+// lib/agent.ts —— 会话 Agent 工厂 + 发送入口(工具组装已移至 lib/tools/registry.ts;决策 36)
+// 每会话一个 pi-agent-core Agent 实例(Map 长期持有,多会话并发);自持原始转录 + convertToLlm(toLlmMessage)+ transformContext(压缩裁剪)+ prepareNextTurn(每轮工具重建)
+ensureSessionAgent(options): Agent              // 创建/复用;buildAgentInputs 每轮刷新 model/tools/systemPrompt/streamFn
+hasSessionAgent(sessionId) / sessionAgentFor(sessionId) / disposeSessionAgent(sessionId) / disposeAllSessionAgents()  // 会话删除/恢复导入释放
+setAgentEventSink(sink | null)                  // 常驻订阅出口(entrypoints 注入 → 投影层 → store.runs)
+runAgentTurn(options) / continueAgentTurn(options): Promise<RunAgentResult>  // 发送/队列泵内核;userMessage 仅前者需要
+// RunAgentOptions: provider/modelId/history?(提供=覆盖转录)/compaction?/userMessage?/refTabs?/pickedElements?/thinkingLevel/language?/rules?/systemPrompt?/sessionId?/signal?/onEvent?/onCompactContext?/webSearch?/dynamicTabs?
 toPiModel(p: ProviderConfig, m: ModelConfig): Model<KnownApi>   // 缺失参数保守默认(128000/4096)
 buildSystemPrompt(): string                     // 身份 + 本地日期行 + 压缩版 <page-refs> 协议规则(不注入引用目录)
-runAgentTurn({ provider; modelId; history: ChatMessage[]; userMessage: UserMessage;  // content 已内嵌块
-  refTabs?: RefTab[]; pickedElements?: PickedElement[];                              // 当前草稿引用(App 已按开关过滤)
-  thinkingLevel: ReasoningLevel; sessionId?; signal?; onEvent?: (e: AgentEvent) => void;
-  onCompactContext?: () => void; webSearch?: WebSearchConfig | null;
-}): Promise<RunAgentResult>                     // LLM 请求副本经 toLlmMessage:refs 块剥 elements 留 tabs
 // RunAgentResult { messages(完整转录); newMessages(本轮新增,含 toolResult); errorMessage? }
-// 语义:工具白名单 = 草稿引用 ∪ collectPageRefs(history);内部 new Agent({ streamFn: models.streamSimple, toolExecution:'sequential' });
-// 失败经协议事件编码(stopReason='error');中止时已生成部分保留在转录中;onEvent 透出供 UI 流式渲染
+// 语义:工具白名单 = Agent 转录 ∪ 草稿引用 ∪ openedTabs;LLM 请求副本经 toLlmMessage(refs 块剥 elements 留 tabs);失败经协议事件编码(stopReason='error');中止时已生成部分保留在转录中
 
 // lib/tools/registry.ts —— 工具注册表(唯一组装点;一工具一文件见同目录)
 interface GetToolsOptions { refTabs?: RefTab[]; pickedElements?: PickedElement[]; canUseImage?: boolean;
@@ -505,6 +511,8 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
 
 ## 8. 待办(按序)
 
+0. **当前阶段(2026-09,决策 36-40 全部落地)**:会话运行时对齐 pi Agent(四步全完成)+ JSONL 存储(无兼容重构,决策 38)+ 压缩预算自适应(决策 39)+ 多会话并发隔离 + 聊天视觉改版(决策 40)+ 代码块 shiki 双主题 + 页面动作测试台(`fixtures/page-actions`,C 组验收工具)。自动化:40 测试全绿、compile/build 绿;独立 reviewer 两轮报告已全部处理。**唯一剩余 = 浏览器回归**(清单 `docs/regression-jsonl.md`;A 组迁移项已随决策 38 作废,新数据直接测 B/C/D/E/F 组;C 组用测试台)。回归全 ✅ 后接:i18n 收敛 → 发布(图标 + `wxt zip`)。
+
 1. **用户手动回归** —— ✅ 已完成(2026-09,覆盖:普通对话、read/search/fetch/click 全链、点击 _blank 跳转修复、导出、设置抽屉/模型分工/语言/思考档、引导弹窗、删除确认);后续每次新功能按验收标准随批回归。
 2. ~~websearch / fetch_url 工具~~ **已完成**(2026-09,十源 + fetch_url;见 §4 状态表与 §6 API 参考)。
 3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)。
@@ -565,5 +573,5 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
 - **dev 产物配置 `emptyOutDir: false`**(wxt.config vite.build):重建不清空输出目录——旧 hash chunk 保留,长活侧边栏页面的动态 import 不会 404 断链(曾导致多标签测试中回合中断、未落盘消息全部丢失)。**发布打包前手动清一次 `.output/chrome-mv3`**,避免旧 chunk 混入 zip。
 - 无残留 dev 进程;直接 `pnpm dev`(自动拉 Chrome,扩展目录 `.output/chrome-mv3-dev`)。
 - **改 content.ts/消息协议/权限后必须完整重启 `pnpm dev` 并刷新页面**:sidepanel 热更新 ≠ content script 更新,旧 content script 会继续应答过期协议。
-- 浏览器 local storage 里可能残留旧结构 `local:settings`(须过 `sanitizeSettings`)与 `local:sessions`(启动时 `migrateLegacySessions()` 自动迁入 IndexedDB 并删除旧 key,只迁一次)。
+- 浏览器 local storage 里可能残留旧结构 `local:settings`(须过 `sanitizeSettings`);会话存储已无兼容重构(决策 38):旧 `local:sessions`/对象 store/旧库 `ai-sidebar` 均不再读写,新数据全在库 `ai-sidebar-sessions`,旧数据要么丢弃要么手动导出。
 - 本文档与工具无关(原在 pi 中编写,已去除 pi 专属工具链说明);Windows 下注意确认 agent 实际使用的 shell,POSIX 语法按实际情况调整。
