@@ -1,7 +1,6 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
 import { Check, Copy } from 'lucide-react';
 import { i18n } from '#i18n';
 import { Button } from '@/components/ui/button';
@@ -11,13 +10,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { highlightToHtml, normalizeShikiLang, onShikiReady } from '@/lib/shiki';
 
 interface MarkdownViewProps {
   content: string;
   className?: string;
 }
 
-/** 递归拉平 React 子树为纯文本(代码块复制用:children 是 hljs 处理后的 <code> 元素树) */
+/** 递归拉平 React 子树为纯文本(代码块复制与 shiki 输入用) */
 function extractText(node: React.ReactNode): string {
   if (node == null || typeof node === 'boolean') return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -29,23 +29,41 @@ function extractText(node: React.ReactNode): string {
   return '';
 }
 
-/** 代码块容器:右上角常驻复制按钮(官方 Button + Tooltip,文案复用 messages.copy/copied) */
-function PreWithCopy({ children, ...props }: React.ComponentProps<'pre'>) {
+/** 高亮器就绪订阅:未就绪时先纯文本,就绪后重渲染升级 */
+function useShikiReady(): boolean {
+  const [ready, setReady] = useState(() => isShikiReadyLocal());
+  useEffect(() => onShikiReady(() => setReady(true)), []);
+  return ready;
+}
+
+import { isShikiReady as isShikiReadyLocal } from '@/lib/shiki';
+
+/** 代码块容器:shiki HTML(双主题变量)或降级纯文本;右上角常驻复制按钮 */
+function PreWithCopy({
+  children,
+  html,
+  copyText,
+}: {
+  children?: React.ReactNode;
+  html: string | null;
+  copyText: string;
+}) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
-    void navigator.clipboard.writeText(extractText(children)).then(() => {
+    void navigator.clipboard.writeText(copyText).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     });
   };
   return (
     <div className="relative my-2">
-      <pre
-        className="not-typeset rounded-lg bg-code-background text-code-foreground overflow-x-auto text-xs p-3"
-        {...props}
-      >
-        {children}
-      </pre>
+      {html ? (
+        <div className="code-shiki-host overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />
+      ) : (
+        <pre className="not-typeset rounded-lg bg-code-background text-code-foreground overflow-x-auto text-xs p-3">
+          {children}
+        </pre>
+      )}
       <TooltipProvider delay={200}>
         <Tooltip>
           <TooltipTrigger
@@ -75,11 +93,12 @@ export const MarkdownView = memo(function MarkdownView({
   content,
   className = '',
 }: MarkdownViewProps) {
+  // 高亮器就绪后触发一次重渲染(未就绪期间渲染的纯文本代码块升级为 shiki)
+  useShikiReady();
   return (
     <div className={`typeset typeset-chat ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
         components={{
           a: ({ href, children, ...props }) => (
             <a
@@ -92,7 +111,25 @@ export const MarkdownView = memo(function MarkdownView({
               {children}
             </a>
           ),
-          pre: (props) => <PreWithCopy {...props} />,
+          pre: ({ children }) => {
+            // react-markdown v9:pre 的 children 是 <code className="language-x"> 元素
+            const codeEl = Array.isArray(children) ? children[0] : children;
+            if (React.isValidElement(codeEl)) {
+              const props = codeEl.props as { className?: string; children?: React.ReactNode };
+              const lang = normalizeShikiLang(props.className);
+              const text = extractText(props.children).replace(/\n$/, '');
+              return (
+                <PreWithCopy html={highlightToHtml(text, lang)} copyText={text}>
+                  {codeEl}
+                </PreWithCopy>
+              );
+            }
+            return (
+              <PreWithCopy html={null} copyText={extractText(children)}>
+                {children}
+              </PreWithCopy>
+            );
+          },
           table: ({ children, ...props }) => (
             <div className="typeset-scroll my-2">
               <table {...props}>{children}</table>

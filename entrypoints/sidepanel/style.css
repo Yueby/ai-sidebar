@@ -24,8 +24,8 @@
   --destructive: oklch(0.577 0.245 27.325);
   --warning: oklch(0.666 0.179 58.318);
   --success: oklch(0.596 0.145 163.225);
-  --code-background: oklch(0.141 0.005 285.823);
-  --code-foreground: oklch(0.967 0.001 286.375);
+  --code-background: oklch(0.969 0.001 286.375);
+  --code-foreground: oklch(0.205 0 0);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -493,103 +493,26 @@
   }
 
   /* MARK: Code Highlight */
-  /* 代码高亮双主题(GitHub Light/Dark, 跟随 .dark 自动切换)——替换单主题 github-dark.css;
-     变量定义在覆盖区尾部统一管理,底色沿用 --code-background/--code-foreground token */
-  :root {
-    --hljs-fg: #1f2328;
-    --hljs-comment: #59636e;
-    --hljs-keyword: #cf222e;
-    --hljs-string: #0a3069;
-    --hljs-number: #0550ae;
-    --hljs-type: #953800;
-    --hljs-function: #8250df;
-    --hljs-section: #0550ae;
-    --hljs-addition: #116329;
-    --hljs-deletion: #82071e;
+  /* shiki 双主题高亮(github-light/github-dark):token 色走 --shiki-light/--shiki-dark
+     CSS 变量跟随 .dark 自动切换;shiki 自带 inline 底色让位给 --code-background token */
+  .code-shiki-host pre {
+    @apply m-0 rounded-lg text-xs p-3;
+    background-color: transparent !important;
+    color: var(--code-foreground);
   }
 
-  .dark {
-    --hljs-fg: #e6edf3;
-    --hljs-comment: #8b949e;
-    --hljs-keyword: #ff7b72;
-    --hljs-string: #a5d6ff;
-    --hljs-number: #79c0ff;
-    --hljs-type: #ffa657;
-    --hljs-function: #d2a8ff;
-    --hljs-section: #79c0ff;
-    --hljs-addition: #7ee787;
-    --hljs-deletion: #ff7b72;
+  .code-shiki-host .line {
+    min-height: 1em;
   }
 
-  .hljs {
-    color: var(--hljs-fg);
-    background: transparent;
+  .code-shiki-host span {
+    color: var(--shiki-light);
   }
 
-  .hljs-comment,
-  .hljs-quote {
-    color: var(--hljs-comment);
-    font-style: italic;
+  .dark .code-shiki-host span {
+    color: var(--shiki-dark);
   }
 
-  .hljs-keyword,
-  .hljs-doctag,
-  .hljs-selector-tag {
-    color: var(--hljs-keyword);
-  }
-
-  .hljs-string,
-  .hljs-regexp,
-  .hljs-link {
-    color: var(--hljs-string);
-  }
-
-  .hljs-number,
-  .hljs-variable,
-  .hljs-template-variable,
-  .hljs-built_in,
-  .hljs-builtin-name {
-    color: var(--hljs-number);
-  }
-
-  .hljs-attr,
-  .hljs-attribute {
-    color: var(--hljs-number);
-  }
-
-  .hljs-type,
-  .hljs-selector-class,
-  .hljs-selector-attr,
-  .hljs-selector-pseudo,
-  .hljs-title.class_ {
-    color: var(--hljs-type);
-  }
-
-  .hljs-title,
-  .hljs-title.function_ {
-    color: var(--hljs-function);
-  }
-
-  .hljs-section,
-  .hljs-name {
-    color: var(--hljs-section);
-  }
-
-  .hljs-addition {
-    color: var(--hljs-addition);
-  }
-
-  .hljs-deletion {
-    color: var(--hljs-deletion);
-  }
-
-  .hljs-emphasis {
-    font-style: italic;
-  }
-
-  .hljs-strong {
-    font-weight: 600;
-  }
 
   /* MARK: Switch */
   .cn-switch {
