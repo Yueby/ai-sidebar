@@ -575,5 +575,6 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
 - **dev 产物配置 `emptyOutDir: false`**(wxt.config vite.build):重建不清空输出目录——旧 hash chunk 保留,长活侧边栏页面的动态 import 不会 404 断链(曾导致多标签测试中回合中断、未落盘消息全部丢失)。**发布打包前手动清一次 `.output/chrome-mv3`**,避免旧 chunk 混入 zip。
 - 无残留 dev 进程;直接 `pnpm dev`(自动拉 Chrome,扩展目录 `.output/chrome-mv3-dev`)。
 - **改 content.ts/消息协议/权限后必须完整重启 `pnpm dev` 并刷新页面**:sidepanel 热更新 ≠ content script 更新,旧 content script 会继续应答过期协议。
+- **dev 浏览器 profile 已持久化**(`wxt.config.ts` 的 `webExt.chromiumProfile = .wxt/chrome-data` + `keepProfileChanges`):重启 `pnpm dev` **不再清空 IndexedDB/登录**,所以“重启后数据还在吗”这类回归(A 组)可以真机验证。两个约束不得回退:①目录必须在配置加载时 `mkdirSync` 自建(chrome-launcher 要在里面写 `chrome-out.log`,不存在直接 ENOENT 启动失败);②不要改回默认临时 profile——那会让所有依赖重启的持久化测试不可测。副作用:dev 登录态/扩展设置会跳会话保留(属预期;profile 住在 `.wxt` 不入库)。
 - 浏览器 local storage 里可能残留旧结构 `local:settings`(须过 `sanitizeSettings`);会话存储已无兼容重构(决策 38):旧 `local:sessions`/对象 store/旧库 `ai-sidebar` 均不再读写,新数据全在库 `ai-sidebar-sessions`,旧数据要么丢弃要么手动导出。
 - 本文档与工具无关(原在 pi 中编写,已去除 pi 专属工具链说明);Windows 下注意确认 agent 实际使用的 shell,POSIX 语法按实际情况调整。
