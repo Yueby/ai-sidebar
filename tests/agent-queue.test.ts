@@ -166,6 +166,51 @@ test('steer 与 followUp 的消费点不同:steer 先注入,队列先后清空',
   assert.equal(agent.hasQueuedMessages(), false);
 });
 
+test('agent_end 时刻入队的消息由 continue 泵消费,newMessages 累加不丢首轮', async () => {
+  installFaux();
+  const events: string[] = [];
+  let queuedAtEnd = false;
+  setAgentEventSink((sid, event) => {
+    events.push(event.type);
+    // 在首次 agent_end 时刻入队:followUp 的轮询点已过,必须靠 runAgentTurn 的 continue 泵接住
+    if (event.type === 'agent_end' && !queuedAtEnd) {
+      queuedAtEnd = true;
+      sessionAgentFor(sid)?.followUp(createUserMessage('late-queued'));
+    }
+  });
+  faux.setResponses([fauxAssistantMessage('reply-1'), fauxAssistantMessage('reply-2')]);
+
+  const result = await runAgentTurn({ ...baseOptions('q5', createUserMessage('first')), history: [] });
+  const texts = result.messages.map((m) => (m.role === 'user' ? messageText(m) : `[${m.role}]`));
+  assert.deepEqual(
+    texts,
+    ['first', '[assistant]', 'late-queued', '[assistant]'],
+    'agent_end 时刻入队的消息被 continue 泵消费',
+  );
+  assert.equal(events.filter((e) => e === 'agent_end').length, 2, '泵额外触发一次 run 生命周期');
+  assert.equal(
+    result.newMessages.length,
+    4,
+    'newMessages 累加两轮(首轮 user+assistant,泵轮 user+assistant)',
+  );
+});
+
+test('run 已结束后入队不自动消费:泵已退出,由调用方继续调度', async () => {
+  installFaux();
+  faux.setResponses([fauxAssistantMessage('reply-1'), fauxAssistantMessage('reply-2')]);
+
+  await runAgentTurn({ ...baseOptions('q6', createUserMessage('first')), history: [] });
+  const agent = sessionAgentFor('q6')!;
+  agent.followUp(createUserMessage('idle-queued'));
+  assert.equal(agent.hasQueuedMessages(), true, 'idle 后入队仍滞留(上游语义)');
+
+  // 调用方用 continue() 消费(空闲窗口的调度责任在调用方/出队器)
+  await agent.continue();
+  assert.equal(agent.hasQueuedMessages(), false);
+  const texts = agent.state.messages.filter((m) => m.role === 'user').map((m) => messageText(m));
+  assert.deepEqual(texts, ['first', 'idle-queued']);
+});
+
 test('dispose 期间的迟到流:旧 Agent 事件不进入 sink,重建后恢复', async () => {
   installFaux();
   const events: string[] = [];

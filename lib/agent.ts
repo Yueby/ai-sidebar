@@ -422,7 +422,8 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   let newMessages: ChatMessage[] = [];
   const unsubscribe = agent.subscribe((event) => {
     if (event.type === 'agent_end') {
-      newMessages = event.messages as ChatMessage[];
+      // 累加而非覆盖:continue 泵会触发多次 agent_end,覆盖语义会丢掉首轮消息
+      newMessages = [...newMessages, ...(event.messages as ChatMessage[])];
     }
     options.onEvent?.(event);
   });
@@ -434,6 +435,13 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   try {
     // 原始 user 消息入转录;请求面由 convertToLlm 展开元素(单一表示,存储与请求同源)
     await agent.prompt(options.userMessage as UserMessage);
+    // 泵:prompt 结束后仍有排队消息时用 continue() 消费。
+    // followUp 只在“agent 本要停止”点被轮询(agent-loop.js:161),
+    // run 结束后(包括 agent_end 时刻)入队的消息会滞留;与上游
+    // AgentSession._runAgentPrompt 的 `while (await postRun()) await agent.continue()` 同构。
+    while (!signal?.aborted && agent.hasQueuedMessages()) {
+      await agent.continue();
+    }
   } finally {
     unsubscribe();
     signal?.removeEventListener('abort', onAbort);
