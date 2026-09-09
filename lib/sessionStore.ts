@@ -69,7 +69,7 @@ function fromRow(row: SessionRecordRow): Session {
     customTitle: parsed.customTitle,
     messages: parsed.messages,
     createdAt: parsed.createdAt,
-    updatedAt: parsed.updatedAt ?? row.updatedAt,
+    updatedAt: row.updatedAt,
     compaction: parsed.compaction,
     draft: parsed.draft,
   };
@@ -96,8 +96,8 @@ function legacyToRow(s: Session): SessionRecordRow {
 export async function migrateAllSessions(): Promise<Session[]> {
   const db = await getDB();
 
-  // 1) local:sessions → 对象 store(旧迁移,保持原语义)
-  const legacy = await storage.getItem<unknown[]>(LEGACY_KEY);
+  // 1) local:sessions → 对象 store(旧迁移,保持原语义;flag 已为 jsonl 时跳过,避免死写入)
+  const legacy = (await storage.getItem<string>(FORMAT_FLAG)) === 'jsonl' ? null : await storage.getItem<unknown[]>(LEGACY_KEY);
   if (Array.isArray(legacy) && legacy.length > 0) {
     for (const s of sanitizeSessions(legacy)) {
       await db.put(SESSION_STORE, s);
@@ -128,11 +128,16 @@ export async function migrateAllSessions(): Promise<Session[]> {
 export async function listSessions(): Promise<Session[]> {
   const db = await getDB();
   const rows = (await db.getAll(SESSION_STORE_V2)) as SessionRecordRow[];
-  const sessions = rows
-    .map(fromRow)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-  // 读取路径统一过 sanitize(旧格式迁移 + pi 形状透传归一)——与旧路径同款防御
-  return sanitizeSessions(sessions);
+  // P1-1 容错:单行损坏(外部改写/未来降级读新格式)不得炸全表——坏行丢弃并告警,行数据保留在 raw 供人工恢复
+  const sessions: Session[] = [];
+  for (const row of rows) {
+    try {
+      sessions.push(fromRow(row));
+    } catch (err) {
+      console.warn('[sessionStore] skipping corrupted session row:', row.id, err);
+    }
+  }
+  return sanitizeSessions(sessions.sort((a, b) => b.updatedAt - a.updatedAt));
 }
 
 export async function saveSession(session: Session): Promise<void> {
@@ -155,9 +160,6 @@ export async function replaceAllSessions(sessions: Session[]): Promise<void> {
   await tx.store.clear();
   for (const s of sessions) void tx.store.put(toRow(s));
   await tx.done;
-  // 旧对象 store 一并清空(防止恢复后旧数据残留/回读)
-  const txOld = db.transaction(SESSION_STORE, 'readwrite');
-  await txOld.store.clear();
-  await txOld.done;
+  // 旧对象 store 保留只读作回滚点(文档 §4.3 承诺;仅 v2 为执行格式)
   await storage.setItem(FORMAT_FLAG, 'jsonl');
 }

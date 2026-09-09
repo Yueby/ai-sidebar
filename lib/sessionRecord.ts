@@ -120,8 +120,8 @@ export function sessionToJsonl(session: Session): string {
   });
   prevId = entries[entries.length - 1]!.id;
 
-  // 消息流:摘要 user 消息(若 compaction 指向它)转为 compaction entry
-  const summaryTs = session.compaction?.summaryTimestamp;
+  // 消息流:摘要 user 消息(若 compaction 指向它)转为 compaction entry(只转第一条,防同毫秒撞车)
+  let summaryTs = session.compaction?.summaryTimestamp;
   for (const msg of session.messages) {
     const isSummaryMessage = summaryTs !== undefined && msg.timestamp === summaryTs && msg.role === 'user';
     if (isSummaryMessage) {
@@ -229,13 +229,17 @@ export function jsonlToSession(jsonl: string): ParsedSessionRecord {
     } else if (e.type === 'message') {
       messages.push((e as Extract<SessionEntry, { type: 'message' }>).message);
     } else if (e.type === 'compaction') {
+      // 只认第一条 compaction entry(后续重复为脏数据,忽略)
+      if (compaction) continue;
       const c = e as Extract<SessionEntry, { type: 'compaction' }>;
       // 重建摘要 user 消息(pi 语义:摘要由 entry 承载;解析时还原,消费方 effectiveMessages 照常工作)
-      messages.push({
-        role: 'user',
-        content: c.summary,
-        timestamp: c.summaryTimestamp,
-      } as ChatMessage);
+      if (typeof c.summary === 'string') {
+        messages.push({
+          role: 'user',
+          content: c.summary,
+          timestamp: c.summaryTimestamp,
+        } as ChatMessage);
+      }
       // firstKeptEntryId → 保留区首条消息 timestamp(向后查找;找不到则全量保留)
       const kept = entries
         .slice(entries.indexOf(e) + 1)

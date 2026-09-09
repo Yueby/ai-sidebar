@@ -436,12 +436,21 @@ export function useChatTurn(params: {
         const queueId = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const ownerAgent = sessionAgentFor(owner);
         // 目标会话忙 ⇒ 其 Agent 必已存在(有 run/门控/压缩都源于先前的 turn);
-        // 无实例则属内部不变量破坏,fail-fast 而非静默走第二执行器
-        if (!ownerAgent) {
-          throw new Error(`session ${owner} is busy but has no Agent instance`);
+        // 无实例属异常路径(恢复导入后挂起门控):降级入镜像等待 Agent 重建后由出队器补发,不丢消息
+        if (ownerAgent) {
+          ownerAgent.followUp(queuedMessage);
         }
-        ownerAgent.followUp(queuedMessage);
-        store.enqueueMessage({ id: queueId, sessionId: owner, text: trimmed, message: queuedMessage });
+        store.enqueueMessage({
+          id: queueId,
+          sessionId: owner,
+          text: trimmed,
+          message: ownerAgent ? queuedMessage : undefined,
+          refTabs: [...snapTabs],
+          pickedElements: [...snapElements],
+        });
+        if (import.meta.env.DEV && !ownerAgent) {
+          console.warn(`[turn] busy enqueue without Agent instance (session ${owner}) — queued for re-dispatch`);
+        }
         if (!frozen && owner === useAppStore.getState().activeSessionId) {
           // 元素引用随该条消息消费(与直发路径一致);refTabs 保留为会话上下文
           useAppStore.getState().patchActiveDraft((d) => ({ ...d, pickedElements: [] }));

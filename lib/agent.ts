@@ -1,5 +1,5 @@
 import { Agent } from '@earendil-works/pi-agent-core';
-import type { AgentEvent, AgentTool } from '@earendil-works/pi-agent-core';
+import type { AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
 import {
   createModels,
   createProvider,
@@ -349,11 +349,11 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     ) => models.streamSimple(m, ctx, o));
   // 压缩裁剪(非破坏):请求面 = [摘要]+之后,转录本体不变
   const transformContext = options.compaction
-    ? (msgs: Parameters<NonNullable<Agent['transformContext']>>[0]) =>
-        effectiveMessages(msgs as ChatMessage[], options.compaction) as never
+    ? async (msgs: Parameters<NonNullable<Agent['transformContext']>>[0]) =>
+        effectiveMessages(msgs as ChatMessage[], options.compaction) as AgentMessage[]
     : undefined;
   const convertToLlm = (msgs: Parameters<NonNullable<Agent['convertToLlm']>>[0]) =>
-    msgs.map((m) => toLlmMessage(m as ChatMessage)) as never;
+    msgs.map((m) => toLlmMessage(m as ChatMessage));
   // 每轮请求前刷新上下文:工具白名单用**最新转录**重算——run 内消费的 followUp/steer
   // 携带的新 refs 也能进白名单(否则 read_page/read_element 会拒)。
   // messages 传副本:loop 会向该数组 push 注入消息,不能与 Agent 内部转录共用引用。
