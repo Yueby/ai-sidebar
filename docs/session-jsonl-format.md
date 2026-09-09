@@ -1,7 +1,7 @@
 # 会话 JSONL 记录格式（设计规格）
 
 > 目标 mttk9xo5 task-2。对齐 pi-coding-agent 的 session-format v3，**线性** id/parentId（决策 37：不做分支/fork/clone UI）。
-> 状态：**设计定稿待实施**。实施前不得改动生产读写路径。
+> 状态：**设计定稿（2026-09 用户拍板）**。实施前不得改动生产读写路径。
 
 ## 1. 依据与范围
 
@@ -63,9 +63,17 @@ pi v3 entry 类型（`packages/coding-agent/src/core/session-manager.ts`）：
 - 旧快照（`Session[]` JSON）**必须可读**：下载时按旧结构解析后走同一迁移函数转 JSONL。
 - 恢复仍为单事务原子替换（先写新 store 全部，再切换标记）。
 
-## 6. 未决问题（实施前需确认）
+## 6. 已定决策（2026-09 拍板）
 
-1. **草稿 entry 的位置语义**：追加在尾部会随每条消息增长；是否改为"覆盖式"（同 customType 只保留最后一条）？倾向覆盖式（解析时取最后一条）。
-2. **`cwd` 字段**：我们无工作目录概念，写固定 `"ai-sidebar"` 还是省略？倾向写固定值（与 pi 结构兼容）。
-3. **`message` entry 的 id 来源**：现有消息无 id（只有 timestamp）。迁移时生成新 id 并写入；新消息在 `createUserMessage`/落盘时补 id？还是解析时按顺序生成？倾向**落盘时生成并持久化**（回放稳定）。
-4. **压缩摘要消息与 `compaction` entry 的关系**：现有实现把摘要作为一条 user 消息存在 `messages` 里；对齐 pi 后摘要是否仍进 `messages`？pi 的做法是 `compaction` entry 承载摘要、`buildSessionContext` 时注入。倾向**对齐 pi**（摘要不再进 messages，由解析层注入）——但会改动压缩语义，需单独评审。
+1. **压缩摘要：直接对齐 pi**——`compaction` entry 承载 `summary` + `firstKeptEntryId`；**摘要不再作为 user 消息存在 messages**，请求面由解析层注入（同 pi 的 `buildSessionContext`）。影响面（实施时需逐项适配）：`lib/compaction.ts`（产出改写入 entry）、`useCompact.ts`（不再 append 摘要消息）、`lib/contextTokens.ts`（effectiveMessages 改从 compaction entry 注入）、`lib/sessionExport.ts`（导出摘要格式）、`MessageItem/CompactionRow`（渲染数据源）。
+2. **草稿 entry：覆盖式**——同 `customType: ai-sidebar/draft` 只保留最后一条，解析时取最后一条。
+3. **cwd：写固定值 `"ai-sidebar"`**（保持与 pi header 结构兼容）。
+4. **message entry id：落盘时生成并持久化**——新消息在落盘时补 id，解析/回放稳定；迁移时为存量消息生成新 id。
+
+## 7. 实施顺序（下一批）
+
+1. `lib/sessionRecord.ts`：格式类型 + 序列化/解析 + 迁移函数（纯逻辑，可单测）。
+2. `lib/sessionStore.ts` 切换：新 store（`sessions_v2`）+ 启动迁移 + 旧 store 只读回滚点。
+3. 压缩语义对齐（第 6 节第 1 项）。
+4. WebDAV 适配（第 5 节）。
+5. 消费点适配（useChatTurn/useCompact/useSessionManager/sessionSlice 草稿防抖/App 恢复）+ 测试。
