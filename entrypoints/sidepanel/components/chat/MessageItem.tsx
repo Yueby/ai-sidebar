@@ -137,9 +137,24 @@ function useSmoothText(target: string, enabled: boolean): string {
   return isSmooth ? target.slice(0, shownLen) : target;
 }
 
-/** 流式末段平滑揭示: 仅在流式末尾文本段用已揭示前缀渲染 Markdown; 物化后自动走 MarkdownView 全量直渲 */
-function SmoothMarkdown({ text, className }: { text: string; className?: string }) {
-  const shown = useSmoothText(text, true);
+/**
+ * 文本段渲染器(**组件身份恒定**):流式末段逐字揭示,其余全量直渲。
+ *
+ * 关键:不能按条件在 SmoothMarkdown / MarkdownView 之间切换组件类型——流式结束的
+ * 那一瞬同 key 换类型 = React 卸载重挂整棵 markdown 子树(重新解析 + 高亮重跑),
+ * 表现为“输出完闪一下”。改成始终渲染本组件,仅用 animate 开关控制揭示。
+ */
+function SmoothMarkdown({
+  text,
+  className,
+  animate,
+}: {
+  text: string;
+  className?: string;
+  /** true = rAF 逐字揭示(流式末段);false = 直接全量(内容不变 → MarkdownView memo 命中) */
+  animate: boolean;
+}) {
+  const shown = useSmoothText(text, animate);
   return <MarkdownView content={shown} className={className} />;
 }
 
@@ -902,6 +917,12 @@ export function MessageItem({
   const hasStatus = showDots || Boolean(errorMessage) || Boolean(isCancelled) || emptyReply;
   // 状态节点/流式光标锚定最后一个「气泡段」(末段可能是工具卡,状态必须仍可见)
   const lastBubbleIndex = segments.reduce((acc, s, i) => (s.kind === 'bubble' ? i : acc), -1);
+  /** 流式末段判定(animate 与光标的唯一信息源;组件身份始终为 SmoothMarkdown) */
+  const isLiveTail = (segIndex: number, itemIndex: number, itemCount: number) =>
+    segIndex === lastBubbleIndex &&
+    itemIndex === itemCount - 1 &&
+    Boolean(isStreaming) &&
+    Boolean(rawText);
   const hasBubble = lastBubbleIndex >= 0;
   // 行渲染条件:有内容段/live 活动/真实生成中/状态兜底才渲染(gate 空闲等待时整行不渲染)
   const shouldRenderRow =
@@ -1015,19 +1036,13 @@ export function MessageItem({
                     item.type === 'thinking' ? (
                       <ThinkingBlock key={j} thinking={item.thinking} />
                     ) : item.type === 'text' ? (
-                      i === lastBubbleIndex && j === seg.items.length - 1 && isStreaming && rawText ? (
-                        <SmoothMarkdown
-                          key={j}
-                          text={item.text}
-                          /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
-                          className="md-caret"
-                        />
-                      ) : (
-                        <MarkdownView
-                          key={j}
-                          content={item.text}
-                        />
-                      )
+                      <SmoothMarkdown
+                        key={j}
+                        text={item.text}
+                        animate={isLiveTail(i, j, seg.items.length)}
+                        /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
+                        className={isLiveTail(i, j, seg.items.length) ? 'md-caret' : undefined}
+                      />
                     ) : null
                   )}
 
