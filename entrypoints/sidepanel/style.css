@@ -2,7 +2,6 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import './typeset.css';
-@import 'highlight.js/styles/github-dark.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -491,6 +490,105 @@
   /* Toast viewport 层级高于全高 Drawer (z-50),确保在设置抽屉打开时 toast 显示在抽屉之上 */
   [data-slot="toast-viewport"] {
     z-index: 60 !important;
+  }
+
+  /* MARK: Code Highlight */
+  /* 代码高亮双主题(GitHub Light/Dark, 跟随 .dark 自动切换)——替换单主题 github-dark.css;
+     变量定义在覆盖区尾部统一管理,底色沿用 --code-background/--code-foreground token */
+  :root {
+    --hljs-fg: #1f2328;
+    --hljs-comment: #59636e;
+    --hljs-keyword: #cf222e;
+    --hljs-string: #0a3069;
+    --hljs-number: #0550ae;
+    --hljs-type: #953800;
+    --hljs-function: #8250df;
+    --hljs-section: #0550ae;
+    --hljs-addition: #116329;
+    --hljs-deletion: #82071e;
+  }
+
+  .dark {
+    --hljs-fg: #e6edf3;
+    --hljs-comment: #8b949e;
+    --hljs-keyword: #ff7b72;
+    --hljs-string: #a5d6ff;
+    --hljs-number: #79c0ff;
+    --hljs-type: #ffa657;
+    --hljs-function: #d2a8ff;
+    --hljs-section: #79c0ff;
+    --hljs-addition: #7ee787;
+    --hljs-deletion: #ff7b72;
+  }
+
+  .hljs {
+    color: var(--hljs-fg);
+    background: transparent;
+  }
+
+  .hljs-comment,
+  .hljs-quote {
+    color: var(--hljs-comment);
+    font-style: italic;
+  }
+
+  .hljs-keyword,
+  .hljs-doctag,
+  .hljs-selector-tag {
+    color: var(--hljs-keyword);
+  }
+
+  .hljs-string,
+  .hljs-regexp,
+  .hljs-link {
+    color: var(--hljs-string);
+  }
+
+  .hljs-number,
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-built_in,
+  .hljs-builtin-name {
+    color: var(--hljs-number);
+  }
+
+  .hljs-attr,
+  .hljs-attribute {
+    color: var(--hljs-number);
+  }
+
+  .hljs-type,
+  .hljs-selector-class,
+  .hljs-selector-attr,
+  .hljs-selector-pseudo,
+  .hljs-title.class_ {
+    color: var(--hljs-type);
+  }
+
+  .hljs-title,
+  .hljs-title.function_ {
+    color: var(--hljs-function);
+  }
+
+  .hljs-section,
+  .hljs-name {
+    color: var(--hljs-section);
+  }
+
+  .hljs-addition {
+    color: var(--hljs-addition);
+  }
+
+  .hljs-deletion {
+    color: var(--hljs-deletion);
+  }
+
+  .hljs-emphasis {
+    font-style: italic;
+  }
+
+  .hljs-strong {
+    font-weight: 600;
   }
 
   /* MARK: Switch */
