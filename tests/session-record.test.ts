@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 // 副作用导入:定义测试环境的 browser 全局(必须先于被测模块)
 import './helpers/browser-stub';
-import { sessionToJsonl, jsonlToSession, SESSION_RECORD_VERSION } from '../lib/sessionRecord';
+import { sessionToJsonl, jsonlToSession, SESSION_RECORD_VERSION, mergeTranscriptKeepingHistory } from '../lib/sessionRecord';
 import { messageText } from '../lib/storage';
 import type { Session } from '../lib/types';
 
@@ -97,4 +97,30 @@ test('非法输入 fail-fast', () => {
   assert.throws(() => jsonlToSession(''), /empty session record/);
   assert.throws(() => jsonlToSession('{"type":"message","id":"x","parentId":null,"timestamp":"t"}'), /missing header/);
   assert.throws(() => jsonlToSession('not-json'), /invalid JSON line/);
+});
+
+// 回归:finalize 无条件覆盖曾导致“本轮乃至之前的回复凭空消失”——转录单调性守卫必须不丢已存历史
+test('转录守卫:变长直用、变短不丢已存且只补缺失(按对象身份不重复)', () => {
+  const a = { tag: 'a' };
+  const b = { tag: 'b' };
+  const c = { tag: 'c' };
+
+  // 正常路径:Agent 转录只增 → 原样采用,不报警
+  const grown = mergeTranscriptKeepingHistory([a], [a, b]);
+  assert.equal(grown.shrank, false);
+  assert.deepEqual(grown.messages, [a, b]);
+
+  // 相等长度(编辑重发截断后同长)也不触发守卫
+  assert.equal(mergeTranscriptKeepingHistory([a, b], [a, b]).shrank, false);
+
+  // 变短:保留已存两条,补入 newMessages 里的 c,且不重复
+  const shrunk = mergeTranscriptKeepingHistory([a, b], [a], [c, b]);
+  assert.equal(shrunk.shrank, true);
+  assert.deepEqual(shrunk.messages, [a, b, c], '已存历史不得丢失');
+  assert.equal(shrunk.messages.filter((m) => m === b).length, 1, '同一引用不得重复补入');
+
+  // 全部已存在时只报警不新增
+  const noop = mergeTranscriptKeepingHistory([a, b], [a], [b]);
+  assert.equal(noop.shrank, true);
+  assert.deepEqual(noop.messages, [a, b]);
 });

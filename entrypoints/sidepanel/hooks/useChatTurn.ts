@@ -13,6 +13,7 @@ import type {
 } from '@/lib/types';
 import { activeSessionIdItem, createSession, createUserMessage, titleFromText } from '@/lib/storage';
 import { saveSession } from '@/lib/sessionStore';
+import { mergeTranscriptKeepingHistory } from '@/lib/sessionRecord';
 import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
 import { continueAgentTurn, hasSessionAgent, runAgentTurn, sessionAgentFor } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
@@ -28,6 +29,33 @@ import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 interface FrozenPayload {
   refTabs: RefTab[];
   pickedElements: PickedElement[];
+}
+
+/**
+ * 落盘前的转录守卫(防“整轮回复被静默丢掉”):
+ * finalize 以前无条件用 Agent 转录覆盖 store——一旦某条路径递过来较旧/较短的快照
+ * (播种自旧 store 副本、dispose 后重建、编辑重发索引算错等),本轮乃至之前的回复就会凭空消失。
+ * 上游除 reset() 外不缩转录(本仓零调用点),所以任何“变短”都是缺陷:不覆盖,仅追加缺失部分,
+ * 并把现场信息抛到日志以便定位真正成因。
+ */
+function mergeFinalizedMessages(
+  latest: Session,
+  result: { messages: ChatMessage[]; newMessages: ChatMessage[] },
+  site: string,
+): ChatMessage[] {
+  const { messages, shrank } = mergeTranscriptKeepingHistory(
+    latest.messages,
+    result.messages,
+    result.newMessages,
+  );
+  if (shrank) {
+    console.error(
+      `[turn:${latest.id}] ${site}: Agent transcript shrank ` +
+        `(${latest.messages.length} → ${result.messages.length}); kept existing and appended ` +
+        `${messages.length - latest.messages.length} missing. Report this line — it identifies the bad seeding path.`,
+    );
+  }
+  return messages;
 }
 
 /**
@@ -183,7 +211,7 @@ export function useChatTurn(params: {
         if (latest) {
           const finalizedSession: Session = {
             ...latest,
-            messages: [...result.messages],
+            messages: mergeFinalizedMessages(latest, result, 'continue-finalize'),
             updatedAt: Date.now(),
           };
           const latestDraft = useAppStore.getState().sessions.find((s) => s.id === sid)?.draft;
@@ -319,8 +347,8 @@ export function useChatTurn(params: {
           // 直接落 result.messages 会丢被压缩截断的前缀消息)
           const finalizedSession: Session = {
             ...latest,
-            // Agent 自持转录 = 原始全量(含 refs 块与本轮全部消息);直接落库,非破坏
-            messages: [...result.messages],
+            // Agent 自持转录 = 原始全量(含 refs 块与本轮全部消息);变短时走守卫,不丢已存消息
+            messages: mergeFinalizedMessages(latest, result, 'turn-finalize'),
             updatedAt: Date.now(),
           };
           // 草稿以内存最新副本为准(后台出队落盘期间用户可能已在编辑该会话草稿)

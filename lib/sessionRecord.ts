@@ -267,4 +267,25 @@ export function jsonlToSession(jsonl: string): ParsedSessionRecord {
   };
 }
 
-// ── 迁移:旧 Session → JSONL(已移除:开发阶段无旧版兼容,唯一格式即 sessionToJsonl) ────────────────────────────────────────
+// ── 迁移:旧 Session → JSONL(已移除:开发阶段无旧版兼容,唯一格式即 sessionToJsonl) ────────────────────────────────────
+
+/**
+ * finalize 落盘前的**转录单调性守卫**(纯函数,可单测)。
+ *
+ * Agent 自持转录只应增长(上游除 reset() 外不缩,本仓 reset() 零调用点)。一旦传入的
+ * 转录比已存短,说明有路径递来了旧快照(播种自旧 store 副本 / dispose 后重建 / 编辑重发
+ * 索引算错等)——直接覆盖会让“本轮乃至之前的回复”凭空消失。此处不丢已存历史,
+ * 仅按对象身份补入缺失项,并回报 shrank 供上层告警定位真因。
+ */
+export function mergeTranscriptKeepingHistory<T>(
+  existing: readonly T[],
+  incoming: readonly T[],
+  extra: readonly T[] = [],
+): { messages: T[]; shrank: boolean } {
+  if (incoming.length >= existing.length) return { messages: [...incoming], shrank: false };
+  const merged: T[] = [...existing];
+  for (const item of [...incoming, ...extra]) {
+    if (!merged.includes(item)) merged.push(item);
+  }
+  return { messages: merged, shrank: true };
+}
