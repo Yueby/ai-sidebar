@@ -39,7 +39,7 @@
 | 存储 | 设置/API Key → chrome.storage.local(`local:settings`);会话历史+草稿 → **IndexedDB JSONL 记录**(`lib/sessionStore.ts` 库 `ai-sidebar-sessions` v1 单 store + `lib/sessionRecord.ts` 序列化,决策 38 零旧版兼容);activeSessionId → chrome.storage.local;UI 共享状态 → **zustand v5 单 store 五切片**(`entrypoints/sidepanel/store/`:gate/error/session/settings/chat;devtools 仅 DEV 构建),**显式 IndexedDB 持久化,不用 persist 中间件**(persist 会退化草稿防抖写序与非破坏压缩精细写序);消息按 pi 消息联合形状持久化 |
 | 页面引用 | **元素引用单一表示 = 自闭合 `<picked-element elementId tabId selector tagName label />` 块**,草稿(TipTap 原子徽章节点)/存储消息/LLM 视图三处同串(属性值经 `&quot;` 转义);`<page-refs>{JSON}</page-refs>` 块仅承载 tabs 元数据(LLM 视图剥 elements 留 tabs,存储层保留供 UI chip 查表),两块皆在发送时序列化进 user content 此后不可变(`lib/pageRefs.ts`);元素内容按需经 `read_element`(块属性 tabId+selector 即句柄)获取 |
 | manifest 权限 | `storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts` + host_permissions **`<all_urls>`**(截图 captureVisibleTab 硬要求,Chrome 只认 <all_urls>/activeTab;content_scripts 的 http/https 宿主访问随安装授予);`minimum_chrome_version: "135"`(userScripts.execute 门槛;Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts,无 API 可代开仅能引导) |
-| Markdown | react-markdown + remark-gfm + rehype-highlight + highlight.js(样式已在 style.css 引入) |
+| Markdown | react-markdown + remark-gfm + **shiki**(github-light/github-dark 双主题 CSS 变量跟随 .dark,`lib/shiki.ts` 懒初始化;决策 40 ⑤。旧 rehype-highlight + highlight.js 已停用,依赖待回归后 `pnpm remove`) |
 | 路径别名 | `@/*` → 项目根 |
 | Shell | Windows 环境;编写多命令/shell 片段时先确认实际使用的 shell 类型(POSIX vs PowerShell),语法按实际情况调整 |
 | 密钥 | 只存 `chrome.storage.local`;不打印/不提交任何 API Key |
@@ -134,7 +134,7 @@ lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_elem
 
 UI 细节基调:顶/底渐变遮罩衔接滚动区、用户气泡 `bg-secondary`、三点打字动画。
 
-依赖:`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`(^0.84.4)、`@tiptap/*` v3.31(Composer)、`@mozilla/readability` + `dom-to-semantic-markdown`(提取,content.ts 与 fetchPage 共用)、`@medv/finder`(框选 selector)、`highlight.js`(11.x)、`idb`、`zustand` v5、`@base-ui/react` 1.8(Drawer/Toast等)、`@shadcn/react`(MessageScroller等)。pnpm 曾提示 `@google/genai`/`protobufjs` 构建脚本被忽略,无害。
+依赖:`@earendil-works/pi-ai` + `@earendil-works/pi-agent-core`(^0.84.4)、`@tiptap/*` v3.31(Composer)、`@mozilla/readability` + `dom-to-semantic-markdown`(提取,content.ts 与 fetchPage 共用)、`@medv/finder`(框选 selector)、`shiki`(代码高亮,双主题;旧 `highlight.js`/`rehype-highlight` 已停用待移除,见 §8)、`idb`、`zustand` v5、`@base-ui/react` 1.8(Drawer/Toast等)、`@shadcn/react`(MessageScroller等)。pnpm 曾提示 `@google/genai`/`protobufjs` 构建脚本被忽略,无害。
 
 ## 5. UI 设计稿(designer 当年产出的历史稿,实际实现以代码为准)
 
@@ -511,7 +511,7 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
 
 ## 8. 待办(按序)
 
-0. **当前阶段(2026-09,决策 36-40 全部落地)**:会话运行时对齐 pi Agent(四步全完成)+ JSONL 存储(无兼容重构,决策 38)+ 压缩预算自适应(决策 39)+ 多会话并发隔离 + 聊天视觉改版(决策 40)+ 代码块 shiki 双主题 + 页面动作测试台(`fixtures/page-actions`,C 组验收工具)。自动化:40 测试全绿、compile/build 绿;独立 reviewer 两轮报告已全部处理。**唯一剩余 = 浏览器回归**(清单 `docs/regression-jsonl.md`;A 组迁移项已随决策 38 作废,新数据直接测 B/C/D/E/F 组;C 组用测试台)。回归全 ✅ 后接:i18n 收敛 → 发布(图标 + `wxt zip`)。
+0. **当前阶段(2026-09,决策 36-40 全部落地)**:会话运行时对齐 pi Agent(四步全完成)+ JSONL 存储(无兼容重构,决策 38)+ 压缩预算自适应(决策 39)+ 多会话并发隔离 + 聊天视觉改版(决策 40)+ 代码块 shiki 双主题 + 页面动作测试台(`fixtures/page-actions`,C 组验收工具)。**收尾待办**:回归通过后 `pnpm remove highlight.js rehype-highlight`(shiki 已替代,代码零引用,现在移除会触发 dev 重建故押后)。自动化:40 测试全绿、compile/build 绿;独立 reviewer 两轮报告已全部处理。**唯一剩余 = 浏览器回归**(清单 `docs/regression-jsonl.md`;A 组迁移项已随决策 38 作废,新数据直接测 B/C/D/E/F 组;C 组用测试台)。回归全 ✅ 后接:i18n 收敛 → 发布(图标 + `wxt zip`)。
 
 1. **用户手动回归** —— ✅ 已完成(2026-09,覆盖:普通对话、read/search/fetch/click 全链、点击 _blank 跳转修复、导出、设置抽屉/模型分工/语言/思考档、引导弹窗、删除确认);后续每次新功能按验收标准随批回归。
 2. ~~websearch / fetch_url 工具~~ **已完成**(2026-09,十源 + fetch_url;见 §4 状态表与 §6 API 参考)。
