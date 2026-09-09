@@ -170,7 +170,12 @@ test('dispose 期间的迟到流:旧 Agent 事件不进入 sink,重建后恢复'
   installFaux();
   const events: string[] = [];
   setAgentEventSink((sid, event) => {
-    events.push(`${sid}:${event.type}`);
+    // 带上 assistant 文本:旧流的回复文本能直接被抓到(而非仅事件类型)
+    const label =
+      event.type === 'message_end' && event.message.role === 'assistant'
+        ? `msg:${event.message.content.map((b) => (b.type === 'text' ? b.text : '')).join('')}`
+        : event.type;
+    events.push(`${sid}:${label}`);
   });
 
   let releaseOld: (() => void) | null = null;
@@ -197,14 +202,23 @@ test('dispose 期间的迟到流:旧 Agent 事件不进入 sink,重建后恢复'
   events.length = 0;
   const newRun = runAgentTurn({ ...baseOptions('q4', createUserMessage('new')), history: [] });
 
-  // 放行旧流:其事件必须被 epoch 校验丢弃
+  // 放行旧流:其事件必须被 epoch 校验丢弃。
+  // 断言必须能区分新旧:旧流若未被丢弃,会额外产生一次 agent_end 与 old-reply 文本。
   releaseOld!();
   await oldRun;
   await newRun;
 
-  assert.ok(
-    events.every((e) => !e.includes('old')),
-    `旧实例事件不得进入 sink(实际:${events.join(',')})`,
+  assert.equal(
+    events.filter((e) => e === 'q4:agent_end').length,
+    1,
+    `旧实例的 agent_end 必须被 epoch 丢弃(实际事件:${events.join(',')})`,
   );
-  assert.ok(events.some((e) => e.startsWith('q4:agent_end')), '新实例事件正常透出');
+  assert.ok(
+    !events.some((e) => e.includes('old-reply')),
+    `旧实例的 message_end 文本不得进入 sink(实际:${events.join(',')})`,
+  );
+  assert.ok(
+    events.some((e) => e.includes('new-reply')),
+    '新实例事件正常透出',
+  );
 });

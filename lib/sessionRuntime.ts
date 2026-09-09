@@ -9,8 +9,8 @@ import type { ChatMessage } from './types';
  *
  * 并发语义(与 pi 一致):
  * - 同一会话同时只允许一个 run(重复 prompt 由调用方按 streamingBehavior 处理);
- * - steer = 打断当前轮并注入消息(停止按钮/打断语义);
- * - followUp = 排队,当前轮结束后按 FIFO 发送;
+ * - steer = 当前 assistant turn 结束后注入(**不 abort 在途请求**;停止按钮仍是显式 abort);
+ * - followUp = agent 本要停止时执行,当前轮结束后按 FIFO 发送;
  * - pendingMessageCount = 两种队列之和。
  */
 export interface SessionRunSnapshot {
@@ -58,7 +58,7 @@ export class SessionRuntime {
   private sending = false;
   /** followUp 队列(排队等当前轮结束;pi 语义) */
   private followUps: string[] = [];
-  /** steering 队列(pi 语义:当前 assistant turn 结束后注入,不 abort 在途请求) */
+  /** steering 队列(pi 语义:当前 assistant turn 结束后注入,**不是 abort**) */
   private steering: string[] = [];
   /** 已释放:删除会话后迟到的续体不得再写入/重启本实例 */
   private disposed = false;
@@ -260,7 +260,7 @@ export class SessionRuntime {
     this.followUps.push(text);
   }
 
-  /** 入队一条 steering(调用方负责中止当前轮后立即消费) */
+  /** 入队一条 steering(pi 语义:当前 assistant turn 结束后注入,不中止在途请求) */
   steer(text: string): void {
     this.steering.push(text);
   }
