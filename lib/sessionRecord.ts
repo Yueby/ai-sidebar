@@ -267,12 +267,4 @@ export function jsonlToSession(jsonl: string): ParsedSessionRecord {
   };
 }
 
-// ── 迁移:旧 Session → JSONL 文本 ────────────────────────────────────────
-
-/**
- * 旧 IndexedDB Session → JSONL 文本(幂等:同输入同输出)。
- * 摘要 user 消息转为 compaction entry;其余消息线性落 entry。
- */
-export function migrateSessionToJsonl(session: Session): string {
-  return sessionToJsonl(session);
-}
+// ── 迁移:旧 Session → JSONL(已移除:开发阶段无旧版兼容,唯一格式即 sessionToJsonl) ────────────────────────────────────────

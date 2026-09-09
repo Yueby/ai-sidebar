@@ -125,8 +125,6 @@ function sanitizeAuxThinking(v: unknown, fallback: AuxThinkingLevel): AuxThinkin
 export function sanitizeSettings(value: unknown): Settings {
   if (!value || typeof value !== 'object') return DEFAULT_SETTINGS;
   const v = value as Partial<Settings>;
-  // 旧版共享 auxThinking(设置一次两处生效)→ 迁移为两字段各自默认(字段已从 Settings 移除,裸读)
-  const legacyAux = sanitizeAuxThinking((v as Record<string, unknown>).auxThinking, 'off');
   return {
     providers: Array.isArray(v.providers) ? v.providers : [],
     activeProviderId: typeof v.activeProviderId === 'string' ? v.activeProviderId : null,
@@ -136,8 +134,8 @@ export function sanitizeSettings(value: unknown): Settings {
     language: typeof v.language === 'string' && v.language ? v.language : null,
     systemPrompt: typeof v.systemPrompt === 'string' ? v.systemPrompt.trim().slice(0, SYSTEM_PROMPT_MAX) : '',
     rules: sanitizeRules(v.rules),
-    titleThinking: sanitizeAuxThinking(v.titleThinking, legacyAux),
-    quickPromptThinking: sanitizeAuxThinking(v.quickPromptThinking, legacyAux),
+    titleThinking: sanitizeAuxThinking(v.titleThinking, 'off'),
+    quickPromptThinking: sanitizeAuxThinking(v.quickPromptThinking, 'off'),
     includePageContext: v.includePageContext === true,
     reasoningLevel: REASONING_LEVELS.includes(v.reasoningLevel as never)
       ? (v.reasoningLevel as Settings['reasoningLevel'])
@@ -158,59 +156,15 @@ export const EMPTY_USAGE = {
 };
 
 /**
- * 旧中间格式(自定义字段 refSnapshot:{tabs:[{title,url}],elements:[{preview,tagName,selector?}]})
- * → <page-refs> 块的 PageRefs 结构。旧字段不携带 tabId/元素 selector 归属,
- * 句柄以 0 占位(工具侧读取自然失败,不崩渲染)。
- */
-function legacyRefSnapshotToPageRefs(v: unknown): PageRefs | null {
-  if (!v || typeof v !== 'object') return null;
-  const s = v as Record<string, unknown>;
-  const tabs = Array.isArray(s.tabs)
-    ? s.tabs.flatMap((t): PageRefs['tabs'][number][] => {
-        if (!t || typeof t !== 'object') return [];
-        const x = t as Record<string, unknown>;
-        return [{
-          tabId: 0,
-          title: typeof x.title === 'string' ? x.title : '',
-          url: typeof x.url === 'string' ? x.url : '',
-        }];
-      })
-    : [];
-  const elements = Array.isArray(s.elements)
-    ? s.elements.flatMap((e): PageRefs['elements'][number][] => {
-        if (!e || typeof e !== 'object') return [];
-        const x = e as Record<string, unknown>;
-        return [{
-          id: typeof x.id === 'number' && Number.isInteger(x.id) && x.id > 0 ? x.id : 0,
-          tabId: 0,
-          selector: typeof x.selector === 'string' ? x.selector : '',
-          tagName: typeof x.tagName === 'string' ? x.tagName : '',
-          preview: typeof x.preview === 'string' ? x.preview : '',
-        }];
-      }).map((e, i) => (e.id === 0 ? { ...e, id: i + 1 } : e))
-    : [];
-  if (tabs.length === 0 && elements.length === 0) return null;
-  return { tabs, elements };
-}
-
-/**
- * 旧版扁平消息 {id?, role:'user'|'assistant', content:string, createdAt} → pi 消息;
- * 已是 pi 形状的消息**原样透传**(assistant 的 thinking 块/toolCall/usage、
+ * 消息防御清洗:非法形状丢弃,合法 pi 形状**原样透传**(assistant 的 thinking 块/toolCall/usage、
  * toolResult 的 toolCallId/content 数组等,重建会打平丢失 —— 回放正确性的关键)。
  */
 function sanitizeMessage(v: unknown): ChatMessage | null {
   if (!v || typeof v !== 'object') return null;
   const m = v as Record<string, unknown>;
   const ts =
-    typeof m.createdAt === 'number' ? m.createdAt : typeof m.timestamp === 'number' ? m.timestamp : Date.now();
+    typeof m.timestamp === 'number' ? m.timestamp : Date.now();
   if (m.role === 'user') {
-    // 旧中间格式:带 refSnapshot 自定义字段且 content 尚无块 → 块内嵌,字段丢弃
-    if (m.refSnapshot && typeof m.content === 'string' && !m.content.includes('<page-refs>')) {
-      const legacy = legacyRefSnapshotToPageRefs(m.refSnapshot);
-      if (legacy) {
-        return { role: 'user', content: m.content + renderPageRefsBlock(legacy), timestamp: ts };
-      }
-    }
     return {
       role: 'user',
       content: typeof m.content === 'string' ? m.content : Array.isArray(m.content) ? (m.content as UserMessage['content']) : '',

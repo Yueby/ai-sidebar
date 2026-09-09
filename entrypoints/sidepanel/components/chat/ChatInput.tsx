@@ -531,59 +531,10 @@ export function ChatInput({
         <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
       </div>
 
-      {/* 队列提示条: 本会话有排队即展示(不依赖当前是否正在生成——后台运行时自己的队列也要可见) */}
-      {queuedMessages && queuedMessages.length > 0 && (
-        <div className="pointer-events-auto mb-1.5 flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] text-muted-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-          <div className="flex items-center justify-between font-medium text-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
-              <span>{i18n.t('composer.queuedCount', { count: queuedMessages.length })}</span>
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            {queuedMessages.map((queued) => (
-              <div
-                key={queued.id}
-                className="flex items-center justify-between gap-2 rounded bg-background/60 px-1.5 py-0.5"
-              >
-                <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground/90">
-                  {queued.text}
-                </span>
-                <TooltipProvider delay={200}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-4 shrink-0 text-muted-foreground hover:text-foreground"
-                          onClick={() => onRemoveQueuedMessage?.(queued.id)}
-                          aria-label={i18n.t('composer.queuedRemove')}
-                        >
-                          <X className="size-2.5" />
-                        </Button>
-                      }
-                    />
-                    <TooltipContent side="top">
-                      {i18n.t('composer.queuedRemove')}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Input container (TipTap 编辑器 + 底部工具栏) */}
       <div
         className={`pointer-events-auto relative z-10 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs transition-[box-shadow,border-color] duration-200 ease-out focus-within:ring-1 focus-within:ring-ring ${
-          refTabs &&
-          refTabs.length > 0 &&
-          (!queuedMessages || queuedMessages.length === 0)
-            ? '-mt-2'
-            : ''
+          refTabs && refTabs.length > 0 ? '-mt-2' : ''
         }`}
       >
 
@@ -842,6 +793,51 @@ export function ChatInput({
         </div>
         </TooltipProvider>
       </div>
+
+      {/* 队列提示条: 本会话有排队即展示(位于输入框卡片下方, 不参与引用栏+输入框的层叠关系) */}
+      {queuedMessages && queuedMessages.length > 0 && (
+        <div className="pointer-events-auto mt-1.5 flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] text-muted-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <div className="flex items-center justify-between font-medium text-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+              <span>{i18n.t('composer.queuedCount', { count: queuedMessages.length })}</span>
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            {queuedMessages.map((queued) => (
+              <div
+                key={queued.id}
+                className="flex items-center justify-between gap-2 rounded bg-background/60 px-1.5 py-0.5"
+              >
+                <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground/90">
+                  {queued.text}
+                </span>
+                <TooltipProvider delay={200}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-4 shrink-0 text-muted-foreground hover:text-foreground"
+                          onClick={() => onRemoveQueuedMessage?.(queued.id)}
+                          aria-label={i18n.t('composer.queuedRemove')}
+                        >
+                          <X className="size-2.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent side="top">
+                      {i18n.t('composer.queuedRemove')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

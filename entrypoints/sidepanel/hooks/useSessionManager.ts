@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createModels, type AssistantMessage, type Context, type SimpleStreamOptions } from '@earendil-works/pi-ai';
 import type { Session, SessionDraft, Settings } from '@/lib/types';
 import { settingsItem, activeSessionIdItem, sanitizeSettings, createSession } from '@/lib/storage';
-import { migrateAllSessions, saveSession, deleteSession } from '@/lib/sessionStore';
+import { listSessions, saveSession, deleteSession } from '@/lib/sessionStore';
 import { resolveAuxModel } from '@/lib/providers';
 import { resolveAiLanguage } from '@/lib/language';
 import { buildProvider } from '@/lib/agent';
@@ -125,7 +125,7 @@ export function useSessionManager() {
       const cleanSettings = sanitizeSettings(rawSettings);
       setSettings(cleanSettings);
 
-      let initialSessions = await migrateAllSessions();
+      let initialSessions = await listSessions();
       let initialActiveId = rawActiveId;
 
       if (initialSessions.length === 0) {
