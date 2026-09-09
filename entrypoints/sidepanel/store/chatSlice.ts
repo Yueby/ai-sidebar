@@ -18,14 +18,17 @@ export interface SessionRun {
   inFlight: ChatMessage[];
 }
 
-/** 排队消息:归属目标会话(会话自身忙时才入队,该会话空闲即出队);
- *  id 供 UI 稳定删除;refs/elements 为入队时刻快照(出队不读后续被改动的草稿) */
+/** 排队消息镜像:归属目标会话 + 展示文本;`message` 为入 Agent 原生队列的同一对象引用,
+ *  被消费(message_end)时按身份移除。本 slice 仅作 UI 镜像,不参与发送(执行器 = Agent 队列)。 */
 export interface QueuedMessage {
   id: string;
   sessionId: string;
   text: string;
-  refTabs: RefTab[];
-  pickedElements: PickedElement[];
+  /** 入队时构造的完整 user 消息(含 refs 块;与 Agent 队列同一引用) */
+  message?: ChatMessage;
+  /** 兑底路径(Agent 不存在的理论情形)携带的 refs 快照 */
+  refTabs?: RefTab[];
+  pickedElements?: PickedElement[];
 }
 
 export interface ChatSlice {
@@ -45,6 +48,8 @@ export interface ChatSlice {
 
   enqueueMessage: (item: QueuedMessage) => void;
   removeQueuedMessage: (id: string) => void;
+  /** 按对象身份移除镜像条目(Agent 消费该条时由事件钩子调用) */
+  removeQueuedMessageByMessage: (message: ChatMessage) => void;
   /** 删除指定会话的排队条目(会话删除时) */
   removeQueuedMessagesForSession: (sessionId: string) => void;
 }
@@ -84,6 +89,10 @@ export function createChatSlice(set: SliceSet): ChatSlice {
     enqueueMessage: (item) => set((s) => ({ queuedMessages: [...(s.queuedMessages ?? []), item] })),
     removeQueuedMessage: (id) =>
       set((s) => ({ queuedMessages: (s.queuedMessages ?? []).filter((q) => q.id !== id) })),
+    removeQueuedMessageByMessage: (message) =>
+      set((s) => ({
+        queuedMessages: (s.queuedMessages ?? []).filter((q) => q.message !== message),
+      })),
     removeQueuedMessagesForSession: (sessionId) =>
       set((s) => ({
         queuedMessages: (s.queuedMessages ?? []).filter((q) => q.sessionId !== sessionId),

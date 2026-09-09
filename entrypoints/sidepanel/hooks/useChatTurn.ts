@@ -14,7 +14,7 @@ import type {
 import { activeSessionIdItem, createSession, createUserMessage, titleFromText } from '@/lib/storage';
 import { saveSession } from '@/lib/sessionStore';
 import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
-import { hasSessionAgent, runAgentTurn } from '@/lib/agent';
+import { continueAgentTurn, hasSessionAgent, runAgentTurn, sessionAgentFor } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
@@ -76,15 +76,25 @@ export function useChatTurn(params: {
     [],
   );
 
+  // 出队/继续消费互相引用(dispatchQueueFor ↔ runContinueTurn):用 ref 解耦声明顺序
+  const runContinueTurnRef = useRef<(sessionId: string) => void>(() => {});
+  const dispatchQueueForRef = useRef<(sessionId: string) => void>(() => {});
+
   /** 出队指定会话的排队消息(该会话空闲时;不切换当前视图) */
   const dispatchQueueFor = useCallback(
     (sessionId: string) => {
       if (isSessionBusy(sessionId)) return;
       const s = useAppStore.getState();
+      // 主路径:Agent 原生队列非空(入队即 followUp)→ 空闲窗口用 continue 消费。
+      // Agent 自身在 run 内会自动消费 followUp,这里只负责“run 已结束但队列还有”的窗口。
+      const agent = sessionAgentFor(sessionId);
+      if (agent?.hasQueuedMessages()) {
+        void runContinueTurnRef.current(sessionId);
+        return;
+      }
+      // 兑底:store 镜像仍有条目但 Agent 不存在(理论路径,如恢复导入后):走 prompt 直发
       const item = s.queuedMessages.find((q) => q.sessionId === sessionId);
       if (!item) return;
-      // 先验证执行条件再原子领取:目标会话已删 → 丢弃该条并继续调度;
-      // 无可用模型 → 保留条目并暂停(不逐条弹出后丢弃)
       if (!s.sessions.some((x) => x.id === sessionId)) {
         s.removeQueuedMessage(item.id);
         setTimeout(() => dispatchQueueFor(sessionId), 0);
@@ -102,6 +112,7 @@ export function useChatTurn(params: {
     },
     [isSessionBusy],
   );
+  dispatchQueueForRef.current = dispatchQueueFor;
 
   /** 压缩结束后补出队(压缩可能压住了该会话的排队消息)。
    *  注意:isCompacting 变 false 时 compactingSessionId 已被 useCompact 置 null,
@@ -118,6 +129,89 @@ export function useChatTurn(params: {
     }
     prevCompactingRef.current = { active: isCompacting, sessionId: compactingSessionId ?? null };
   }, [isCompacting, compactingSessionId, dispatchQueueFor]);
+
+  /**
+   * 空闲窗口消费原生队列:Agent 已 idle 但 followUp 队列非空(压缩/门控结束后滞留)时,
+   * 用 continueAgentTurn 启动一轮 run 把队列排空(与 executeTurn 同一套落盘/守卫时序)。
+   */
+  const runContinueTurn = useCallback(
+    async (sid: string) => {
+      const store = useAppStore.getState();
+      const session = store.sessions.find((s) => s.id === sid);
+      const active = findActiveModel(store.settings);
+      const agent = sessionAgentFor(sid);
+      if (!session || !active || !agent?.hasQueuedMessages()) return;
+
+      const rt = runtimeFor(sid);
+      let seq: number;
+      let signal: AbortSignal;
+      try {
+        ({ seq, signal } = rt.beginRun());
+      } catch {
+        return;
+      }
+      useAppStore.getState().resetResolvedGateCount(sid);
+      let autoCompactPending = false;
+      try {
+        const result = await continueAgentTurn({
+          provider: active.provider,
+          modelId: active.model.id,
+          thinkingLevel: resolveReasoningLevel(active.model, useAppStore.getState().settings.reasoningLevel),
+          language: useAppStore.getState().settings.language,
+          rules: useAppStore.getState().settings.rules,
+          systemPrompt: useAppStore.getState().settings.systemPrompt,
+          sessionId: sid,
+          signal,
+          webSearch: useAppStore.getState().settings.webSearch,
+          compaction: session.compaction,
+          onCompactContext: () => rt.requestCompaction(seq),
+        });
+        if (!rt.isOwner(seq)) return;
+        autoCompactPending = rt.consumeCompactionRequest();
+        const latest = useAppStore.getState().sessions.find((s) => s.id === sid);
+        if (latest) {
+          const finalizedSession: Session = {
+            ...latest,
+            messages: [...result.messages],
+            updatedAt: Date.now(),
+          };
+          const latestDraft = useAppStore.getState().sessions.find((s) => s.id === sid)?.draft;
+          if (latestDraft) finalizedSession.draft = latestDraft;
+          dropPendingDraftSave(sid);
+          useAppStore.getState().setSessions(
+            useAppStore.getState().sessions.map((s) => (s.id === sid ? finalizedSession : s)),
+          );
+          rt.clearInFlight(seq);
+          await saveSession(finalizedSession);
+        } else {
+          rt.clearInFlight(seq);
+        }
+        if (signal.aborted) {
+          rt.markCancelled(seq);
+        } else if (result.errorMessage) {
+          setErrorMessage(result.errorMessage, sid);
+        }
+      } catch (err: unknown) {
+        if (!rt.isOwner(seq)) return;
+        autoCompactPending = false;
+        rt.clearInFlight(seq);
+        if (signal.aborted) rt.markCancelled(seq);
+        else setErrorMessage(getErrorMessage(err) || '请求失败,请检查网络或提供商配置', sid);
+      } finally {
+        if (rt.endRun(seq)) {
+          if (autoCompactPending) {
+            void Promise.resolve(onAutoCompact(sid)).finally(() => {
+              setTimeout(() => dispatchQueueForRef.current(sid), 0);
+            });
+          } else {
+            setTimeout(() => dispatchQueueForRef.current(sid), 0);
+          }
+        }
+      }
+    },
+    [onAutoCompact, setErrorMessage],
+  );
+  runContinueTurnRef.current = runContinueTurn;
 
   // 共享转录执行内核:runAgentTurn 流式循环、事件透出、in-flight 物化、非破坏落盘与异常清理。
   // handleSendMessage 与 handleEditResend 共用本逻辑，保证 turn 身份守卫与时序一致。
@@ -319,24 +413,57 @@ export function useChatTurn(params: {
         const owner = target.id;
         const ownerSession = store.sessions.find((s) => s.id === owner);
         const draftAtEnqueue = ownerSession?.draft ?? EMPTY_DRAFT;
-        // 冻结副本:frozen(出队重入)优先,否则快照入队时刻的草稿引用
-        const frozenTabs = frozen
-          ? [...frozen.refTabs]
+        // 构造完整 user 消息(含 refs 块,与直发同一表示)后入 Agent 原生队列:
+        // run 内自动消费(followUp 在 agent 本要停止时轮询);run 已结束时由出队器 continue 消费
+        const snapTabs = frozen
+          ? frozen.refTabs
           : store.settings.includePageContext
-            ? [...draftAtEnqueue.refTabs]
+            ? draftAtEnqueue.refTabs
             : [];
-        const frozenElements = frozen
-          ? [...frozen.pickedElements]
+        const snapElements = frozen
+          ? frozen.pickedElements
           : store.settings.includePageContext
-            ? [...draftAtEnqueue.pickedElements]
+            ? draftAtEnqueue.pickedElements
             : [];
-        store.enqueueMessage({
-          id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          sessionId: owner,
-          text: trimmed,
-          refTabs: frozenTabs,
-          pickedElements: frozenElements,
-        });
+        let queuedRefs: PageRefs | undefined;
+        if (snapTabs.length > 0 || snapElements.length > 0) {
+          const focusedTabId = (await getActiveTabMeta().catch(() => null))?.id;
+          const refreshedTabs = await Promise.all(
+            snapTabs.map(async (t) => (await getTabMeta(t.id).catch(() => null)) ?? t),
+          );
+          queuedRefs = {
+            tabs: refreshedTabs.map((t) => ({
+              tabId: t.id,
+              title: t.title,
+              url: t.url,
+              ...(t.id === focusedTabId ? { focused: true } : {}),
+            })),
+            elements: snapElements.map((e) => ({
+              id: e.elementId,
+              tabId: e.tabId,
+              selector: e.selector,
+              tagName: e.tagName,
+              preview: e.preview,
+            })),
+          };
+        }
+        const queuedMessage = createUserMessage(trimmed, queuedRefs);
+        const queueId = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const ownerAgent = sessionAgentFor(owner);
+        if (ownerAgent) {
+          // 主路径:Agent 原生队列(镜像存同一对象引用,消费时按身份移除)
+          ownerAgent.followUp(queuedMessage);
+          store.enqueueMessage({ id: queueId, sessionId: owner, text: trimmed, message: queuedMessage });
+        } else {
+          // 兑底(理论不可达:忙但无实例):旧 store 队列,由出队器 prompt 直发
+          store.enqueueMessage({
+            id: queueId,
+            sessionId: owner,
+            text: trimmed,
+            refTabs: [...snapTabs],
+            pickedElements: [...snapElements],
+          });
+        }
         if (!frozen && owner === useAppStore.getState().activeSessionId) {
           // 元素引用随该条消息消费(与直发路径一致);refTabs 保留为会话上下文
           useAppStore.getState().patchActiveDraft((d) => ({ ...d, pickedElements: [] }));
@@ -593,6 +720,10 @@ export function useChatTurn(params: {
     const sid = sessionId ?? useAppStore.getState().activeSessionId;
     if (!sid) return;
     runtimeFor(sid).abort();
+    // Agent.abort() 不清队列:残留的 steering/followUp 会在下一次 run 的初始轮询/停止点
+    // 被注入(陈旧乱序)——停止时一并清空并同步 UI 镜像
+    sessionAgentFor(sid)?.clearAllQueues();
+    useAppStore.getState().removeQueuedMessagesForSession(sid);
     useAppStore.getState().dismissPendingGates(sid);
   }, []);
 

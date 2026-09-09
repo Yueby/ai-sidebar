@@ -46,6 +46,10 @@ setRuntimeStateSink((sessionId, snapshot, active) => {
 // Agent 事件出口:每个会话 Agent 常驻订阅一次,事件写入该会话 runtime(pi 设计)
 setAgentEventSink((sessionId, event) => {
   bridgeAgentEvent(sessionId, event);
+  // 队列镜像同步:排队 user 消息被 Agent 消费(注入并 message_end)时按对象身份移除镜像条目
+  if (event.type === 'message_end' && event.message.role === 'user') {
+    useAppStore.getState().removeQueuedMessageByMessage(event.message);
+  }
 });
 
 setGateHandler((req: GateRequest, sessionId: string) => {

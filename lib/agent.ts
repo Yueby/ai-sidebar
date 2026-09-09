@@ -162,7 +162,8 @@ export interface RunAgentOptions {
   /** 压缩元数据:非破坏裁剪请求面(transformContext),不改转录(可选) */
   compaction?: SessionCompaction;
   /** 本轮用户消息(content 已内嵌 <page-refs> 块);与历史同形状,无任何自定义字段 */
-  userMessage: UserMessage;
+  /** 本轮 user 消息(runAgentTurn 必填;continueAgentTurn 不用) */
+  userMessage?: UserMessage;
   /** 当前草稿中被引用的标签页(App 侧已按 includePageContext 门槛过滤) */
   refTabs?: RefTab[];
   /** 当前草稿中用户框选的页面元素(App 侧已按 includePageContext 门槛过滤) */
@@ -399,6 +400,9 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     streamFn,
     convertToLlm,
     transformContext,
+    // 队列语义显式声明(不依赖上游默认):一次消费一条,保持 FIFO 与 UI 镜像一致
+    followUpMode: 'one-at-a-time',
+    steeringMode: 'one-at-a-time',
     sessionId: sid,
     toolExecution: 'sequential',
   });
@@ -433,11 +437,13 @@ export function disposeAllSessionAgents(): void {
 }
 
 /**
- * 基于 pi-agent-core 的 Agent 跑一轮对话(可能包含多轮工具调用循环)。
- * 失败经 Agent 协议事件编码(stopReason='error'),取消经 signal 注入;
- * 中止时已生成的部分保留在转录中。
+ * runAgentTurn 与 continueAgentTurn 的共享内核:常驻订阅已在外,这里只做本轮订阅(捕获 newMessages)、
+ * 启动(kickoff)、队列泵与结果汇总。
  */
-export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentResult> {
+async function runTurnCore(
+  options: RunAgentOptions,
+  kickoff: (agent: Agent) => Promise<void>,
+): Promise<RunAgentResult> {
   const agent = ensureSessionAgent(options);
 
   let newMessages: ChatMessage[] = [];
@@ -454,9 +460,8 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
   signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
-    // 原始 user 消息入转录;请求面由 convertToLlm 展开元素(单一表示,存储与请求同源)
-    await agent.prompt(options.userMessage as UserMessage);
-    // 泵:prompt 结束后仍有排队消息时用 continue() 消费。
+    await kickoff(agent);
+    // 泵:run 结束后仍有排队消息时用 continue() 消费。
     // followUp 只在“agent 本要停止”点被轮询(agent-loop.js:161),
     // run 结束后(包括 agent_end 时刻)入队的消息会滞留;与上游
     // AgentSession._runAgentPrompt 的 `while (await postRun()) await agent.continue()` 同构。
@@ -478,4 +483,23 @@ export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentRe
       : undefined;
 
   return { messages, newMessages, errorMessage };
+}
+
+/**
+ * 基于 pi-agent-core 的 Agent 跑一轮对话(可能包含多轮工具调用循环)。
+ * 失败经 Agent 协议事件编码(stopReason='error'),取消经 signal 注入;
+ * 中止时已生成的部分保留在转录中。
+ */
+export async function runAgentTurn(options: RunAgentOptions): Promise<RunAgentResult> {
+  if (!options.userMessage) throw new Error('runAgentTurn requires userMessage');
+  return runTurnCore(options, (agent) => agent.prompt(options.userMessage as UserMessage));
+}
+
+/**
+ * 继续当前转录(不追加新 user 消息):用于空闲窗口消费原生队列。
+ * `Agent.continue()` 在末尾为 assistant 且队列非空时会 drain 队列并启动新 run
+ * (agent.js:242-252),否则从末尾 user/toolResult 继续。
+ */
+export async function continueAgentTurn(options: RunAgentOptions): Promise<RunAgentResult> {
+  return runTurnCore(options, (agent) => agent.continue());
 }

@@ -70,5 +70,5 @@ test('入队快照是副本:入队后修改原数组不影响条目', () => {
   const tabs = [{ id: 1, title: 't', url: 'https://a' }];
   slice.enqueueMessage({ ...q('a1', 'A'), refTabs: [...tabs] });
   tabs.push({ id: 2, title: 'x', url: 'https://b' });
-  assert.equal(getState().queuedMessages[0]?.refTabs.length, 1);
+  assert.equal(getState().queuedMessages[0]?.refTabs?.length, 1);
 });
