@@ -917,7 +917,8 @@
   }
 
   .cn-message-avatar {
-    @apply min-w-8 group-has-data-[slot=message-footer]/message:-translate-y-8;
+    /* 垂直布局(头像行在内容上方):左对齐,不参与水平布局时代的 footer 位移补偿 */
+    @apply self-start min-w-6;
   }
 
   .cn-message-content {
