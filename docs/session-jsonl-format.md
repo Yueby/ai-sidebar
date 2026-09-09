@@ -53,7 +53,7 @@ pi v3 entry 类型（`packages/coding-agent/src/core/session-manager.ts`）：
 
 1. 启动时检测新 store（`sessions_v2`）是否为空且旧 store（`sessions`）非空 → 执行一次性迁移。
 2. 每个旧 `Session` 生成：header → `session_info`（title/customTitle）→ 按序 `message` entries（线性 parentId）→ 若 `compaction` 存在追加 `compaction` entry（`firstKeptEntryId` = 摘要消息对应的 entry id）→ 若有草稿追加 `custom` entry。
-3. **旧 store 保留只读**（不删除）作为回滚点；迁移完成后写 `local:sessionFormat=v1` 标记避免重复迁移。
+3. **旧 store 保留只读**（不删除）作为回滚点；迁移完成后写 `local:sessionFormat='jsonl'` 标记避免重复迁移。
 4. 迁移必须**幂等**：同一会话已在新 store 则跳过；比对证据 = 逐会话 `messages.length`、refs 块存在性、`compaction` 指针、草稿字段。
 5. 回滚：删除新 store 内容 + 清标记即可回到旧路径（旧 store 未被改动）。
 
@@ -65,10 +65,10 @@ pi v3 entry 类型（`packages/coding-agent/src/core/session-manager.ts`）：
 
 ## 6. 已定决策（2026-09 拍板）
 
-1. **压缩摘要：直接对齐 pi**——`compaction` entry 承载 `summary` + `firstKeptEntryId`；**摘要不再作为 user 消息存在 messages**，请求面由解析层注入（同 pi 的 `buildSessionContext`）。影响面（实施时需逐项适配）：`lib/compaction.ts`（产出改写入 entry）、`useCompact.ts`（不再 append 摘要消息）、`lib/contextTokens.ts`（effectiveMessages 改从 compaction entry 注入）、`lib/sessionExport.ts`（导出摘要格式）、`MessageItem/CompactionRow`（渲染数据源）。
+1. **压缩摘要：保留现有语义**——摘要仍作为 user 消息存在 messages（`summaryTimestamp` 定位键不变，消费方零改动）；JSONL 序列化时把它表示为 `compaction` entry（含 `summary` + `summaryTimestamp` + `firstKeptEntryId`，与 pi 格式同形），解析时重建为 user 消息。**完全对齐 pi（摘要不进 messages）列为后续独立任务**——需一并改 compaction/useCompact/contextTokens/导出/渲染。
 2. **草稿 entry：覆盖式**——同 `customType: ai-sidebar/draft` 只保留最后一条，解析时取最后一条。
 3. **cwd：写固定值 `"ai-sidebar"`**（保持与 pi header 结构兼容）。
-4. **message entry id：落盘时生成并持久化**——新消息在落盘时补 id，解析/回放稳定；迁移时为存量消息生成新 id。
+4. **message entry id：确定性顺序编号**（`e-1, e-2, …`，迁移可重放——同输入产出逐字节一致的 JSONL）。
 
 ## 7. 实施顺序（下一批）
 
