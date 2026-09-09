@@ -4,6 +4,7 @@ import { PICK_ELEMENT_RESULT_MESSAGE } from '@/lib/types';
 import {
   getActiveTabMeta,
   getTabMeta,
+  liveTabIds,
   startPickElement,
   type RefTab,
 } from '@/lib/pageContext';
@@ -155,6 +156,35 @@ export function usePageContextRefs(params: {
   const activeDraftRefTabs = useAppStore((s) => selectCurrentSession(s)?.draft?.refTabs ?? null);
   const activeDraftPicked = useAppStore((s) => selectCurrentSession(s)?.draft?.pickedElements ?? null);
   const includePageContext = useAppStore((s) => s.settings.includePageContext);
+
+  // 僵尸引用清理:草稿引用可能指向本会话从未存在过的 tabId——WebDAV 恢复自其它机器/上一次
+  // profile 时,那些 tab 在本环境根本没存在过,tabs.onRemoved 永远不会为它们触发(面板存活期
+  // 内的关闭已由 onRemoved 处理)。惰性对账:引用一变(切会话/恢复/初始化)就校验现存 tab,
+  // 缺失者从草稿移除;查询失败(null)一律不动,防把“未知”当“全关”而误删全部引用。
+  useEffect(() => {
+    if (!activeDraftRefTabs?.length && !activeDraftPicked?.length) return;
+    const refsAtEffect = activeDraftRefTabs;
+    const pickedAtEffect = activeDraftPicked;
+    let cancelled = false;
+    void liveTabIds().then((ids) => {
+      if (cancelled || !ids) return;
+      const draft = selectCurrentSession(useAppStore.getState())?.draft;
+      if (!draft) return;
+      // 对账期间草稿已被改写 → 本次作废(下一次变化会重新对账)
+      if (draft.refTabs !== refsAtEffect || draft.pickedElements !== pickedAtEffect) return;
+      const hasDeadTab = draft.refTabs.some((t) => !ids.has(t.id));
+      const hasDeadPick = draft.pickedElements.some((e) => !ids.has(e.tabId));
+      if (!hasDeadTab && !hasDeadPick) return;
+      patchActiveDraft((d) => ({
+        ...d,
+        refTabs: d.refTabs.filter((t) => ids.has(t.id)),
+        pickedElements: d.pickedElements.filter((e) => ids.has(e.tabId)),
+      }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDraftRefTabs, activeDraftPicked, patchActiveDraft]);
   // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆)。
   // 引用栏被用户删空 → 重置组记忆(陈旧快照不复活,回归纯跟随;
   // 发送不再清空 refTabs——决策 13 修订——故不会误伤跨消息的组存活)

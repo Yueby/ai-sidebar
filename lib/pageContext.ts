@@ -132,6 +132,24 @@ export interface TabSnapshot {
   activeId?: number;
 }
 
+/**
+ * 现存 tab id 集合(草稿引用对账用)。**查询失败返回 null** ——
+ * 调用方必须把它当“未知”跳过清理,绝不可归零处理(`snapshotTabs` 的 catch 会返回空集,
+ * 用于本场景会误删全部引用)。
+ */
+export async function liveTabIds(): Promise<Set<number> | null> {
+  try {
+    const tabs = await browser.tabs.query({});
+    const ids = new Set<number>();
+    for (const t of tabs) {
+      if (t.id !== undefined) ids.add(t.id);
+    }
+    return ids;
+  } catch {
+    return null;
+  }
+}
+
 /** 动作前快照:tab 集合 + 焦点 tab */
 export async function snapshotTabs(): Promise<TabSnapshot> {
   const tabs = await browser.tabs.query({}).catch(() => []);
