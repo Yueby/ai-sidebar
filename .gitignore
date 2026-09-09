@@ -28,3 +28,5 @@ web-ext.config.ts
 # BEGIN oh-my-opencode-slim clonedeps
 .slim/clonedeps/repos/
 # END oh-my-opencode-slim clonedeps
+# pi agent runtime state (goals/sessions)
+.pi/
