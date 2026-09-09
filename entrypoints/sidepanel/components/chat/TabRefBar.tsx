@@ -73,7 +73,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
       <TooltipProvider delay={200}>
         <div className="relative z-0 w-full select-none animate-in fade-in-0 duration-150 motion-reduce:animate-none">
           <div
-            className="flex items-center justify-between gap-2 px-2.5 pt-1.5 pb-3 rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground group/single transition-colors hover:bg-muted/60"
+            className="flex items-center justify-between gap-2 px-2.5 pt-1.5 pb-3 rounded-t-lg border border-b-0 border-border/70 bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-background))] text-xs text-foreground group/single transition-colors hover:bg-[color-mix(in_srgb,var(--color-muted)_60%,var(--color-background))]"
           >
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <FaviconIcon url={tab.url} tabId={tab.id} className="size-3.5" />
@@ -126,11 +126,11 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
   // 2 & 3. 多引用态 (折叠 / 展开): 独立卡片控件
   return (
     <TooltipProvider delay={200}>
-      <div className="relative z-0 w-full select-none rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+      <div className="relative z-0 w-full select-none rounded-t-lg border border-b-0 border-border/70 bg-[color-mix(in_srgb,var(--color-muted)_40%,var(--color-background))] text-xs text-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
         {/* 头部摘要栏 (点击可展开/收起) */}
         <div
           onClick={() => setExpanded((prev) => !prev)}
-          className={`flex items-center justify-between gap-2 px-2.5 pt-1.5  hover:bg-muted/60 transition-colors ${
+          className={`flex items-center justify-between gap-2 px-2.5 pt-1.5  hover:bg-[color-mix(in_srgb,var(--color-muted)_60%,var(--color-background))] transition-colors ${
             expanded ? 'pb-1.5' : 'pb-3'
           }`}
         >

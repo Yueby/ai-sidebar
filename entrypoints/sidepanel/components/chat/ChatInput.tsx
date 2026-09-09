@@ -589,9 +589,7 @@ export function ChatInput({
         <div
           className={cn(
             'pointer-events-auto relative z-10',
-            // 半透明 bg-muted/40 叠压在队列卡上会透出下层内容（发黑蒙层感）：
-            // 有队列时垫一层实色底，让引用卡半透明背景叠在实色上（与单卡时代视觉一致）
-            hasQueued && '-mt-2 bg-background',
+            hasQueued && '-mt-2',
           )}
         >
           <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
