@@ -492,6 +492,15 @@
     z-index: 60 !important;
   }
 
+  /* 窄面板适配(侧边栏视口 <640px 恒成立):官方 viewport 宽度靠 sm:w-full 给,
+     而子项全为 absolute(无流内内容)→ sm: 不生效时 viewport 宽度塔陷为 0,
+     toast 只剩边框(看到一条线)。按同尺寸显式给宽(10px 左右等距)。 */
+  @media (width < 40rem) {
+    [data-slot="toast-viewport"][data-position="top-right"] {
+      width: calc(100vw - 1.25rem);
+    }
+  }
+
   /* MARK: Code Highlight */
   /* shiki 双主题高亮(github-light/github-dark):token 色走 --shiki-light/--shiki-dark
      CSS 变量跟随 .dark 自动切换;shiki 自带 inline 底色让位给 --code-background token */
