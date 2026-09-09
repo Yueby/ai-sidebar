@@ -662,7 +662,7 @@ export default function App() {
             onStartPickElement={pageRefs.handleStartPickElement}
             onRemovePickedElement={pageRefs.handleRemovePickedElement}
             onOpenSettings={handleOpenSettings}
-            disabled={!activeModelInfo || isCompactingHere}
+            disabled={!activeModelInfo}
             placeholder={isCompactingHere ? i18n.t('app.compacting') : undefined}
             initialInput={draft.input}
             onInputChange={handleDraftInput}
