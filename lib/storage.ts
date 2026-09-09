@@ -2,6 +2,7 @@ import { storage } from 'wxt/utils/storage';
 import type { AssistantMessage, ToolResultMessage, UserMessage } from '@earendil-works/pi-ai';
 import type { RefTab } from './pageContext';
 import type {
+  AppearanceMode,
   AuxThinkingLevel,
   ChatMessage,
   PageRefs,
@@ -12,7 +13,7 @@ import type {
   Settings,
   UserRule,
 } from './types';
-import { REASONING_LEVELS, AUX_THINKING_LEVELS } from './types';
+import { REASONING_LEVELS, AUX_THINKING_LEVELS, APPEARANCE_MODES } from './types';
 import { DEFAULT_SETTINGS } from './providers';
 import { renderPageRefsBlock, stripPageRefs } from './pageRefs';
 
@@ -122,6 +123,10 @@ function sanitizeAuxThinking(v: unknown, fallback: AuxThinkingLevel): AuxThinkin
   return AUX_THINKING_LEVELS.includes(v as never) ? (v as AuxThinkingLevel) : fallback;
 }
 
+function sanitizeAppearance(v: unknown): AppearanceMode {
+  return APPEARANCE_MODES.includes(v as never) ? (v as AppearanceMode) : 'system';
+}
+
 export function sanitizeSettings(value: unknown): Settings {
   if (!value || typeof value !== 'object') return DEFAULT_SETTINGS;
   const v = value as Partial<Settings>;
@@ -129,6 +134,7 @@ export function sanitizeSettings(value: unknown): Settings {
     providers: Array.isArray(v.providers) ? v.providers : [],
     activeProviderId: typeof v.activeProviderId === 'string' ? v.activeProviderId : null,
     activeModelId: typeof v.activeModelId === 'string' ? v.activeModelId : null,
+    appearance: sanitizeAppearance(v.appearance),
     titleModel: sanitizeAuxModelRef(v.titleModel),
     quickPromptModel: sanitizeAuxModelRef(v.quickPromptModel),
     language: typeof v.language === 'string' && v.language ? v.language : null,

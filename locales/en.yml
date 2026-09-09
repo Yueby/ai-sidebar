@@ -184,7 +184,7 @@ app:
   close: Close
   settingsSr: Settings
   gateSwitchTo: Switch there
-  settingsDesc: Configure AI providers, search, permissions and preferences
+  settingsDesc: Configure AI providers, search, appearance and preferences
 
 
 settings:
@@ -195,7 +195,7 @@ settings:
     models: Models
     prompt: Prompts
     search: Search
-    permissions: Permissions
+    appearance: Appearance
     backup: Backup
     about: About
   systemPrompt:
@@ -366,17 +366,16 @@ search:
   applyUrlPrefix: "Get API key: "
   keyStorageNote: Keys are stored only in local browser extension storage.
 
-permissions:
-  userScriptsTitle: "User Scripts (userScripts)"
-  webAccessTitle: Web Page Access
-  grantedWithInstall: Granted at install
-  installedListTitle: "Permissions Granted at Install ({count})"
-  enabled: Enabled
-  disabled: Disabled
-  openDetails: Open extension details to enable
-  userScriptsHint: "Prompted on panel open; execute_js automatically falls back to scripting if disabled"
-  declarationTitle: "Least-Privilege Declaration:"
-  declarationText: ai-sidebar only requests permissions necessary for functionality. All network requests connect directly to target services without intermediary servers. Any future permissions required for new features will be transparently listed here.
+appearance:
+  title: Appearance
+  themeLabel: Theme Mode
+  themeDesc: Select the display theme for the sidebar interface
+  system: Follow System
+  systemDesc: Automatically adapt to system light or dark appearance
+  light: Light
+  lightDesc: Always use light theme
+  dark: Dark
+  darkDesc: Always use dark theme
 
 backup:
   title: Backup & Restore

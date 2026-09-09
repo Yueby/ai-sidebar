@@ -44,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   providers: [],
   activeProviderId: null,
   activeModelId: null,
+  appearance: 'system',
   titleModel: null,
   quickPromptModel: null,
   language: null,

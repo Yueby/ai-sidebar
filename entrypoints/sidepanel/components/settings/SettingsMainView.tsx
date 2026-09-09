@@ -60,7 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { SettingsPermissionsView } from './SettingsPermissionsView';
+import { SettingsAppearanceView } from './SettingsAppearanceView';
 import { Button } from '@/components/ui/button';
 import { cn, getErrorMessage } from '@/lib/utils';
 
@@ -78,7 +78,7 @@ interface SettingsMainViewProps {
   activeSessionId: string | null;
 }
 
-type SettingsTab = 'providers' | 'models' | 'prompt' | 'search' | 'permissions' | 'backup' | 'about';
+type SettingsTab = 'providers' | 'models' | 'prompt' | 'search' | 'appearance' | 'backup' | 'about';
 
 const AUX_THINKING_OPTIONS: { value: AuxThinkingLevel; label: string }[] = [
   { value: 'off', label: REASONING_LEVEL_LABELS.off.full },
@@ -347,7 +347,7 @@ export function SettingsMainView({
               { id: 'models', label: i18n.t('settings.tabs.models') },
               { id: 'prompt', label: i18n.t('settings.tabs.prompt') },
               { id: 'search', label: i18n.t('settings.tabs.search') },
-              { id: 'permissions', label: i18n.t('settings.tabs.permissions') },
+              { id: 'appearance', label: i18n.t('settings.tabs.appearance') },
               { id: 'backup', label: i18n.t('settings.tabs.backup') },
               { id: 'about', label: i18n.t('settings.tabs.about') },
             ].map((tab) => (
@@ -875,9 +875,12 @@ export function SettingsMainView({
           />
         )}
 
-        {/* VIEW 3: Permissions Management */}
-        {currentTab === 'permissions' && (
-          <SettingsPermissionsView />
+        {/* VIEW: Appearance Settings */}
+        {currentTab === 'appearance' && (
+          <SettingsAppearanceView
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+          />
         )}
 
         {/* VIEW 5: About Page */}

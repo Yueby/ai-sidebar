@@ -96,10 +96,16 @@ export type AuxThinkingLevel = 'off' | 'low' | 'medium' | 'high';
 
 export const AUX_THINKING_LEVELS: AuxThinkingLevel[] = ['off', 'low', 'medium', 'high'];
 
+export type AppearanceMode = 'system' | 'light' | 'dark';
+
+export const APPEARANCE_MODES: AppearanceMode[] = ['system', 'light', 'dark'];
+
 export interface Settings {
   providers: ProviderConfig[];
   activeProviderId: string | null;
   activeModelId: string | null;
+  /** 外观主题:跟随系统 / 浅色 / 深色 */
+  appearance: AppearanceMode;
   /** 会话标题生成模型;null = 跟随对话模型 */
   titleModel: AuxModelRef | null;
   /** 新会话推荐快捷指令生成模型;null = 跟随对话模型 */

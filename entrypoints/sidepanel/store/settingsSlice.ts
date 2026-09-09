@@ -1,6 +1,7 @@
 import type { Settings } from '@/lib/types';
 import { settingsItem } from '@/lib/storage';
 import { DEFAULT_SETTINGS } from '@/lib/providers';
+import { setAppearance } from '../theme';
 
 export interface SettingsSlice {
   settings: Settings;
@@ -15,9 +16,13 @@ export function createSettingsSlice(set: SliceSet): SettingsSlice {
   return {
     settings: DEFAULT_SETTINGS,
 
-    setSettings: (settings) => set({ settings }),
+    setSettings: (settings) => {
+      setAppearance(settings.appearance);
+      set({ settings });
+    },
 
     updateSettings: async (settings) => {
+      setAppearance(settings.appearance);
       set({ settings });
       await settingsItem.setValue(settings);
     },
