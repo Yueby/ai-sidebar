@@ -899,7 +899,8 @@ export function MessageItem({
   const errorMessage = assistantMsg.errorMessage;
   const usage = assistantMsg.usage;
   const hasUsage = usage && usage.totalTokens > 0;
-  const hasVisibleTextOrThinking = textBlocks.length > 0 || thinkingBlocks.length > 0 || Boolean(rawText);
+  const hasVisibleText = textBlocks.length > 0 || Boolean(rawText);
+  const hasVisibleTextOrThinking = hasVisibleText || (!isStreaming && thinkingBlocks.length > 0);
   const hasLiveActivity = Boolean(liveThinking) || (liveToolLabels && liveToolLabels.length > 0);
   // gate pending = turn 空闲等待用户操作,并非生成中:打字点与空 live 气泡都不渲染
   const isTurnIdle = Boolean(activeGateRequest);
@@ -910,6 +911,7 @@ export function MessageItem({
     Boolean(isStreaming) &&
     !isTurnIdle &&
     !liveThinking &&
+    thinkingBlocks.length === 0 &&
     (!liveToolLabels || liveToolLabels.length === 0) &&
     !hasTextInSegments;
   const emptyReply =
@@ -1025,7 +1027,7 @@ export function MessageItem({
                 className="relative min-w-0 w-full max-w-full"
               >
                   {/* Live streaming thinking block(仅 live 气泡;流式消息无物化 thinking 块,置于首段首位) */}
-                  {i === 0 && liveThinking && (
+                  {i === 0 && liveThinking && thinkingBlocks.length === 0 && (
                     <ThinkingBlock
                       thinking={liveThinking}
                       isGenerating={Boolean(isStreaming) && !rawText}
@@ -1034,10 +1036,14 @@ export function MessageItem({
 
                   {seg.items.map((item, j) =>
                     item.type === 'thinking' ? (
-                      <ThinkingBlock key={j} thinking={item.thinking} />
+                      <ThinkingBlock
+                        key={`thinking-${j}`}
+                        thinking={item.thinking}
+                        isGenerating={Boolean(isStreaming) && !rawText}
+                      />
                     ) : item.type === 'text' ? (
                       <SmoothMarkdown
-                        key={j}
+                        key={`text-${j}`}
                         text={item.text}
                         animate={isLiveTail(i, j, seg.items.length)}
                         /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
@@ -1076,24 +1082,17 @@ export function MessageItem({
             </div>
           )}
 
-          {/* 无气泡段但有 live 思考/状态(纯 thinking 阶段、纯工具卡报错等):气泡壳兜底。
-              仅 thinking 时此前整列无气泡壳 → 气泡"消失"空档;此处保证壳连续 */}
-          {!hasBubble && (hasStatus || liveThinking) && (
-            <Bubble
-              variant="tinted"
-              align="start"
-              className="w-fit max-w-full"
-            >
-              <BubbleContent className="relative min-w-0 w-fit max-w-full rounded-lg border border-border/60 p-2.5 text-card-foreground overflow-hidden">
-                {liveThinking && (
-                  <ThinkingBlock
-                    thinking={liveThinking}
-                    isGenerating={Boolean(isStreaming) && !rawText}
-                  />
-                )}
-                {statusNodes}
-              </BubbleContent>
-            </Bubble>
+          {/* 无气泡段但有 live 思考/状态(纯 thinking 阶段、纯工具卡报错等):平铺兜底。 */}
+          {!hasBubble && (hasStatus || (liveThinking && thinkingBlocks.length === 0)) && (
+            <MessageContent className="relative min-w-0 w-full max-w-full">
+              {liveThinking && thinkingBlocks.length === 0 && (
+                <ThinkingBlock
+                  thinking={liveThinking}
+                  isGenerating={Boolean(isStreaming) && !rawText}
+                />
+              )}
+              {statusNodes}
+            </MessageContent>
           )}
 
           {/* Action & Usage bar (Only shown when text or usage exists) */}

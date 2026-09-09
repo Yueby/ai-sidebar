@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { i18n } from '#i18n';
 import {
   Bot,
@@ -109,13 +109,11 @@ export function MessageList({
   onEditResend,
   canEditMessage,
 }: MessageListProps) {
-  const isEmpty = messages.length === 0 && !streamingContent && !gateRequest;
-  // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(随消息身份重估)
-  const quietFrom = Math.max(0, messages.length - (quietTailCount ?? 0));
-  // 键 = 过滤后位置(msg-${i})。live 槽键 = 其「未来物化位置」——message_end 时
-  // in-flight 消息顶替 live 槽实例(零重挂载,MarkdownView memo 复用),finalize 后索引不变、
-  // 实例跨转录落盘持续复用,全程无 class/实例翻转 → 肉眼无闪烁
+  const isEmpty = messages.length === 0 && !streamingContent && !streamingThinking && !gateRequest;
+  // 过滤后的非 toolResult 消息(工具结果合入 ToolCallCard 内联展示)
   const filteredMessages = useMemo(() => messages.filter((m) => m.role !== 'toolResult'), [messages]);
+  // 尾部 quietTailCount 条 = 刚从 live 接管的 in-flight 消息:跳过入场动画(随消息身份重估)
+  const quietFrom = Math.max(0, filteredMessages.length - (quietTailCount ?? 0));
 
   const toolResultsByCallId = useMemo(() => {
     const map = new Map<string, ToolResultMessage>();
@@ -140,6 +138,92 @@ export function MessageList({
     }
     return activeToolLabels.filter((n) => !materialized.has(n));
   }, [messages, activeToolLabels, toolResultsByCallId]);
+
+  const liveTimestampRef = useRef(Date.now());
+  if (!isStreaming) {
+    liveTimestampRef.current = Date.now();
+  }
+
+  // live 项存在条件:流式中且(有正文/思考/活动工具,或在等待首个 token)
+  const hasLiveContent = Boolean(
+    (streamingContent && streamingContent.length > 0) ||
+      (streamingThinking && streamingThinking.length > 0) ||
+      (liveToolLabels && liveToolLabels.length > 0)
+  );
+
+  const isWaitingForFirstToken = Boolean(
+    isStreaming &&
+      (messages.length === 0 ||
+        messages[messages.length - 1]?.role === 'user' ||
+        messages[messages.length - 1]?.role === 'toolResult')
+  );
+
+  const hasLiveItem = Boolean(isStreaming && (hasLiveContent || isWaitingForFirstToken));
+
+  // 单一统一渲染数组:将 live 流式项并入 filteredMessages 数组末尾,
+  // 消除不同 JSX 槽位导致的卸载/重挂载——live 与物化使用相同 key(`msg-${i}`)并在
+  // 同一个数组槽中协调,物化时仅为 props 更新,彻底杜绝“正文输出完闪一下”
+  const itemsToRender = useMemo(() => {
+    const list: Array<{
+      key: string;
+      messageId: string;
+      message: ChatMessage;
+      isStreaming?: boolean;
+      isCancelled?: boolean;
+      liveThinking?: string;
+      liveToolLabels?: string[];
+      suppressEntryAnimation: boolean;
+      scrollAnchor: boolean;
+      compactionInfo?: { tokensBefore: number } | null;
+    }> = filteredMessages.map((msg, i) => ({
+      key: `msg-${i}`,
+      messageId: `msg-${i}`,
+      message: msg,
+      suppressEntryAnimation: i >= quietFrom,
+      scrollAnchor: msg.role === 'user',
+      compactionInfo:
+        compaction && msg.timestamp === compaction.summaryTimestamp
+          ? { tokensBefore: compaction.tokensBefore }
+          : null,
+    }));
+
+    if (hasLiveItem) {
+      list.push({
+        key: `msg-${filteredMessages.length}`,
+        messageId: `msg-${filteredMessages.length}`,
+        message: {
+          role: 'assistant',
+          content: [
+            ...(streamingThinking ? [{ type: 'thinking' as const, thinking: streamingThinking }] : []),
+            ...(streamingContent || !streamingThinking ? [{ type: 'text' as const, text: streamingContent ?? '' }] : []),
+          ],
+          api: 'openai-completions',
+          provider: '',
+          model: '',
+          stopReason: 'stop',
+          usage: EMPTY_USAGE,
+          timestamp: liveTimestampRef.current,
+        } satisfies AssistantMessage,
+        isStreaming: true,
+        isCancelled: isCancelled,
+        liveThinking: streamingThinking,
+        liveToolLabels: liveToolLabels,
+        suppressEntryAnimation: false,
+        scrollAnchor: false,
+      });
+    }
+
+    return list;
+  }, [
+    filteredMessages,
+    hasLiveItem,
+    streamingContent,
+    streamingThinking,
+    isCancelled,
+    liveToolLabels,
+    quietFrom,
+    compaction,
+  ]);
 
   return (
     <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-background">
@@ -289,55 +373,30 @@ export function MessageList({
                   复用同一 MessageItem 实例(live 槽键 = 未来物化位置);若 pi 升级改变此行为
                   (消息对象在转写间重建),流式交接会重现闪烁。 */}
               <MessageScrollerContent className="gap-1 pb-12">
-                {filteredMessages.map((msg, i) => (
+                {itemsToRender.map((item) => (
                   <MessageScrollerItem
-                    key={`msg-${i}`}
-                    messageId={`msg-${i}`}
-                    scrollAnchor={msg.role === 'user'}
+                    key={item.key}
+                    messageId={item.messageId}
+                    scrollAnchor={item.scrollAnchor}
                   >
                     <MessageItem
-                      message={msg}
+                      message={item.message}
                       toolResults={toolResultsByCallId}
-                      activeToolNames={activeToolLabels}
+                      activeToolNames={item.isStreaming ? undefined : activeToolLabels}
                       activeGateRequest={gateRequest}
                       pendingGateTotal={pendingGateTotal}
-                      suppressEntryAnimation={i >= quietFrom}
+                      suppressEntryAnimation={item.suppressEntryAnimation}
                       sessionKey={sessionKey}
-                      compactionInfo={
-                        compaction && msg.timestamp === compaction.summaryTimestamp
-                          ? { tokensBefore: compaction.tokensBefore }
-                          : null
-                      }
+                      compactionInfo={item.compactionInfo}
                       onEditResend={onEditResend}
                       canEdit={canEditMessage}
+                      isStreaming={item.isStreaming}
+                      isCancelled={item.isCancelled}
+                      liveThinking={item.liveThinking}
+                      liveToolLabels={item.liveToolLabels}
                     />
                   </MessageScrollerItem>
                 ))}
-                {isStreaming && (
-                  <MessageScrollerItem messageId={`msg-${filteredMessages.length}`}>
-                    <MessageItem
-                      key={`msg-${filteredMessages.length}`}
-                      message={{
-                        role: 'assistant',
-                        content: [{ type: 'text', text: streamingContent ?? '' }],
-                        api: 'openai-completions',
-                        provider: '',
-                        model: '',
-                        stopReason: 'stop',
-                        usage: EMPTY_USAGE,
-                        timestamp: Date.now(),
-                      } satisfies AssistantMessage}
-                      isStreaming
-                      isCancelled={isCancelled}
-                      liveThinking={streamingThinking}
-                      liveToolLabels={liveToolLabels}
-                      toolResults={toolResultsByCallId}
-                      activeGateRequest={gateRequest}
-                      pendingGateTotal={pendingGateTotal}
-                      sessionKey={sessionKey}
-                    />
-                  </MessageScrollerItem>
-                )}
               </MessageScrollerContent>
             </MessageScrollerViewport>
             {/* 回到底按钮:官方件自带 active 态(离底出现/贴底隐藏) */}
