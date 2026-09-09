@@ -514,7 +514,7 @@ buildUnreadableTabError(tabId, validIds, dynamicTabs?, noun?): Promise<string>  
 
 ## 8. 待办(按序)
 
-0. **当前阶段(2026-09,决策 36-40 全部落地)**:会话运行时对齐 pi Agent(四步全完成)+ JSONL 存储(无兼容重构,决策 38)+ 压缩预算自适应(决策 39)+ 多会话并发隔离 + 聊天视觉改版(决策 40)+ 代码块 shiki 双主题 + 页面动作测试台(`fixtures/page-actions`,C 组验收工具)。自动化:40 测试全绿、compile/build 绿;独立 reviewer 两轮报告已全部处理。**唯一剩余 = 浏览器回归**(清单 `docs/regression-jsonl.md`;A 组迁移项已随决策 38 作废,新数据直接测 B/C/D/E/F 组;C 组用测试台)。回归全 ✅ 后接:i18n 收敛 → 发布(图标 + `wxt zip`)。
+0. **当前阶段(2026-09,决策 36-40 全部落地)**:会话运行时对齐 pi Agent(四步全完成)+ JSONL 存储(无兼容重构,决策 38)+ 压缩预算自适应(决策 39)+ 多会话并发隔离 + 聊天视觉改版(决策 40)+ 代码块 shiki 双主题 + 页面动作测试台(`fixtures/page-actions`,C 组验收工具)。自动化:40 测试全绿、compile/build 绿;独立 reviewer 两轮报告已全部处理。**回归进度**:清单六组(A/B/C/D/E/F)已全部真机通过并勾选(含 A 组新库往返——dev profile 持久化后可测,见 §9)。**但收尾被一个新报 P0 挡住(清单 G1)**:AI 回复的 message content 突然消失,待定性“真丢数据 vs 仅未渲染”。本轮已核实、**尚未修**的两个相关缺陷(均有行号依据,热重载会销毁复现现场故待用户/reviewer 结论后动):①`useChatTurn` finalize 的 `await saveSession` 在 try 内(约 :30/:56),失败被报成“请求失败,请检查网络或提供商配置”——**语义错误**:实际是没落盘,而内存仍在、重开面板即丢;②`sessionSlice` 草稿落盘 `void saveSession(s).catch(() => {})` 为**真静默吞掉**。另:上游 pi 只有逐条 `appendEntry`、无任何 replace-all,而我们是每轮全量覆盖整行→“用更短转录覆盖 store”在结构上可行(落盘边界亦无“新转录不得短于已存”守卫,且 `saveSession`/finalize 路径测试零覆盖)。假设 B(仅未渲染)的“空档帧”机制已静态排除:`inFlight` 派生自 `runs[sid]`,`displayedMessages = [...session.messages, ...inFlight.messages]`,finalize 内 setSessions→clearInFlight→endRun 同处一个同步块。回归全 ✅ + G1 定论后接:i18n 收敛 → 发布(图标 + `wxt zip`)。
 
 1. **用户手动回归** —— ✅ 已完成(2026-09,覆盖:普通对话、read/search/fetch/click 全链、点击 _blank 跳转修复、导出、设置抽屉/模型分工/语言/思考档、引导弹窗、删除确认);后续每次新功能按验收标准随批回归。
 2. ~~websearch / fetch_url 工具~~ **已完成**(2026-09,十源 + fetch_url;见 §4 状态表与 §6 API 参考)。
