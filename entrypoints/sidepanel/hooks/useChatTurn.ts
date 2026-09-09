@@ -16,6 +16,7 @@ import { saveSession } from '@/lib/sessionStore';
 import { findActiveModel, resolveReasoningLevel } from '@/lib/providers';
 import { continueAgentTurn, hasSessionAgent, runAgentTurn, sessionAgentFor } from '@/lib/agent';
 import { getErrorMessage } from '@/lib/utils';
+import { i18n } from '#i18n';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
 import { parsePageRefs } from '@/lib/pageRefs';
@@ -27,6 +28,22 @@ import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 interface FrozenPayload {
   refTabs: RefTab[];
   pickedElements: PickedElement[];
+}
+
+/**
+ * 落盘已 finalize 的会话。失败不得伪装成“请求失败”:内存已有、IDB 未写时,
+ * 用户重开面板就表现为“内容突然消失”。单独捕获并给出可行动的**持久化**告警,
+ * 不把已成功的轮次误判为失败。
+ */
+async function persistFinalizedSession(finalized: Session): Promise<void> {
+  try {
+    await saveSession(finalized);
+  } catch (err: unknown) {
+    useAppStore.getState().setErrorMessage(
+      `${i18n.t('app.persistFailed')}${getErrorMessage(err) ? `: ${getErrorMessage(err)}` : ''}`,
+      finalized.id,
+    );
+  }
 }
 
 /**
@@ -92,8 +109,17 @@ export function useChatTurn(params: {
         void runContinueTurnRef.current(sessionId);
         return;
       }
-      // 无队列:无事可做。store.queuedMessages 是展示镜像而非执行器,
-      // 正常入队都会走 agent.followUp;若镜像与 Agent 队列不一致,由用户手动重发兜底。
+      // 降级条目兜底:无 Agent 时入队的镜像条目(message 为空)不在 Agent 队列里,
+      // 以前会被永久滞留(注释声称的“等待重建后补发”并未实现)——现按冻结载荷重发。
+      const mirror = s.queuedMessages.find((q) => q.sessionId === sessionId && !q.message);
+      if (mirror) {
+        s.removeQueuedMessage(mirror.id);
+        void handleSendMessageRef.current(mirror.text, sessionId, {
+          refTabs: mirror.refTabs ?? [],
+          pickedElements: mirror.pickedElements ?? [],
+        });
+      }
+      // 无队列也无降级条目:无事可做(store.queuedMessages 是展示镜像而非执行器)
     },
     [isSessionBusy],
   );
@@ -167,7 +193,7 @@ export function useChatTurn(params: {
             useAppStore.getState().sessions.map((s) => (s.id === sid ? finalizedSession : s)),
           );
           rt.clearInFlight(seq);
-          await saveSession(finalizedSession);
+          await persistFinalizedSession(finalizedSession);
         } else {
           rt.clearInFlight(seq);
         }
@@ -306,7 +332,7 @@ export function useChatTurn(params: {
           );
           // 完整转录已含 in-flight 各条 assistant → 同批清空该会话 inFlight,避免重复渲染闪烁
           rt.clearInFlight(seq);
-          await saveSession(finalizedSession);
+          await persistFinalizedSession(finalizedSession);
 
           // 首轮对话成功完成:尝试静默自动 AI 命名一次(若失败则保持目前的截断标题)
           if (shouldTriggerAutoAiTitle && onAutoAiTitle && !signal.aborted && !result.errorMessage) {

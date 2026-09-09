@@ -26,7 +26,10 @@ export function flushDraftSaves(): void {
   const pending = new Map(pendingDraftSaves);
   pendingDraftSaves.clear();
   for (const s of pending.values()) {
-    void saveSession(s).catch(() => {});
+    // 失败不再静默吞掉:草稿未落盘时重开面板会丢输入,至少留下可诊断的错误日志
+    void saveSession(s).catch((err) => {
+      console.error('[sessionStore] pending draft save failed:', s.id, err);
+    });
   }
 }
 

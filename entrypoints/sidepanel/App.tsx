@@ -246,6 +246,12 @@ export default function App() {
   const inFlight = currentRun
     ? { sessionId: currentSession!.id, messages: currentRun.inFlight }
     : null;
+  // 只追加「尚未进入 session.messages」的 in-flight 项:被注入的排队 user 消息会短暂同时存在于
+  // in-flight 与后续转录,按对象身份去重避免重复渲染/重复计 token
+  const appendedInFlight =
+    inFlight && inFlight.sessionId === currentSession?.id
+      ? inFlight.messages.filter((m) => !(currentSession?.messages ?? []).includes(m))
+      : [];
   const streamingContent = currentRun?.content ?? '';
   const streamingThinking = currentRun?.thinking ?? '';
   const activeToolNames = currentRun?.toolNames ?? [];
@@ -292,8 +298,7 @@ export default function App() {
   const contextData = useMemo(() => {
     const model = activeModelInfo?.model;
     if (!model) return null;
-    const liveInFlight =
-      inFlight && inFlight.sessionId === currentSession?.id ? inFlight.messages : [];
+    const liveInFlight = appendedInFlight;
     const all = [...(currentSession?.messages ?? []), ...liveInFlight];
     const effective = effectiveMessages(all, currentSession?.compaction);
     // 流式中的 live 文本(尚未 message_end 物化)计入尾部
@@ -370,15 +375,12 @@ export default function App() {
   // 渲染源 = 会话转录 + 本次运行的 in-flight assistant 消息(仅当归属当前会话;
   // 流式中途切到别的会话时不串显)。live 气泡仍由 MessageList 追加在最后。
   const displayedMessages =
-    inFlight && inFlight.sessionId === currentSession?.id && inFlight.messages.length > 0
-      ? [...(currentSession?.messages ?? []), ...inFlight.messages]
+    appendedInFlight.length > 0
+      ? [...(currentSession?.messages ?? []), ...appendedInFlight]
       : (currentSession?.messages ?? []);
   // 尾部 in-flight 消息刚从 live 流式气泡接管:跳过入场动画,交接不闪
   // (toolResult 不渲染独立气泡,不计入手数,避免过度抑制动画)
-  const quietTailCount =
-    inFlight && inFlight.sessionId === currentSession?.id
-      ? inFlight.messages.filter((m) => m.role !== 'toolResult').length
-      : 0;
+  const quietTailCount = appendedInFlight.filter((m) => m.role !== 'toolResult').length;
   // 编辑重发使能:非流式、非门控、非压缩时允许用户编辑已发送消息
   // 编辑重发走全局单 run(handleEditResend 的 busy 守卫):与按钮使能保持一致,避免可点但无效
   const canEditMessage = !isStreamingHere && !isGateHere && !isCompactingHere;

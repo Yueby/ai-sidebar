@@ -176,6 +176,7 @@ app:
   gatePendingElsewhere: 会话「{title}」正在等待你的确认
   errorElsewhere: 会话「{title}」运行出错
   overflowSuggest: 当前上下文超出模型窗口，建议压缩
+  persistFailed: 回复已显示但未能保存，重开面板可能丢失
   compact: 压缩
   ignoreSuggest: 忽略建议
   compacting: 正在压缩上下文…

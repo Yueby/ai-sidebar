@@ -198,6 +198,16 @@ export class SessionRuntime {
     this.patch({ inFlight: [] });
   }
 
+  /**
+   * 仅追加 in-flight、**不动 live 流式态**:用于被注入消费的 user 消息。
+   * (不能用 pushInFlight——它会清空 content/thinking,steering 注入时会掉掉正在输出的助手文本)
+   */
+  pushUserInFlight(seq: number, message: ChatMessage): void {
+    if (!this.isOwner(seq)) return;
+    if (this.snapshot.inFlight.includes(message)) return;
+    this.patch({ inFlight: [...this.snapshot.inFlight, message] });
+  }
+
   addTool(seq: number, toolName: string): void {
     if (!this.isOwner(seq)) return;
     if (this.snapshot.toolNames.includes(toolName)) return;
@@ -339,6 +349,12 @@ export function bridgeAgentEvent(sessionId: string, event: AgentEvent): void {
   } else if (event.type === 'message_end' && event.message.role === 'toolResult') {
     if (!rt.isOwner(seq)) return;
     rt.pushInFlight(seq, event.message as ChatMessage);
+  } else if (event.type === 'message_end' && event.message.role === 'user') {
+    // 排队 user 消息被 Agent 注入消费:展示镜像随即被移除、而它尚未进入 session.messages,
+    // 若不补一个可见载体就会“凭空消失”直到 finalize 落盘(回归 G1 的最佳解释)。
+    // 直发路径的 user 消息早已在 session.messages 里——由消费侧(App.displayedMessages)按对象身份去重兜住。
+    if (!rt.isOwner(seq)) return;
+    rt.pushUserInFlight(seq, event.message as ChatMessage);
   } else if (event.type === 'tool_execution_start') {
     if (!rt.isOwner(seq)) return;
     rt.addTool(seq, event.toolName);

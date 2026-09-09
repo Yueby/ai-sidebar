@@ -4,7 +4,8 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionRuntime } from '../lib/sessionRuntime';
+import { SessionRuntime, runtimeFor, bridgeAgentEvent, disposeRuntime } from '../lib/sessionRuntime';
+import type { AgentEvent } from '../lib/agent';
 import type { ChatMessage } from '../lib/types';
 
 const assistantMsg = (text: string): ChatMessage =>
@@ -113,4 +114,23 @@ test('订阅者收到快照变更', () => {
   unsub();
   rt.pushInFlight(seq, assistantMsg('y'));
   assert.deepEqual(seen, [0, 1]);
+});
+
+// 回归 G1(排队消息被注入消费后“凭空消失”):user message_end 必须有一个可见载体,
+// 直到 finalize 把它归入 session.messages(消费侧按对象身份去重)。
+test('user message_end 经 bridgeAgentEvent 进入 in-flight 保持可见,同一对象不重复', () => {
+  const sid = 'bridge-user-visibility';
+  const rt = runtimeFor(sid);
+  rt.beginRun();
+  const user = { role: 'user', content: [{ type: 'text', text: 'queued msg' }], timestamp: Date.now() } as unknown as ChatMessage;
+
+  bridgeAgentEvent(sid, { type: 'message_end', message: user } as unknown as AgentEvent);
+  assert.equal(rt.getSnapshot().inFlight.length, 1, '注入的 user 消息应在 in-flight 可见');
+
+  // 同一对象再次到达不双计(幂等)
+  bridgeAgentEvent(sid, { type: 'message_end', message: user } as unknown as AgentEvent);
+  assert.equal(rt.getSnapshot().inFlight.length, 1, '同一引用不得重复入 in-flight');
+
+  // 不污染 live 流式态:后续 assistant 增量仍属同一快照字段
+  disposeRuntime(sid);
 });

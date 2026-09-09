@@ -3,9 +3,14 @@ import fs from 'node:fs';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
 
-// dev 持久 profile 目录(chrome-launcher 要求预先存在,否则写 chrome-out.log 时 ENOENT)
+// dev 持久 profile 目录(chrome-launcher 要求预先存在,否则写 chrome-out.log 时 ENOENT)。
+// 仅在可写时创建:配置加载会被 build/zip/prepare/clean 与只读 CI 环跑,不能因建不了目录而直接抛错。
 const chromeProfile = path.join(__dirname, '.wxt', 'chrome-data');
-fs.mkdirSync(chromeProfile, { recursive: true });
+try {
+  fs.mkdirSync(chromeProfile, { recursive: true });
+} catch {
+  // 只读环境/无 .wxt 父目录:dev 启动时若真需该目录会自行提示,不在此阻断所有构建
+}
 
 // 项目代号 ai-sidebar(内部用,产品名后续再定)
 export default defineConfig({

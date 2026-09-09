@@ -176,6 +176,7 @@ app:
   gatePendingElsewhere: Session "{title}" is waiting for your confirmation
   errorElsewhere: Session "{title}" hit an error
   overflowSuggest: Context exceeds the model window — compaction recommended
+  persistFailed: Reply is shown but could not be saved; reopening the panel may lose it
   compact: Compact
   ignoreSuggest: Dismiss
   compacting: Compacting context…
