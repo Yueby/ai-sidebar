@@ -305,6 +305,7 @@ FetchModelsDialog    ModelConfigDialog
 1. 拉取/模型参数用 Dialog 居中覆盖,**不要**在页内塞深层 Accordion(360px 下滚动体验差)。
 2. Base URL/API Key 必须 `truncate`,严禁横向滚动条。
 3. API Key 默认 `type="password"`,右侧绝对定位 Eye/EyeOff ghost 按钮。
+4. **项目级样式覆盖不得与元素自带的 utility 类争同一属性**(Tailwind v4 层序 theme < base < components < **utilities**,`@layer components` 里的 `@apply`/声明永远输给写在 JSX className 上的 utility → 静默失效)。要覆盖官方组件 className 已有的属性(宽/高/self-*/translate-*/z-*/margin/圆角等),只有两条路:**加 `!important`**,或**把规则移到所有 `@layer` 之外**(未分层高于任何分层)。已踩两次:头像 `self-start`(`components/ui/message.tsx` 自带 `self-end`)、toast viewport 宽度(官方 `w-auto`);两处均靠消费处 className 覆盖(tailwind-merge 去重)或 `!important` 生效。
 
 ## 6. lib API 参考(UI 只许对着这些写)
 
