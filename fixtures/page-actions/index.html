@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>页面动作测试台 — ai-sidebar</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: #0f172a; color: #fff; padding: 10px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  #scrollPos { font-size: 12px; font-family: ui-monospace, monospace; background: #1e293b; padding: 4px 10px; border-radius: 6px; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px 120vh; }
+  section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+  section h2 { margin: 0 0 6px; font-size: 16px; }
+  section p.desc { margin: 0 0 14px; font-size: 12px; color: #64748b; }
+  .result {
+    font-family: ui-monospace, monospace; font-size: 13px;
+    background: #f1f5f9; border-radius: 8px; padding: 10px 12px; margin-top: 12px;
+    min-height: 20px; white-space: pre-wrap;
+  }
+  .ok { color: #16a34a; font-weight: 600; }
+  .bad { color: #dc2626; font-weight: 600; }
+  label { display: block; font-size: 12px; color: #475569; margin: 10px 0 4px; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px;
+  }
+  button.primary {
+    background: #0f172a; color: #fff; border: 0; border-radius: 8px;
+    padding: 9px 18px; font-size: 13px; cursor: pointer; margin-top: 12px;
+  }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  #likeBtn {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 999px;
+    padding: 10px 22px; font-size: 14px; cursor: pointer;
+  }
+  #likeBtn:hover { background: #f1f5f9; }
+  #likeCount { font-size: 18px; font-weight: 700; margin-left: 10px; vertical-align: middle; }
+  /* C4 遮挡层:盖住目标按钮所在区域 */
+  #overlay {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: 24px; z-index: 100;
+    background: #0f172aee; color: #fff; border-radius: 12px;
+    padding: 16px 20px; width: min(560px, 90vw);
+    box-shadow: 0 10px 30px #0004;
+  }
+  #overlay p { margin: 0 0 8px; font-size: 12px; color: #cbd5e1; }
+  #overlay button {
+    background: #334155; color: #fff; border: 0; border-radius: 6px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer;
+  }
+  #hiddenTargetWrap { position: relative; }
+  #obscuredBtn {
+    background: #2563eb; color: #fff; border: 0; border-radius: 8px;
+    padding: 10px 20px; font-size: 13px; cursor: pointer;
+  }
+  code { background: #f1f5f9; border-radius: 4px; padding: 1px 6px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>页面动作测试台</h1>
+  <div id="scrollPos">滚动位置：顶部</div>
+</header>
+
+<main>
+  <section id="sec-scroll">
+    <h2>C1 · 滚动</h2>
+    <p class="desc">指令示例：<code>向下滚动页面</code>。粘性头部实时显示滚动位置，长页面（底部有 120vh 垫高）用于验证 scroll_page 的位移与落地位置。</p>
+    <div class="result" id="scrollLog">向下滚动三次后，此处应出现三次滚动记录（每次的滚动距离与方向）。</div>
+  </section>
+
+  <section id="sec-login">
+    <h2>C2 · 表单提交（只提交一次）</h2>
+    <p class="desc">指令示例：<code>在登录表单填入用户 demo 密码 pass1234 并提交</code>。提交计数必须等于 1——出现 2 次即为重复提交（Enter 与按钮双派发的回归信号）。</p>
+    <form id="loginForm">
+      <label for="username">用户名</label>
+      <input type="text" id="username" name="username" autocomplete="off" placeholder="demo">
+      <label for="password">密码</label>
+      <input type="password" id="password" name="password" autocomplete="off" placeholder="pass1234">
+      <button type="submit" class="primary" id="loginSubmit">登 录</button>
+    </form>
+    <div class="result" id="loginLog">等待提交…</div>
+  </section>
+
+  <section id="sec-like">
+    <h2>C3 · 计数按钮（只 +1）</h2>
+    <p class="desc">指令示例：<code>点击点赞按钮</code>。计数必须恰好 +1——出现 +2 即为双击/重复派发（CDP 可信输入回归信号）。</p>
+    <div>
+      <button id="likeBtn">👍 点赞</button>
+      <span id="likeCount">0</span>
+    </div>
+    <div class="result" id="likeLog">等待点击…</div>
+  </section>
+
+  <section id="sec-obscured">
+    <h2>C4 · 遮挡降级</h2>
+    <p class="desc">指令示例：<code>点击"被遮挡的按钮"</code>。页面底部的固定遮挡层默认盖住该按钮——期望结果：agent 检测到遮挡并降级（直接派发或报告遮挡），点击仍然生效；若先让 agent 关闭遮挡层再点击亦可。两种路径都不应误点遮挡层上的按钮。</p>
+    <div id="hiddenTargetWrap">
+      <button id="obscuredBtn">被遮挡的按钮</button>
+      <span id="obscuredCount" style="margin-left:10px;font-size:13px;color:#64748b;">点击 0 次</span>
+    </div>
+    <div class="result" id="obscuredLog">等待点击…</div>
+  </section>
+
+  <section id="sec-notes">
+    <h2>使用说明</h2>
+    <p class="desc" style="margin-bottom:0">
+      1. 本目录起本地服务：<code>npx http-server fixtures/page-actions -p 8788</code>（或 <code>python -m http.server 8788</code>）。<br>
+      2. 浏览器打开 <code>http://localhost:8788/</code>，侧边栏引用该标签页。<br>
+      3. 按上面各节的示例指令逐项驱动 agent，对照每节的 result 区域判定通过/失败。<br>
+      4. 每次操作都会追加日志（含时间戳），方便核对 agent 声称的动作与页面真实反应是否一致。
+    </p>
+  </section>
+</main>
+
+<!-- C4 遮挡层 -->
+<div id="overlay">
+  <p>这是一个固定定位的遮挡层（模拟弹窗/cookie 条）。它盖住了上方"被遮挡的按钮"。</p>
+  <button id="overlayClose">关闭遮挡层</button>
+</div>
+
+<script>
+  // ── C1 滚动日志 ──
+  let lastY = window.scrollY, scrollCount = 0;
+  const scrollPos = document.getElementById('scrollPos');
+  const scrollLog = document.getElementById('scrollLog');
+  function zone(y) {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    if (y <= 10) return '顶部';
+    if (y >= max - 10) return '底部';
+    return '中部';
+  }
+  addEventListener('scroll', () => {
+    const y = window.scrollY;
+    scrollPos.textContent = '滚动位置：' + zone(y) + '（y=' + Math.round(y) + '）';
+    const dy = y - lastY;
+    if (Math.abs(dy) > 5) {
+      scrollCount++;
+      scrollLog.textContent += '\n#' + scrollCount + ' ' + (dy > 0 ? '↓ 向下' : '↑ 向上') + ' ' + Math.round(Math.abs(dy)) + 'px';
+      lastY = y;
+    } else {
+      lastY = y;
+    }
+  }, { passive: true });
+
+  // ── C2 表单提交计数 ──
+  let submitCount = 0;
+  const loginLog = document.getElementById('loginLog');
+  document.getElementById('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitCount++;
+    const u = document.getElementById('username').value;
+    const p = document.getElementById('password').value;
+    const verdict = submitCount === 1
+      ? '<span class="ok">✓ 恰好提交 1 次</span>'
+      : '<span class="bad">✗ 已提交 ' + submitCount + ' 次（重复提交!）</span>';
+    loginLog.innerHTML = '提交 #' + submitCount + ' · 用户名="' + u + '" 密码长度=' + p.length + ' · ' + verdict;
+  });
+
+  // ── C3 点赞计数 ──
+  let likes = 0, likeClicks = 0;
+  const likeLog = document.getElementById('likeLog');
+  document.getElementById('likeBtn').addEventListener('click', () => {
+    likes++;
+    likeClicks++;
+    document.getElementById('likeCount').textContent = likes;
+    const verdict = likeClicks === 1
+      ? '<span class="ok">✓ 恰好 +1</span>'
+      : '<span class="bad">✗ 本次点击累计 +' + likeClicks + '（双击/重复派发!）</span>';
+    likeLog.innerHTML = '第 ' + likeClicks + ' 次点击 · ' + verdict;
+  });
+
+  // ── C4 遮挡 ──
+  let obscuredClicks = 0;
+  const obscuredLog = document.getElementById('obscuredLog');
+  document.getElementById('obscuredBtn').addEventListener('click', () => {
+    obscuredClicks++;
+    document.getElementById('obscuredCount').textContent = '点击 ' + obscuredClicks + ' 次';
+    obscuredLog.textContent = '目标按钮被点击 ' + obscuredClicks + ' 次（时间戳 ' + new Date().toLocaleTimeString() + '）';
+  });
+  document.getElementById('overlayClose').addEventListener('click', () => {
+    document.getElementById('overlay').style.display = 'none';
+    obscuredLog.textContent = '遮挡层已关闭（此刻点击目标按钮属于无遮挡路径）';
+  });
+</script>
+</body>
+</html>
