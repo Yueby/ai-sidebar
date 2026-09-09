@@ -92,23 +92,8 @@ export function useChatTurn(params: {
         void runContinueTurnRef.current(sessionId);
         return;
       }
-      // 兑底:store 镜像仍有条目但 Agent 不存在(理论路径,如恢复导入后):走 prompt 直发
-      const item = s.queuedMessages.find((q) => q.sessionId === sessionId);
-      if (!item) return;
-      if (!s.sessions.some((x) => x.id === sessionId)) {
-        s.removeQueuedMessage(item.id);
-        setTimeout(() => dispatchQueueFor(sessionId), 0);
-        return;
-      }
-      if (!findActiveModel(s.settings)) return;
-      s.removeQueuedMessage(item.id);
-      if (import.meta.env.DEV) {
-        console.log(`[turn] dispatch queued message -> session ${sessionId}: "${item.text.slice(0, 30)}..."`);
-      }
-      void handleSendMessageRef.current(item.text, sessionId, {
-        refTabs: item.refTabs ?? [],
-        pickedElements: item.pickedElements ?? [],
-      });
+      // 无队列:无事可做。store.queuedMessages 是展示镜像而非执行器,
+      // 正常入队都会走 agent.followUp;若镜像与 Agent 队列不一致,由用户手动重发兜底。
     },
     [isSessionBusy],
   );
@@ -450,20 +435,13 @@ export function useChatTurn(params: {
         const queuedMessage = createUserMessage(trimmed, queuedRefs);
         const queueId = `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const ownerAgent = sessionAgentFor(owner);
-        if (ownerAgent) {
-          // 主路径:Agent 原生队列(镜像存同一对象引用,消费时按身份移除)
-          ownerAgent.followUp(queuedMessage);
-          store.enqueueMessage({ id: queueId, sessionId: owner, text: trimmed, message: queuedMessage });
-        } else {
-          // 兑底(理论不可达:忙但无实例):旧 store 队列,由出队器 prompt 直发
-          store.enqueueMessage({
-            id: queueId,
-            sessionId: owner,
-            text: trimmed,
-            refTabs: [...snapTabs],
-            pickedElements: [...snapElements],
-          });
+        // 目标会话忙 ⇒ 其 Agent 必已存在(有 run/门控/压缩都源于先前的 turn);
+        // 无实例则属内部不变量破坏,fail-fast 而非静默走第二执行器
+        if (!ownerAgent) {
+          throw new Error(`session ${owner} is busy but has no Agent instance`);
         }
+        ownerAgent.followUp(queuedMessage);
+        store.enqueueMessage({ id: queueId, sessionId: owner, text: trimmed, message: queuedMessage });
         if (!frozen && owner === useAppStore.getState().activeSessionId) {
           // 元素引用随该条消息消费(与直发路径一致);refTabs 保留为会话上下文
           useAppStore.getState().patchActiveDraft((d) => ({ ...d, pickedElements: [] }));

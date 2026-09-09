@@ -75,7 +75,7 @@ test('旧 Session 形状兼容:缺 draft/compaction 的 bundle 解析后经 sani
   ];
   const sanitized = sanitizeSessions(legacy as never);
   assert.equal(sanitized.length, 1);
-  assert.deepEqual(sanitized[0]?.messages, legacy[0].messages);
+  assert.deepEqual(sanitized[0]?.messages, legacy[0]!.messages);
 });
 
 test('坏数据 fail-fast:截断的 gzip 被拒绝(WXT i18n 在 Node 下文案构建会额外报错,两者都算通过)', async () => {
