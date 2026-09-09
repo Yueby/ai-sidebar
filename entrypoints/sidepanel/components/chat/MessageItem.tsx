@@ -989,7 +989,7 @@ export function MessageItem({
             : 'animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none'
         )}
       >
-        <MessageAvatar className="size-6 rounded-md border bg-muted text-muted-foreground">
+        <MessageAvatar className="size-6 min-w-6 self-start rounded-md border bg-muted text-muted-foreground">
           <Bot className="size-3.5" />
         </MessageAvatar>
 
