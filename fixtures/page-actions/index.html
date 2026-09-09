@@ -126,9 +126,13 @@
 
 <script>
   // ── C1 滚动日志 ──
+  // ── C1 滚动日志（只保留最近 5 条：无限追加会让页面本身越滚越长，
+  //    任何反复滚动都会被放大成“页面在无限变大”的假象）──
   let lastY = window.scrollY, scrollCount = 0;
   const scrollPos = document.getElementById('scrollPos');
   const scrollLog = document.getElementById('scrollLog');
+  const scrollEntries = [];
+  const scrollStamps = []; // 近3s 内的滚动时间戳，用于失控探测
   function zone(y) {
     const max = document.documentElement.scrollHeight - innerHeight;
     if (y <= 10) return '顶部';
@@ -139,13 +143,20 @@
     const y = window.scrollY;
     scrollPos.textContent = '滚动位置：' + zone(y) + '（y=' + Math.round(y) + '）';
     const dy = y - lastY;
-    if (Math.abs(dy) > 5) {
-      scrollCount++;
-      scrollLog.textContent += '\n#' + scrollCount + ' ' + (dy > 0 ? '↓ 向下' : '↑ 向上') + ' ' + Math.round(Math.abs(dy)) + 'px';
-      lastY = y;
-    } else {
-      lastY = y;
-    }
+    lastY = y;
+    if (Math.abs(dy) <= 5) return;
+    scrollCount++;
+    scrollEntries.push('#' + scrollCount + ' ' + (dy > 0 ? '↓ 向下' : '↑ 向上') + ' ' + Math.round(Math.abs(dy)) + 'px @' + new Date().toLocaleTimeString());
+    if (scrollEntries.length > 5) scrollEntries.shift();
+    // 失控探测：3s 内滚动次数过多 = 有东西在循环滚（非人类行为）
+    const now = Date.now();
+    scrollStamps.push(now);
+    while (scrollStamps.length && now - scrollStamps[0] > 3000) scrollStamps.shift();
+    const runaway = scrollStamps.length > 12;
+    scrollLog.textContent =
+      scrollEntries.join('\n') +
+      (runaway ? '\n⚠ 3 秒内滚动 ' + scrollStamps.length + ' 次——怀疑自动滚动失控（非手动行为）' : '');
+    scrollLog.className = 'result' + (runaway ? ' bad' : '');
   }, { passive: true });
 
   // ── C2 表单提交计数 ──
