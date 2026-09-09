@@ -306,6 +306,7 @@ FetchModelsDialog    ModelConfigDialog
 2. Base URL/API Key 必须 `truncate`,严禁横向滚动条。
 3. API Key 默认 `type="password"`,右侧绝对定位 Eye/EyeOff ghost 按钮。
 4. **项目级样式覆盖不得与元素自带的 utility 类争同一属性**(Tailwind v4 层序 theme < base < components < **utilities**,`@layer components` 里的 `@apply`/声明永远输给写在 JSX className 上的 utility → 静默失效)。要覆盖官方组件 className 已有的属性(宽/高/self-*/translate-*/z-*/margin/圆角等),只有两条路:**加 `!important`**,或**把规则移到所有 `@layer` 之外**(未分层高于任何分层)。已踩两次:头像 `self-start`(`components/ui/message.tsx` 自带 `self-end`)、toast viewport 宽度(官方 `w-auto`);两处均靠消费处 className 覆盖(tailwind-merge 去重)或 `!important` 生效。
+5. **React 不跨 JSX 子节点槽位复用实例**——同一个元素数组与一个条件兄弟节点即使写了**完全相同的 key**,协调时也不会复用(旧代码注释曾声称“live 槽键 = 未来物化位置 → 零重挂载”,该断言本身就是错的)。流式末条与物化消息必须活在**同一个数组**里才能原键协调;同时子项 key 要按**类型**而非位置(`thinking-${j}`/`text-${j}`),否则流式 content `[text]` 变物化 `[thinking, text]` 时索引位移会整块重建 markdown。另:注释与断言不算证据,改动靠生成产物/代码路径取证。
 
 ## 6. lib API 参考(UI 只许对着这些写)
 
