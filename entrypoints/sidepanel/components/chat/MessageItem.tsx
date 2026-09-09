@@ -999,13 +999,10 @@ export function MessageItem({
             seg.kind === 'tool' ? (
               renderToolCard(seg.block, i)
             ) : (
-              <Bubble
+              <MessageContent
                 key={i}
-                variant="tinted"
-                align="start"
-                className="w-fit max-w-full"
+                className="relative min-w-0 w-full max-w-full"
               >
-                <BubbleContent className="relative min-w-0 w-fit max-w-full rounded-lg border border-border/60 p-2.5 text-card-foreground overflow-hidden">
                   {/* Live streaming thinking block(仅 live 气泡;流式消息无物化 thinking 块,置于首段首位) */}
                   {i === 0 && liveThinking && (
                     <ThinkingBlock
@@ -1036,8 +1033,7 @@ export function MessageItem({
 
                   {/* 状态节点附在最后一个气泡段内;无气泡段时独立壳渲染 */}
                   {i === lastBubbleIndex && hasStatus && statusNodes}
-                </BubbleContent>
-              </Bubble>
+                </MessageContent>
             )
           )}
 
