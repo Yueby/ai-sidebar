@@ -1,6 +1,11 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
+
+// dev 持久 profile 目录(chrome-launcher 要求预先存在,否则写 chrome-out.log 时 ENOENT)
+const chromeProfile = path.join(__dirname, '.wxt', 'chrome-data');
+fs.mkdirSync(chromeProfile, { recursive: true });
 
 // 项目代号 ai-sidebar(内部用,产品名后续再定)
 export default defineConfig({
@@ -12,6 +17,13 @@ export default defineConfig({
   // locales 目录(默认 <srcDir>/locales)自动发现语言;默认语言 = manifest.default_locale(zh_CN)
   // dev 文件监听在部分 Windows 会话下静默失效(chokidar 事件丢失):强制 1s 轮询保证 rebuild 可靠
   watchOptions: { usePolling: true, interval: 1000 },
+  // 持久化 dev 浏览器 profile:web-ext 默认用临时 profile,重启 `pnpm dev` = 全新环境
+  // (IndexedDB 清空、登录丢失),导致“重启后数据还在吗”这类回归无法手动验证。
+  // 指向项目内目录后跨重启保留(`.wxt` 已 gitignore,不污染仓库)。
+  webExt: {
+    chromiumProfile: chromeProfile,
+    keepProfileChanges: true,
+  },
   manifest: {
     name: 'AI Sidebar',
     description: 'BYOK AI sidebar — chat with any page using your own API key.',
