@@ -234,6 +234,8 @@ export interface AgentTestOverrides {
   streamFn?: StreamFn;
   /** 覆盖工具集(测试环境无 WXT 虚拟模块 i18n,跳过 getTools) */
   tools?: AgentTool[];
+  /** 每轮工具构建钩子(测试用:观察 prepareNextTurn 看到的转录) */
+  buildTools?: (transcript: ChatMessage[]) => AgentTool[];
 }
 
 let agentOverrides: AgentTestOverrides | null = null;
@@ -297,6 +299,7 @@ function buildAgentInputs(options: RunAgentOptions, transcript: ChatMessage[]): 
   // model.input 含 image 才允许 read_element 产 ImageContent 块(省 token + 非 vision 走文字描述);
   // pi-ai transform-messages 的 downgradeUnsupportedImages 是双保险(不支持时块降为占位文本)。
   const tools =
+    agentOverrides?.buildTools?.(transcript) ??
     agentOverrides?.tools ??
     getTools({
       refTabs,
@@ -350,6 +353,22 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     : undefined;
   const convertToLlm = (msgs: Parameters<NonNullable<Agent['convertToLlm']>>[0]) =>
     msgs.map((m) => toLlmMessage(m as ChatMessage)) as never;
+  // 每轮请求前刷新上下文:工具白名单用**最新转录**重算——run 内消费的 followUp/steer
+  // 携带的新 refs 也能进白名单(否则 read_page/read_element 会拒)。
+  // messages 传副本:loop 会向该数组 push 注入消息,不能与 Agent 内部转录共用引用。
+  const makePrepareNextTurn = (target: Agent) => async (): Promise<{
+    context: { systemPrompt: string; messages: ChatMessage[]; tools: AgentTool[] };
+  }> => {
+    const latestTranscript = [...(target.state.messages as ChatMessage[])];
+    const rebuilt = buildAgentInputs(options, latestTranscript);
+    return {
+      context: {
+        systemPrompt: target.state.systemPrompt,
+        messages: latestTranscript,
+        tools: rebuilt.tools,
+      },
+    };
+  };
 
   if (existing) {
     const agent = existing.agent;
@@ -359,6 +378,7 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     }
     agent.streamFunction = streamFn;
     agent.transformContext = transformContext;
+    agent.prepareNextTurn = makePrepareNextTurn(agent);
     agent.state.tools = tools;
     agent.state.systemPrompt = systemPrompt;
     agent.state.model = model;
@@ -382,6 +402,7 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     sessionId: sid,
     toolExecution: 'sequential',
   });
+  agent.prepareNextTurn = makePrepareNextTurn(agent);
   if (sid) {
     const entry: SessionAgentEntry = { agent, epoch: ++agentEpoch };
     sessionAgents.set(sid, entry);

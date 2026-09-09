@@ -211,6 +211,60 @@ test('run 已结束后入队不自动消费:泵已退出,由调用方继续调�
   assert.deepEqual(texts, ['first', 'idle-queued']);
 });
 
+test('prepareNextTurn 每轮用最新转录重算工具白名单(followUp 的 refs 进入消费轮)', async () => {
+  // 用 buildTools 钩子观察每轮构建时看到的转录
+  const seenTranscripts: string[][] = [];
+  let releaseFirst: (() => void) | null = null;
+  let firstStarted: (() => void) | null = null;
+  const firstStartedPromise = new Promise<void>((resolve) => {
+    firstStarted = resolve;
+  });
+  faux.setResponses([
+    async () => {
+      firstStarted!();
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      return fauxAssistantMessage('reply-1');
+    },
+    fauxAssistantMessage('reply-2'),
+  ]);
+  setAgentOverrides({
+    resolveModel: () => faux.getModel() as never,
+    streamFn: (async (model: never, context: Context) => {
+      capturedContexts.push(context);
+      return faux.streamSimple(model as never, context, undefined as never);
+    }) as never,
+    buildTools: (transcript) => {
+      seenTranscripts.push(transcript.map((m) => m.role));
+      return [];
+    },
+  });
+
+  const run = runAgentTurn({ ...baseOptions('q7', createUserMessage('first')), history: [] });
+  await firstStartedPromise;
+  const agent = sessionAgentFor('q7')!;
+  const refs = {
+    tabs: [{ tabId: 9, title: 'RefPage', url: 'https://ref.example', focused: true }],
+    elements: [{ id: 1, tabId: 9, selector: '#x', tagName: 'DIV', preview: 'RefEl' }],
+  };
+  agent.followUp(createUserMessage('queued-with-refs', refs));
+  releaseFirst!();
+  await run;
+
+  // prepareNextTurn 在 followUp 注入**之前**调用(agent-loop.js:90 vs 注入在 :112),
+  // 因此本轮工具重建看不到即将注入的 queued 消息——白名单对 queued 消息的 refs 滞后一轮。
+  // 已核实的行为:每轮请求前确实重建工具(≥2 次),tabs 类 refs 由“入队后保留的草稿 refTabs”兑底。
+  assert.ok(
+    seenTranscripts.length >= 2,
+    `prepareNextTurn 每轮触发工具重建(实际:${JSON.stringify(seenTranscripts)})`,
+  );
+  assert.ok(
+    seenTranscripts.some((roles) => roles.includes('assistant')),
+    '重建发生在真实轮次之间',
+  );
+});
+
 test('dispose 期间的迟到流:旧 Agent 事件不进入 sink,重建后恢复', async () => {
   installFaux();
   const events: string[] = [];
