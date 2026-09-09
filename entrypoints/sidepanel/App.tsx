@@ -334,12 +334,14 @@ export default function App() {
   // 流式进行中拒绝恢复(在途写入会与全量替换互相覆盖)。
   const handleSyncRestore = useCallback(
     async (bundle: SyncBundle) => {
-      // 运行中/在途消息/后台压缩/发送准备中:恢复会与进行中的写入竞态(同 id 覆盖)
+      // 运行中/在途消息/后台压缩/发送准备中:恢复会与进行中的写入竞态(同 id 覆盖)。
+      // 守卫全量读 store 实时真值(不用渲染闭包:preparing/queued 是 stale 易残留的快照)
+      const live = useAppStore.getState();
       if (
-        Object.keys(runs).length > 0 ||
-        compact.isCompacting ||
-        preparingSessionIds.length > 0 ||
-        queuedMessages.length > 0
+        Object.keys(live.runs).length > 0 ||
+        live.compactingSessionId !== null ||
+        live.preparingSessionIds.length > 0 ||
+        (live.queuedMessages?.length ?? 0) > 0
       ) {
         throw new Error(i18n.t('sync.error.streaming'));
       }
@@ -361,7 +363,7 @@ export default function App() {
       store.setActiveSessionId(restoredActive);
       void activeSessionIdItem.setValue(restoredActive);
     },
-    [runs, compact.isCompacting],
+    [],
   );
   const latestLocalSessionAt = sessions.reduce((max, s) => Math.max(max, s.updatedAt), 0);
 
