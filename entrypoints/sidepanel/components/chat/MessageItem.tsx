@@ -870,7 +870,7 @@ export function MessageItem({
                 size="xs"
                 disabled={!canEdit}
                 onClick={handleStartEdit}
-                className="h-5 px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 font-normal disabled:opacity-40 disabled:pointer-events-none"
+                className="h-5 px-1.5 opacity-0 disabled:opacity-0 group-hover:opacity-100 group-hover:disabled:opacity-40 transition-opacity text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 font-normal disabled:pointer-events-none"
                 aria-label={i18n.t('messages.editResend')}
               >
                 <Pencil className="size-3" />

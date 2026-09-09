@@ -420,8 +420,8 @@ sync:
   encryptDesc: 用密码加密备份文件（AES-GCM），密码仅保存在本机
   encryptPasswordLabel: 加密密码
   encryptWarning: 未加密时 API Key 与对话内容将明文存储在 WebDAV 服务商。
-  upload: 上传到 WebDAV
-  restore: 从 WebDAV 恢复
+  upload: 上传
+  restore: 恢复
   remoteHint: 上传会覆盖远端备份；恢复会覆盖本地全部设置与会话记录。
   restoreConfirmTitle: 从 WebDAV 恢复
   restoreConfirmDesc: 将用远端备份（{time}）覆盖本地的全部设置与会话记录，此操作不可撤销。

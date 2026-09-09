@@ -420,8 +420,8 @@ sync:
   encryptDesc: Encrypt the backup file with a password (AES-GCM); the password stays on this device
   encryptPasswordLabel: Encryption password
   encryptWarning: Without encryption, API keys and chat history are stored in plain text on the WebDAV provider.
-  upload: Upload to WebDAV
-  restore: Restore from WebDAV
+  upload: Upload
+  restore: Restore
   remoteHint: Uploading overwrites the remote backup; restoring overwrites all local settings and chat history.
   restoreConfirmTitle: Restore from WebDAV
   restoreConfirmDesc: This will overwrite all local settings and chat history with the remote backup ({time}). This action cannot be undone.
