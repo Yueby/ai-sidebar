@@ -75,18 +75,13 @@ test('abort 中止在途请求;markCancelled 标记快照', () => {
   assert.equal(rt.getSnapshot().cancelled, true);
 });
 
-test('pi 队列语义:steer 优先于 followUp;pendingMessageCount 为两者之和', () => {
+test('pi 队列已移入 Agent:投影层不再持有队列副本', () => {
   const rt = new SessionRuntime('s5');
-  assert.equal(rt.pendingMessageCount, 0);
-  rt.followUp('f1');
-  rt.followUp('f2');
-  rt.steer('s1');
-  assert.equal(rt.pendingMessageCount, 3);
-  assert.equal(rt.shiftPending(), 's1');
-  assert.equal(rt.shiftPending(), 'f1');
-  assert.equal(rt.shiftPending(), 'f2');
-  assert.equal(rt.shiftPending(), undefined);
-  assert.equal(rt.pendingMessageCount, 0);
+  // 队列 API(followUp/steer/shiftPending/pendingMessageCount)已删除——
+  // 队列由 pi-agent-core 的 Agent 原生持有(见 tests/agent-queue.test.ts 的真实 Agent 时序测试)
+  assert.equal('followUp' in rt, false);
+  assert.equal('steer' in rt, false);
+  assert.equal('pendingMessageCount' in rt, false);
 });
 
 test('发送锁同步互斥;release 后可再次领取', () => {

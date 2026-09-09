@@ -1,17 +1,13 @@
 import type { ChatMessage } from './types';
 
 /**
- * 会话运行时(对齐 pi-coding-agent 的 AgentSession 设计,client 版)。
+ * 会话运行时**UI 投影层**(Agent 事件 → React 快照)+ 同步发送锁 + turn 所有权守卫。
  *
- * 每个会话一个实例,持有该会话的全部运行状态:turn 身份序号、在途请求、
- * 流式节流、压缩请求标记、发送锁、steering/followUp 队列。
- * 实例由模块级注册表按 sessionId 持有——切换会话只是切换视图,实例继续在后台运行。
- *
- * 并发语义(与 pi 一致):
- * - 同一会话同时只允许一个 run(重复 prompt 由调用方按 streamingBehavior 处理);
- * - steer = 当前 assistant turn 结束后注入(**不 abort 在途请求**;停止按钮仍是显式 abort);
- * - followUp = agent 本要停止时执行,当前轮结束后按 FIFO 发送;
- * - pendingMessageCount = 两种队列之和。
+ * 职责边界(决策 36 第④步重新定义):
+ * - **不是执行器**:run 生命周期、转录、队列(followUp/steer)均由 pi-agent-core 的 Agent 拥有;
+ * - 本类只做三件事:① 把 Agent 事件节流成可渲染快照(runs[sessionId],经 sink 同步到 store);
+ *   ② 同步发送锁(防同会话双击双开);③ turn 序号守卫(旧 run 回调不得写新 run 状态);
+ * - 不能整体删除:React 需要快照投影层,pi 的 Agent 只提供事件流与 state(上游 TUI 直消费事件)。
  */
 export interface SessionRunSnapshot {
   /** 流式正文(节流冲刷后的最新值) */
@@ -56,10 +52,6 @@ export class SessionRuntime {
   private compactRequested = false;
   /** 同步发送锁:busy 状态在首个 await 之后才置位,并发调用会双开 turn */
   private sending = false;
-  /** followUp 队列(排队等当前轮结束;pi 语义) */
-  private followUps: string[] = [];
-  /** steering 队列(pi 语义:当前 assistant turn 结束后注入,**不是 abort**) */
-  private steering: string[] = [];
   /** 已释放:删除会话后迟到的续体不得再写入/重启本实例 */
   private disposed = false;
 
@@ -100,10 +92,6 @@ export class SessionRuntime {
 
   get isStreaming(): boolean {
     return !this.disposed && this.abortCtrl !== null;
-  }
-
-  get pendingMessageCount(): number {
-    return this.followUps.length + this.steering.length;
   }
 
   get isSending(): boolean {
@@ -171,8 +159,6 @@ export class SessionRuntime {
       clearTimeout(this.throttleTimer);
       this.throttleTimer = null;
     }
-    this.followUps = [];
-    this.steering = [];
     this.listeners.clear();
   }
 
@@ -253,28 +239,9 @@ export class SessionRuntime {
     this.sending = false;
   }
 
-  // ── pi 语义队列(steer = 打断注入;followUp = 排队等待)─────────────────
-
-  /** 排队一条 followUp(当前轮结束后按 FIFO 发送) */
-  followUp(text: string): void {
-    this.followUps.push(text);
-  }
-
-  /** 入队一条 steering(pi 语义:当前 assistant turn 结束后注入,不中止在途请求) */
-  steer(text: string): void {
-    this.steering.push(text);
-  }
-
-  /** 取出下一条待发送消息(steering 优先于 followUp;pi 语义) */
-  shiftPending(): string | undefined {
-    return this.steering.shift() ?? this.followUps.shift();
-  }
-
-  /** 丢弃全部排队消息(会话删除等) */
-  clearPending(): void {
-    this.followUps = [];
-    this.steering = [];
-  }
+  // ── pi 语义队列已移入 Agent ─────────────────────────────────────────
+  // followUp/steer/清空由 pi-agent-core 的 Agent 原生持有(agent.followUp/steer/clearAllQueues),
+  // 本投影层不再维护队列副本(避免双源)。
 }
 
 /**
@@ -308,11 +275,11 @@ export function runtimeFor(sessionId: string): SessionRuntime {
   return rt;
 }
 
-/** 当前有运行态或排队消息的会话(后台指示用) */
+/** 当前有运行态或发送准备的会话(后台指示用) */
 export function activeRuntimeSessionIds(): string[] {
   const ids: string[] = [];
   for (const [id, rt] of runtimes) {
-    if (rt.isStreaming || rt.isSending || rt.pendingMessageCount > 0) ids.push(id);
+    if (rt.isStreaming || rt.isSending) ids.push(id);
   }
   return ids;
 }
