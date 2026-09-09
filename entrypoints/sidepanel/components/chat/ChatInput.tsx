@@ -25,6 +25,7 @@ import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { listCandidateTabs, getActiveTabMeta, type RefTab } from '@/lib/pageContext';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -794,49 +795,55 @@ export function ChatInput({
         </TooltipProvider>
       </div>
 
-      {/* 队列提示条: 本会话有排队即展示(位于输入框卡片下方, 不参与引用栏+输入框的层叠关系) */}
+      {/* 队列提示条: 本会话有排队即展示(使用 shadcn Badge 官方组件, 位于输入框卡片下方) */}
       {queuedMessages && queuedMessages.length > 0 && (
-        <div className="pointer-events-auto mt-1.5 flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] text-muted-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-          <div className="flex items-center justify-between font-medium text-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+        <TooltipProvider delay={200}>
+          <div className="pointer-events-auto mt-1.5 flex flex-wrap items-center gap-1.5 px-0.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+            <Badge
+              variant="outline"
+              className="h-6 gap-1.5 px-2 text-[11px] font-normal text-muted-foreground select-none shrink-0"
+            >
+              <span className="size-1.5 rounded-full bg-primary animate-pulse shrink-0" />
               <span>{i18n.t('composer.queuedCount', { count: queuedMessages.length })}</span>
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
+            </Badge>
             {queuedMessages.map((queued) => (
-              <div
+              <Badge
                 key={queued.id}
-                className="flex items-center justify-between gap-2 rounded bg-background/60 px-1.5 py-0.5"
+                variant="secondary"
+                className="h-6 max-w-[260px] gap-1.5 pl-2 pr-1 font-normal text-[11px] select-none"
               >
-                <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-foreground/90">
+                <span
+                  className="truncate min-w-0 flex-1 font-mono text-[10px] text-foreground/90"
+                  title={queued.text}
+                >
                   {queued.text}
                 </span>
-                <TooltipProvider delay={200}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-4 shrink-0 text-muted-foreground hover:text-foreground"
-                          onClick={() => onRemoveQueuedMessage?.(queued.id)}
-                          aria-label={i18n.t('composer.queuedRemove')}
-                        >
-                          <X className="size-2.5" />
-                        </Button>
-                      }
-                    />
-                    <TooltipContent side="top">
-                      {i18n.t('composer.queuedRemove')}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="size-3.5 rounded-full p-0 text-muted-foreground/70 hover:bg-muted-foreground/20 hover:text-foreground shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveQueuedMessage?.(queued.id);
+                        }}
+                        aria-label={i18n.t('composer.queuedRemove')}
+                      >
+                        <X className="size-2.5" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent side="top">
+                    {i18n.t('composer.queuedRemove')}
+                  </TooltipContent>
+                </Tooltip>
+              </Badge>
             ))}
           </div>
-        </div>
+        </TooltipProvider>
       )}
     </div>
   );
