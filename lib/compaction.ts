@@ -23,8 +23,14 @@ export type ProviderInstance = Provider<KnownApi>;
 
 /** 保守切点预算:自后向前累计到该值即停,预算内消息原样保留(与 read_element 截断同值) */
 const KEEP_RECENT_TOKENS = 12000;
+/** 小窗口模型的切点预算下限:窗口 < KEEP_RECENT_TOKENS 时按比例降级但不低于此值 */
+const KEEP_RECENT_MIN_TOKENS = 2000;
 /** 摘要生成预算基数(pi DEFAULT_COMPACTION_SETTINGS.reserveTokens) */
 const RESERVE_TOKENS = 16384;
+/** 摘要请求输入预算:序列化对话占窗口比例上限(BYOK 小窗口必需,否则请求直接超限) */
+const SUMMARY_INPUT_WINDOW_RATIO = 0.45;
+/** 摘要生成预算:占窗口比例上限(剩余留给输入) */
+const SUMMARY_OUTPUT_WINDOW_RATIO = 0.35;
 /** 序列化时单条 toolResult 截断上限(pi 同值) */
 const TOOL_RESULT_MAX_CHARS = 2000;
 
@@ -176,19 +182,36 @@ export async function runCompact(opts: {
   const window = model.contextWindow > 0 ? model.contextWindow : 128000;
   const tokensBefore = estimateContextTokens(opts.messages, window).tokens;
 
-  const cutIndex = findCutIndex(opts.messages);
+  // 切点预算随窗口自适应(pi 固定 20000 假设大窗口;BYOK 小窗口按比例降级,
+  // 否则窗口 < keepRecent 时切点永远落在首条消息,压缩永远报 Nothing to compact)
+  const keepRecent = Math.max(
+    KEEP_RECENT_MIN_TOKENS,
+    Math.min(KEEP_RECENT_TOKENS, Math.floor(window * 0.15))
+  );
+  const cutIndex = findCutIndex(opts.messages, keepRecent);
   const toSummarize = opts.messages.slice(0, cutIndex);
   if (toSummarize.length === 0) {
     throw new Error('Nothing to compact: the conversation is smaller than the recent-keep budget.');
   }
 
-  let prompt = `<conversation>\n${serializeConversation(toSummarize)}\n</conversation>\n\n${SUMMARIZATION_PROMPT}`;
+  // 摘要请求整体(输入+生成)必须塞进窗口:输入预算 = 窗口的 SUMMARY_INPUT_WINDOW_RATIO,
+  // 序列化超限时从头部截断(被压缩的是最老前缀,丢头部合理),并显式标注
+  const inputBudgetChars = Math.max(8000, Math.floor(window * SUMMARY_INPUT_WINDOW_RATIO) * 4);
+  let serialized = serializeConversation(toSummarize);
+  if (serialized.length > inputBudgetChars) {
+    serialized = `[... earlier conversation truncated for summarization]\n\n${serialized.slice(
+      serialized.length - inputBudgetChars
+    )}`;
+  }
+
+  let prompt = `<conversation>\n${serialized}\n</conversation>\n\n${SUMMARIZATION_PROMPT}`;
   if (opts.customInstructions && opts.customInstructions.trim()) {
     prompt += `\n\nAdditional focus: ${opts.customInstructions.trim()}`;
   }
 
   const maxTokens = Math.min(
     Math.floor(0.8 * RESERVE_TOKENS),
+    Math.floor(window * SUMMARY_OUTPUT_WINDOW_RATIO),
     model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
   );
   const context: Context = {
