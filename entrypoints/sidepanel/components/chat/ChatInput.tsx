@@ -491,6 +491,9 @@ export function ChatInput({
     </DropdownMenuContent>
   );
 
+  const hasRefTabs = Boolean(refTabs && refTabs.length > 0);
+  const hasQueued = Boolean(queuedMessages && queuedMessages.length > 0);
+
   return (
     <div
       className={cn(
@@ -527,15 +530,77 @@ export function ChatInput({
         </div>
       )}
 
-      {/* 标签页引用区 (独立小控件, 紧贴位于输入框卡片上方, 底部被输入框轻微压住层叠) */}
-      <div className="pointer-events-auto">
-        <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
-      </div>
+      {/* 队列提示条: 位于引用栏上方, 底部被引用栏(或输入框)向上负 margin 压住层叠 */}
+      {queuedMessages && queuedMessages.length > 0 && (
+        <div className="pointer-events-auto relative z-0 w-full select-none animate-in fade-in-0 duration-150 motion-reduce:animate-none">
+          <div className="rounded-t-lg border border-b-0 border-border/70 bg-muted/40 px-2.5 pt-1.5 pb-3 transition-colors">
+            <TooltipProvider delay={200}>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge
+                  variant="outline"
+                  className="h-5 gap-1.5 px-2 text-[11px] font-normal text-muted-foreground select-none shrink-0 bg-background/60"
+                >
+                  <span className="size-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                  <span>{i18n.t('composer.queuedCount', { count: queuedMessages.length })}</span>
+                </Badge>
+                {queuedMessages.map((queued) => (
+                  <Badge
+                    key={queued.id}
+                    variant="secondary"
+                    className="h-5 max-w-[240px] gap-1.5 pl-2 pr-1 font-normal text-[11px] select-none"
+                  >
+                    <span
+                      className="truncate min-w-0 flex-1 font-mono text-[10px] text-foreground/90"
+                      title={queued.text}
+                    >
+                      {queued.text}
+                    </span>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="size-3.5 rounded-full p-0 text-muted-foreground/70 hover:bg-muted-foreground/20 hover:text-foreground shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRemoveQueuedMessage?.(queued.id);
+                            }}
+                            aria-label={i18n.t('composer.queuedRemove')}
+                          >
+                            <X className="size-2.5" />
+                          </Button>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        {i18n.t('composer.queuedRemove')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </Badge>
+                ))}
+              </div>
+            </TooltipProvider>
+          </div>
+        </div>
+      )}
 
-      {/* Input container (TipTap 编辑器 + 底部工具栏) */}
+      {/* 标签页引用区 (独立小控件, 紧贴位于输入框卡片上方; 当队列存在时上移 -mt-2 压住队列条底部, 自身底部被输入框压住) */}
+      {hasRefTabs && (
+        <div
+          className={cn(
+            'pointer-events-auto relative z-10',
+            hasQueued && '-mt-2',
+          )}
+        >
+          <TabRefBar refTabs={refTabs} onRemoveRefTab={onRemoveRefTab} />
+        </div>
+      )}
+
+      {/* Input container (TipTap 编辑器 + 底部工具栏, 向上 -mt-2 压住引用区或队列条底部) */}
       <div
-        className={`pointer-events-auto relative z-10 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs transition-[box-shadow,border-color] duration-200 ease-out focus-within:ring-1 focus-within:ring-ring ${
-          refTabs && refTabs.length > 0 ? '-mt-2' : ''
+        className={`pointer-events-auto relative z-20 flex flex-col rounded-xl border border-border/60 bg-card shadow-xs transition-[box-shadow,border-color] duration-200 ease-out focus-within:ring-1 focus-within:ring-ring ${
+          hasRefTabs || hasQueued ? '-mt-2' : ''
         }`}
       >
 
@@ -794,57 +859,6 @@ export function ChatInput({
         </div>
         </TooltipProvider>
       </div>
-
-      {/* 队列提示条: 本会话有排队即展示(使用 shadcn Badge 官方组件, 位于输入框卡片下方) */}
-      {queuedMessages && queuedMessages.length > 0 && (
-        <TooltipProvider delay={200}>
-          <div className="pointer-events-auto mt-1.5 flex flex-wrap items-center gap-1.5 px-0.5 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-            <Badge
-              variant="outline"
-              className="h-6 gap-1.5 px-2 text-[11px] font-normal text-muted-foreground select-none shrink-0"
-            >
-              <span className="size-1.5 rounded-full bg-primary animate-pulse shrink-0" />
-              <span>{i18n.t('composer.queuedCount', { count: queuedMessages.length })}</span>
-            </Badge>
-            {queuedMessages.map((queued) => (
-              <Badge
-                key={queued.id}
-                variant="secondary"
-                className="h-6 max-w-[260px] gap-1.5 pl-2 pr-1 font-normal text-[11px] select-none"
-              >
-                <span
-                  className="truncate min-w-0 flex-1 font-mono text-[10px] text-foreground/90"
-                  title={queued.text}
-                >
-                  {queued.text}
-                </span>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-3.5 rounded-full p-0 text-muted-foreground/70 hover:bg-muted-foreground/20 hover:text-foreground shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemoveQueuedMessage?.(queued.id);
-                        }}
-                        aria-label={i18n.t('composer.queuedRemove')}
-                      >
-                        <X className="size-2.5" />
-                      </Button>
-                    }
-                  />
-                  <TooltipContent side="top">
-                    {i18n.t('composer.queuedRemove')}
-                  </TooltipContent>
-                </Tooltip>
-              </Badge>
-            ))}
-          </div>
-        </TooltipProvider>
-      )}
     </div>
   );
 }
