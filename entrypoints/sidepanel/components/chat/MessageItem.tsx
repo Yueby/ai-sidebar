@@ -166,16 +166,16 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
               render={
                 <Badge
                   variant="outline"
-                  className="h-auto max-w-full justify-start rounded px-1.5 py-0.5 text-[10px] font-normal leading-normal gap-1.5 text-primary-foreground/90 bg-primary-foreground/10 border-primary-foreground/15 select-none hover:bg-primary-foreground/15"
+                  className="h-auto max-w-full justify-start rounded px-1.5 py-0.5 text-[10px] font-normal leading-normal gap-1.5 text-foreground/90 bg-foreground/5 border-foreground/10 select-none hover:bg-foreground/10"
                 />
               }
             >
-              <Globe className="size-2.5 shrink-0 text-primary-foreground/70" />
+              <Globe className="size-2.5 shrink-0 text-muted-foreground" />
               <span className="truncate max-w-full">{tab.title || tab.url}</span>
               {tab.focused && (
                 <Badge
                   variant="secondary"
-                  className="h-auto shrink-0 rounded bg-primary-foreground/20 px-1 py-0 text-[9px] leading-[14px] text-primary-foreground font-medium border-transparent"
+                  className="h-auto shrink-0 rounded bg-foreground/8 px-1 py-0 text-[9px] leading-[14px] text-foreground font-medium border-transparent"
                 >
                   当前
                 </Badge>
@@ -192,12 +192,12 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
               render={
                 <Badge
                   variant="outline"
-                  className="h-auto max-w-full justify-start rounded px-1.5 py-0.5 text-[10px] font-normal leading-normal gap-1.5 text-primary-foreground/90 bg-primary-foreground/10 border-primary-foreground/15 select-none hover:bg-primary-foreground/15"
+                  className="h-auto max-w-full justify-start rounded px-1.5 py-0.5 text-[10px] font-normal leading-normal gap-1.5 text-foreground/90 bg-foreground/5 border-foreground/10 select-none hover:bg-foreground/10"
                 />
               }
             >
-              <span className="font-mono text-primary-foreground/70 shrink-0">{elem.id}.</span>
-              <SquareMousePointer className="size-2.5 shrink-0 text-primary-foreground/70" />
+              <span className="font-mono text-muted-foreground shrink-0">{elem.id}.</span>
+              <SquareMousePointer className="size-2.5 shrink-0 text-muted-foreground" />
               <span className="truncate max-w-full">{elementListLabel(elem)}</span>
             </TooltipTrigger>
             <TooltipContent side="top">
@@ -210,14 +210,14 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
   );
 
   return (
-    <div className="pt-1 mt-1 border-t border-primary-foreground/20 text-xs w-full">
+    <div className="pt-1 mt-1 border-t border-foreground/10 text-xs w-full">
       {isMany ? (
         <Collapsible open={open} onOpenChange={setOpen} className="space-y-1">
           <CollapsibleTrigger
             render={
               <button
                 type="button"
-                className="flex items-center gap-1 text-[10px] font-medium text-primary-foreground/75 hover:text-primary-foreground select-none transition-colors py-0.5"
+                className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground select-none transition-colors py-0.5"
               />
             }
           >
@@ -838,7 +838,7 @@ export function MessageItem({
         className="group px-3 py-1 animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none"
       >
         <MessageContent className="max-w-[85%] items-end gap-0.5">
-          <Bubble variant="default" align="end" className="max-w-full">
+          <Bubble variant="secondary" align="end" className="max-w-full">
             <BubbleContent className="rounded-lg px-3 py-1.5 text-sm shadow-xs">
               {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON;标记渲染为内容预览 chip(新旧标记兼容) */}
               <p className="whitespace-pre-wrap break-all leading-relaxed">
