@@ -8,6 +8,12 @@
  * 语言集 = AI 回答高频语言,未知语言回退 text。
  */
 import type { BundledLanguage, BundledTheme, HighlighterGeneric } from 'shiki';
+// 必须显式指定 JS 正则引擎:shiki 的默认引擎是 Oniguruma **WASM**,而 MV3 扩展页默认 CSP
+// (`script-src 'self'`)禁用 WASM 代码生成(Chrome 文档要求显式加 'wasm-unsafe-eval'),
+// 本项目 manifest 无 CSP 字段 → 默认引擎会被 CSP 拒掉、createHighlighter reject → 高亮静默
+// 降级为纯文本。JS 引擎无 WASM、零 CSP 改动、零新增依赖(覆盖点已核:
+// @shikijs/core createBundledHighlighter 内 `engine: options.engine ?? engine()`)。
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
 const LANGS = [
   'typescript',
@@ -49,7 +55,11 @@ const readyListeners = new Set<() => void>();
 // 模块级后台初始化(动态 import:shiki 及语言 JSON 全部 code-split,不进主包)
 void import('shiki')
   .then(({ createHighlighter }) =>
-    createHighlighter({ themes: ['github-light', 'github-dark'], langs: [...LANGS] })
+    createHighlighter({
+      themes: ['github-light', 'github-dark'],
+      langs: [...LANGS],
+      engine: createJavaScriptRegexEngine(),
+    })
   )
   .then((h) => {
     highlighter = h;
