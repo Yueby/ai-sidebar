@@ -983,17 +983,17 @@ export function MessageItem({
       <Message
         align="start"
         className={cn(
-          "group flex gap-2.5 py-0.5",
+          "group flex flex-col gap-1.5 py-0.5",
           suppressAnimRef.current
             ? ''
             : 'animate-in fade-in-0 slide-in-from-bottom-1 duration-150 motion-reduce:animate-none'
         )}
       >
-        <MessageAvatar className="size-6 min-w-6 self-start rounded-md border bg-muted text-muted-foreground mt-0.5 group-has-data-[slot=message-footer]/message:translate-y-0">
+        <MessageAvatar className="size-6 rounded-md border bg-muted text-muted-foreground">
           <Bot className="size-3.5" />
         </MessageAvatar>
 
-        <MessageContent className="min-w-0 flex-1 items-start gap-1 overflow-hidden">
+        <MessageContent className="min-w-0 w-full items-start gap-1 overflow-hidden">
           {/* 块序还原:thinking → text → toolCall 按 content 原始顺序渲染 */}
           {segments.map((seg, i) =>
             seg.kind === 'tool' ? (
