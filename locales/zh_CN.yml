@@ -70,6 +70,8 @@ composer:
   sendHint: 发送消息 (Enter)
   queuedCount: "队列中 {count} 条"
   queuedRemove: 移除此排队消息
+  expandQueue: 展开排队列表
+  collapseQueue: 收起排队列表
   reasoningTitle: 思考深度：{level}
 
 messages:

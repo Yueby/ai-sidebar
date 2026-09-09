@@ -11,6 +11,7 @@ import {
   Bot,
   Brain,
   ChevronDown,
+  ChevronUp,
   Check,
   Sliders,
   SquareMousePointer,
@@ -136,6 +137,8 @@ export function ChatInput({
   // 斜杠命令:输入以 '/' 开头且无空白 → 浮层;Esc 手动关;空格自然进参数模式
   const [slashClosed, setSlashClosed] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
+  /** 队列卡展开/收起(与引用栏多引用折叠态同构,默认收起) */
+  const [queueExpanded, setQueueExpanded] = useState(false);
   // 记录上一帧的框选元素列表引用与数量,用于侦测「新框选完成」并在光标处插入徽章节点
   const prevPickedRef = useRef<PickedElement[]>(pickedElements);
   // 草稿恢复只执行一次(编辑器就绪后)
@@ -533,18 +536,51 @@ export function ChatInput({
       {queuedMessages && queuedMessages.length > 0 && (
         <TooltipProvider delay={200}>
           <div className="pointer-events-auto relative z-0 w-full select-none rounded-t-lg border border-b-0 border-border/70 bg-muted/40 text-xs text-foreground animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-            {/* 头部行 */}
-            <div className="flex items-center justify-between gap-2 px-2.5 pt-1.5 pb-1.5">
+            {/* 头部摘要行 (点击展开/收起, 与 TabRefBar 多引用折叠态同构) */}
+            <div
+              onClick={() => setQueueExpanded((prev) => !prev)}
+              className={`flex items-center justify-between gap-2 px-2.5 pt-1.5 hover:bg-muted/60 transition-colors cursor-pointer ${
+                queueExpanded ? 'pb-1.5' : 'pb-3'
+              }`}
+            >
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 <span className="size-1.5 rounded-full bg-primary animate-pulse shrink-0" />
                 <span className="text-[11px] text-foreground font-medium truncate">
                   {i18n.t('composer.queuedCount', { count: queuedMessages.length })}
                 </span>
               </div>
+
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setQueueExpanded((prev) => !prev);
+                      }}
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors shrink-0"
+                      aria-label={i18n.t(queueExpanded ? 'composer.collapseQueue' : 'composer.expandQueue')}
+                    >
+                      {queueExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                    </button>
+                  }
+                />
+                <TooltipContent side="top">
+                  {i18n.t(queueExpanded ? 'composer.collapseQueue' : 'composer.expandQueue')}
+                </TooltipContent>
+              </Tooltip>
             </div>
 
-            {/* 列表区 */}
-            <div className="px-1.5 pb-3 pt-0.5 space-y-0.5 max-h-40 overflow-y-auto border-t border-border/30">
+            {/* 展开列表:grid-rows 技巧实现高度双向平滑动画(与 TabRefBar 展开列表同构) */}
+            <div
+              className={cn(
+                'grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none',
+                queueExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+              )}
+            >
+              <div className="overflow-hidden">
+                <div className="px-1.5 pb-3 pt-0.5 space-y-0.5 max-h-40 overflow-y-auto border-t border-border/30">
               {queuedMessages.map((queued) => (
                 <div
                   key={queued.id}
@@ -579,6 +615,8 @@ export function ChatInput({
                   </Tooltip>
                 </div>
               ))}
+                </div>
+              </div>
             </div>
           </div>
         </TooltipProvider>

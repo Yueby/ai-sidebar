@@ -70,6 +70,8 @@ composer:
   sendHint: Send message (Enter)
   queuedCount: "{count} queued"
   queuedRemove: Remove from queue
+  expandQueue: Expand queued list
+  collapseQueue: Collapse queued list
   reasoningTitle: "Thinking depth: {level}"
 
 messages:
