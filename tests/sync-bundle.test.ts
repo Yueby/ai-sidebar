@@ -78,6 +78,17 @@ test('旧 Session 形状兼容:缺 draft/compaction 的 bundle 解析后经 sani
   assert.deepEqual(sanitized[0]?.messages, legacy[0]!.messages);
 });
 
-test('坏数据 fail-fast:截断的 gzip 被拒绝(WXT i18n 在 Node 下文案构建会额外报错,两者都算通过)', async () => {
-  await assert.rejects(() => parseSyncBlob(new Uint8Array([0x1f, 0x8b, 0x00, 0x01])));
+test('坏数据 fail-fast:截断的 gzip 被识别为 invalid(不得被当成 bundle)', async () => {
+  // 契约:parseSyncBlob 以判别联合返回结果、不抛异常;坏数据→ kind:'invalid' + 可读错误。
+  // (旧断言写的是 assert.rejects——它只在 Node 下 i18n.t 自己抛错时才通过,是虚假通过。)
+  const parsed = await parseSyncBlob(new Uint8Array([0x1f, 0x8b, 0x00, 0x01]));
+  assert.equal(parsed.kind, 'invalid');
+  assert.ok(
+    typeof (parsed as { error?: unknown }).error === 'string' &&
+      (parsed as { error: string }).error.length > 0,
+    'invalid 应带可读错误文案',
+  );
+  // 正例对照:合法 bundle 不得被判为 invalid
+  const ok = await parseSyncBlob(await serializeSyncBundle({ version: 1, sessions: [], settings: {} } as never));
+  assert.equal(ok.kind, 'bundle');
 });
