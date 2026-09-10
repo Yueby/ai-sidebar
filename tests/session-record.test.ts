@@ -124,3 +124,37 @@ test('转录守卫:变长直用、变短不丢已存且只补缺失(按对象身
   assert.equal(noop.shrank, true);
   assert.deepEqual(noop.messages, [a, b]);
 });
+
+// 复审复现的缺陷:变短分支原先只按对象引用去重 → “内容相同、引用不同”的克隆来源
+// 会被整段重复追加(用户可见 = 重复气泡)。改用内容签名后必须去重。
+test('转录守卫:变短分支按内容签名去重(克隆体不得整段重复)', () => {
+  type M = { role: string; timestamp: number; content: unknown };
+  const m = (role: string, timestamp: number, content: unknown): M => ({ role, timestamp, content });
+  const u1 = m('user', 1, [{ type: 'text', text: 'q1' }]);
+  const a1 = m('assistant', 2, [{ type: 'text', text: 'a1' }]);
+  const u2 = m('user', 3, [{ type: 'text', text: 'q2' }]);
+
+  // 克隆体(deep-equal 但引用不同)与原件混排 → 不得重复
+  const cloned: M[] = [
+    { role: 'user', timestamp: 1, content: [{ type: 'text', text: 'q1' }] },
+    { role: 'assistant', timestamp: 2, content: [{ type: 'text', text: 'a1' }] },
+  ];
+  const merged = mergeTranscriptKeepingHistory([u1, a1, u2], cloned);
+  assert.equal(merged.shrank, true);
+  assert.deepEqual(
+    merged.messages.map((x) => x.timestamp),
+    [1, 2, 3],
+    '克隆体已被内容签名识别为已存在,不得追加到尾部',
+  );
+
+  // 真正缺失的一条(克隆来源)仍须补入 —— 不得因为去重而丢内容
+  const missing = { role: 'user', timestamp: 9, content: [{ type: 'text', text: 'new' }] };
+  const withMissing = mergeTranscriptKeepingHistory([u1, a1, u2], cloned, [missing]);
+  assert.deepEqual(withMissing.messages.map((x) => x.timestamp), [1, 2, 3, 9]);
+
+  // 同毫秒、不同内容的排队消息不得被误合并(仅 role+timestamp 作签名的陷阱)
+  const sameMs1 = m('user', 5, [{ type: 'text', text: 'first' }]);
+  const sameMs2 = m('user', 5, [{ type: 'text', text: 'second' }]);
+  const merged2 = mergeTranscriptKeepingHistory([sameMs1], [], [sameMs2]);
+  assert.equal(merged2.messages.length, 2, '同毫秒不同内容必须保留两条');
+});

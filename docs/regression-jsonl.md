@@ -60,7 +60,7 @@
 
 ## G. 回归新增 P0（已定位并修复，待真机确认，不得提前收尾）
 
-- [ ] **G1** AI 回复整段消失、只剩刚发出的那条用户消息 —— **根因**：投影桥 `bridgeAgentEvent` 无条件把 `event.message.content` 当数组读，畸形负载抛 `TypeError`；异常沿 Agent 循环回流到 `runAgentTurn`，catch 分支随即 `clearInFlight` 丢弃整轮转录（store 只剩发送时写入的用户消息）。**修复**（`ac3391c`）：事件 sink 调用点兜异常（投影 bug 至多损失一次视图更新）+ 桥对非数组 content 防御（有单测）+ 异常路径改以 Agent 转录落盘；写边界另有单调守卫（`d222a8c`）。**验收**：普通多轮 + 含工具调用的一轮均不再出现整段消失；若仍复现，把控制台 `[agent] event sink failed:` 或 `Agent transcript shrank (N → M)` 那行留下。
+- [ ] **G1** AI 回复整段消失、只剩刚发出的那条用户消息 —— **根因仍未定性**。已修的是一组独立缺陷（投影桥对非数组 content 抛 `TypeError`；事件 sink 无兜底；异常路径 `clearInFlight` 丢弃整轮转录）+ 写边界转录单调守卫（`d222a8c`）。**已证伪**：`message_update` 上的抛异常不会逃逸（pi 吞成 `stopReason:error` 的助手消息 → 走正常 finalize），故早期“触发链”叙述作废。**当前领先候选（复审 P1，待验）**：助手/工具结果只进内存 `runs[sid].inFlight`，直到 finalize 才落盘 → 回合中途面板被销毁（关侧边栏 / Chrome 回收 / dev 重载）即丢掉整轮，重开只剩发送时那条用户消息。**验收**：答复过程中关闭侧边栏再打开（以及正常多轮 + 含工具调用的一轮）不再丢整轮；若仍复现，留下控制台 `[agent] event sink failed:` 或 `Agent transcript shrank (N → M)` 那行。
 
 ## F. 通用回归
 

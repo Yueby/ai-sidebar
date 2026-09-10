@@ -283,9 +283,23 @@ export function mergeTranscriptKeepingHistory<T>(
   extra: readonly T[] = [],
 ): { messages: T[]; shrank: boolean } {
   if (incoming.length >= existing.length) return { messages: [...incoming], shrank: false };
+  // 变短分支的去重不能只看引用(克隆来源会整段重复追加),也不能只看 role+timestamp
+  // (同毫秒的两条排队消息会被误判为同一条 → 反而丢数据)。消息形状用 内容签名;
+  // 非消息形状(测试/通用用法)回退到整体 JSON,避免所有普通对象退化成同一签名。
+  const sig = (item: T): string => {
+    const x = item as Record<string, unknown> | null;
+    if (x && typeof x === 'object' && typeof x.role === 'string' && 'content' in x) {
+      return `${x.role}|${String(x.timestamp ?? '')}|${JSON.stringify(x.content ?? null)}`;
+    }
+    return JSON.stringify(item ?? null);
+  };
+  const seen = new Set(existing.map(sig));
   const merged: T[] = [...existing];
   for (const item of [...incoming, ...extra]) {
-    if (!merged.includes(item)) merged.push(item);
+    const key = sig(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
   }
   return { messages: merged, shrank: true };
 }

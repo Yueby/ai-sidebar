@@ -458,7 +458,13 @@ async function runTurnCore(
       // 累加而非覆盖:continue 泵会触发多次 agent_end,覆盖语义会丢掉首轮消息
       newMessages = [...newMessages, ...(event.messages as ChatMessage[])];
     }
-    options.onEvent?.(event);
+    try {
+      options.onEvent?.(event);
+    } catch (err: unknown) {
+      // 与常驻 sink 同源的风险:订阅者抛异常在生命周期事件上会逃出 agent loop(emit 不吞异常),
+      // 旧代码会因此丢弃整轮。调用方回调出错不该是对话的代价。
+      console.error('[agent] onEvent failed:', event?.type, err);
+    }
   });
 
   const signal = options.signal;
