@@ -131,7 +131,7 @@ export function createClickElementToolDefinition(sessionId?: string): AgentTool<
           details: { tabId, locator },
         };
       }
-      const tabNote = await describeTabChanges(tabsBefore);
+      const { note: tabNote } = await describeTabChanges(tabsBefore);
       return {
         content: [{ type: 'text', text: renderActionSuccess('Clicked', locator, tabId, result) + (tabNote ? `\n${tabNote}` : '') }],
         details: { tabId, locator },

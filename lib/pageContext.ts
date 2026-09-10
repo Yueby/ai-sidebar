@@ -24,6 +24,8 @@ const IS_MAC = /Mac|iPhone|iPad/i.test(typeof navigator !== 'undefined' ? naviga
 export interface ExtractedPage extends PageContext {
   /** content 侧已按块边界截断过正文 */
   truncated?: boolean;
+  /** 该页全文长度(仅续读窗口请求时由 content 侧回报,用于告知还差多少) */
+  totalLength?: number;
 }
 
 /** 被引用的标签页(实时元信息,不含正文) */
@@ -167,21 +169,33 @@ export async function snapshotTabs(): Promise<TabSnapshot> {
  * 动作后对比:有新 tab(如点击 target=_blank 链接)或焦点切换时返回提示文本,
  * 无变化返回 null。新 tab 提示附带可读化路径(open_page 同 URL 复用,不再开重复页)。
  */
-export async function describeTabChanges(before: TabSnapshot): Promise<string | null> {
+export interface TabChangeReport {
+  /** 模型可见的变化说明(无变化为 null) */
+  note: string | null;
+  /** 本次动作新开出的 tab id(已登记为 agent-opened:可读、可由 close_page 清理) */
+  openedTabIds: number[];
+}
+
+export async function describeTabChanges(before: TabSnapshot): Promise<TabChangeReport> {
   const tabs = await browser.tabs.query({}).catch(() => []);
   const opened = tabs.filter((t) => t.id !== undefined && !before.ids.has(t.id));
   const notes: string[] = [];
+  const openedTabIds: number[] = [];
   for (const t of opened) {
     if (t.id === undefined) continue;
+    // 点击导致的“新开页”是 agent 造成的,按 agent-opened 登记:否则模型事后连自己开的页
+    // 都读不了也关不掉(真机记录:只能请用户 Ctrl+W)。close_page 仍需用户确认,安全边界不变。
+    registerAgentOpenedTab(t.id);
+    openedTabIds.push(t.id);
     notes.push(
-      `The click opened new tab #${t.id}${t.url ? ` (${t.url})` : ''}${t.active ? ' — it is now the focused tab' : ''}. It is not readable yet: call open_page with its URL to get a readable handle (it will reuse this tab, not open a duplicate).`,
+      `The click opened new tab #${t.id}${t.url ? ` (${t.url})` : ''}${t.active ? ' — it is now the focused tab' : ''}. It is registered as readable and closable via its tabId (read_page / click_element / fill_element / close_page).`,
     );
   }
   const active = tabs.find((t) => t.active);
   if (opened.length === 0 && active?.id !== undefined && active.id !== before.activeId) {
     notes.push(`Focus moved to tab #${active.id}${active.url ? ` (${active.url})` : ''}. It is not readable unless it was referenced or opened via open_page.`);
   }
-  return notes.length > 0 ? notes.join(' ') : null;
+  return { note: notes.length > 0 ? notes.join(' ') : null, openedTabIds };
 }
 
 // ===== agent 开启标签页的运行时注册表(面板生命周期)=====
@@ -229,6 +243,7 @@ export async function extractFromTab(
   section: 'head' | 'tail' = 'head',
   waitStableMs = 0,
   waitText?: string,
+  offset = 0,
 ): Promise<ExtractedPage | null> {
   let url: string;
   try {
@@ -245,6 +260,7 @@ export async function extractFromTab(
       section,
       waitStableMs,
       waitText,
+      offset,
     })) as Partial<ExtractedPage> | undefined;
     return res;
   };
@@ -262,6 +278,7 @@ export async function extractFromTab(
       text: res.text ?? '',
       truncated: res.truncated === true,
       fingerprint: typeof res.fingerprint === 'string' ? res.fingerprint : undefined,
+      totalLength: typeof res.totalLength === 'number' ? res.totalLength : undefined,
     };
   } catch {
     // 该页没有 content script(如刚加载的 chrome:// 页)或提取失败

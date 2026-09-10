@@ -1,0 +1,64 @@
+/**
+ * 长文续读的纯逻辑(可单测):窗口切分 + 续读提示文案。
+ *
+ * 背景:content 侧把正文截到 12000 字符(块边界),超出部分此前无法取回——
+ * 真机上表现为"Cognition 那篇在公式推导处被截断,附录没读到"。
+ * 这里给出 offset 窗口的唯一算法与模型可见的续读指引(模型可见文本一律英文)。
+ */
+
+export interface TextWindow {
+  /** 窗口内文本(offset>0 时按换行对齐,避免从句子中段开始) */
+  text: string;
+  /** 本窗口在全文中的真实起始位置(对齐后) */
+  start: number;
+  /** 是否还有未返回的内容(offset 之前或窗口之后) */
+  truncated: boolean;
+  /** 该页全文长度,供上层计算下一次 offset(远超 12000 时不要指望一次读完) */
+  totalLength: number;
+  /** 下一次续读的 offset;无剩余时为 null */
+  nextOffset: number | null;
+}
+
+/** 按 offset 取窗口(段落边界对齐);offset<=0 时退化为普通头部窗口 */
+export function textWindow(full: string, offset: number, limit: number): TextWindow {
+  const total = full.length;
+  const requested = Math.max(0, Math.min(Math.round(offset) || 0, total));
+  const raw = full.slice(requested, requested + limit);
+  let text = raw;
+  let start = requested;
+  if (requested > 0) {
+    // 从整段首行可能被截断:对齐到下一个换行,避免返回半句话
+    const nl = raw.indexOf('\n');
+    if (nl >= 0 && nl < raw.length - 1) {
+      text = raw.slice(nl + 1);
+      start = requested + nl + 1;
+    }
+  }
+  const consumed = start + text.length;
+  const hasMore = consumed < total;
+  return {
+    text,
+    start,
+    truncated: requested > 0 || hasMore,
+    totalLength: total,
+    nextOffset: hasMore ? consumed : null,
+  };
+}
+
+/**
+ * 模型可见的续读指引(英文)。
+ * 只在确实被截断时给出,并带上可直接照用的一次调用——否则模型会像真机记录里
+ * 那样自己摸索"再读一次能不能拿到后半段"。
+ */
+export function continuationHint(tabId: number, window: TextWindow): string {
+  const head =
+    `(Note: the page content above is truncated — showing characters ` +
+    `${window.start}-${window.start + window.text.length} of ${window.totalLength}.)`;
+  if (window.nextOffset === null) return head;
+  return (
+    `${head}\n` +
+    `To read the rest, call read_page with the same tabId and offset: ` +
+    `${JSON.stringify({ tabId, offset: window.nextOffset })} ` +
+    `(offset reads forward from that character position; section is ignored when offset is set).`
+  );
+}

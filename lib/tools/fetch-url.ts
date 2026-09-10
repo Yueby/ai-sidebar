@@ -20,7 +20,7 @@ export function createFetchUrlToolDefinition(): AgentTool<typeof FETCH_URL_PARAM
     label: toolLabel('fetch_url'),
     risk: 'safe',
     description:
-      'Fetch the content of any public web page by URL and return its title and main text — use it when the user message contains a link, when a referenced page links to further material, or when external information is needed to answer. Extraction targets HTML article pages; non-HTML responses and pages over 2 MB are rejected with an explanatory error. Private and localhost addresses are blocked.',
+      'Fetch the content of any public web page by URL and return its title and main text — use it when the user message contains a link, when a referenced page links to further material, or when external information is needed to answer. This is a plain HTTP GET: static article pages work well, but JavaScript-rendered pages (SPAs, social timelines, dashboards) often yield little or nothing — for those, open_page the URL and read_page the tab instead, which runs in a real browser. Non-HTML responses and pages over 2 MB are rejected with an explanatory error. Private and localhost addresses are blocked.',
     parameters: FETCH_URL_PARAMS,
     execute: async (_toolCallId, args) => {
       const url = typeof args?.url === 'string' ? args.url.trim() : '';

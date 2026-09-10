@@ -5,7 +5,7 @@ import type { ImageContent } from '@earendil-works/pi-ai';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '../pageContext';
-import { captureVisibleForModel } from '../imageFetch';
+import { capturePathFor, captureTabViaCdpForModel, captureVisibleForModel } from '../imageFetch';
 import { requestGate } from '../gate';
 
 const SCREENSHOT_PAGE_PARAMS = Type.Object({
@@ -33,7 +33,7 @@ export function createScreenshotPageToolDefinition(
     label: toolLabel('screenshot_page'),
     risk: 'confirm',
     description:
-      'Capture the visible viewport of a browser tab and attach it as an image — use it for visual feedback: checking how a page looks, layouts and styles the user refers to, or verifying the visual result of a previous action. Only the ACTIVE tab of its window can be captured (a browser limitation); bring a background tab to the front first. Captures the viewport only, not the full scrollable page. Every call requires explicit user approval via a confirmation card unless the user granted this session for this tool and tab.',
+      'Capture the visible viewport of a browser tab and attach it as an image — use it for visual feedback: checking how a page looks, layouts and styles the user refers to, or verifying the visual result of a previous action. Background tabs are captured via CDP without stealing the user\'s focus; if the debugger is unavailable the extension falls back to activating the tab first. Captures the viewport only, not the full scrollable page. Every call requires explicit user approval via a confirmation card unless the user granted this session for this tool and tab.',
     parameters: SCREENSHOT_PAGE_PARAMS,
     execute: async (toolCallId, args) => {
       const rawTabId = args?.tabId;
@@ -79,8 +79,6 @@ export function createScreenshotPageToolDefinition(
           details: null,
         };
       }
-      // 后台 tab 计时器节流 + captureVisibleTab 仅活动 tab:截图前自动激活目标页
-      await browser.tabs.update(tabId, { active: true }).catch(() => {});
       const refInfo = refTabsById.get(tabId);
 
       const approved = await gateForRun({
@@ -100,7 +98,22 @@ export function createScreenshotPageToolDefinition(
         };
       }
 
-      const result = await captureVisibleForModel(tabId);
+      // 批准后再截图。后台 tab 优先走 CDP 直接截(不抢用户前台),失败才降级为「激活后截可见区」(旧行为)。
+      // captureVisibleTab 只能截活动标签——这才是之前“后台标签被拒”的根因。
+      const path = capturePathFor((await getActiveTabMeta())?.id === tabId, true);
+      let result: Awaited<ReturnType<typeof captureVisibleForModel>>;
+      let viaCdp = false;
+      if (path === 'cdp') {
+        result = await captureTabViaCdpForModel(tabId);
+        viaCdp = result.ok;
+        if (!result.ok) {
+          // CDP 不可用(debugger 被占用 / 受限页):降级激活后截可见区
+          await browser.tabs.update(tabId, { active: true }).catch(() => {});
+          result = await captureVisibleForModel(tabId);
+        }
+      } else {
+        result = await captureVisibleForModel(tabId);
+      }
       if (!result.ok) {
         const text =
           result.reason === 'inactive'
@@ -111,7 +124,7 @@ export function createScreenshotPageToolDefinition(
       const content: (ImageContent | { type: 'text'; text: string })[] = [
         {
           type: 'text',
-          text: `Screenshot of tab #${tabId} (${meta.url}) — visible viewport only, not the full scrollable page.`,
+          text: `Screenshot of tab #${tabId} (${meta.url}) — visible viewport only, not the full scrollable page.${viaCdp ? ' Captured from the background via CDP (the tab was not brought to the front, so the user\'s view did not change).' : ''}`,
         },
         { type: 'image', data: result.image.data, mimeType: result.image.mimeType },
       ];

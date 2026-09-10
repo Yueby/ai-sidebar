@@ -3,6 +3,16 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { extractFromTab, renderPageContext, buildUnreadableTabError, type RefTab } from '../pageContext';
+import { continuationHint } from '../pageTextWindow';
+
+/** 首次抽取过薄(SPA 未渲染完)时的自动重试节奏:有界、总时长封顶,避免模型自己摸索“再等等再读” */
+const THIN_RETRY_WAITS_MS = [1200, 2500];
+const THIN_TEXT_CHARS = 200;
+
+/** 抽取是否过薄(纯判定,便于单测):前端渲染页首次读取常见“只剩骨架/空白” */
+export function isThinExtraction(text: string): boolean {
+  return text.trim().length < THIN_TEXT_CHARS;
+}
 
 const READ_PAGE_PARAMS = Type.Object({
   tabId: Type.Number({ description: 'Id of the tab to read (referenced tabs are annotated with tabId in the <page-refs> block of user messages)' }),
@@ -24,6 +34,12 @@ const READ_PAGE_PARAMS = Type.Object({
         'Wait (up to waitStableMs) until the extracted text CONTAINS this substring (case-insensitive) — e.g. wait for an AI reply to mention a keyword before reading. Requires waitStableMs > 0; returns as soon as it matches or the timeout expires.',
     }),
   ),
+  offset: Type.Optional(
+    Type.Number({
+      description:
+        'Character offset to read from (for long pages whose output was truncated). A truncated result tells you the exact offset to use next; pass it here to read forward without re-reading the beginning. When set, section is ignored.',
+    }),
+  ),
 });
 
 /** read_page 工具定义(safe):AI 按需读取某个被引用标签页的当前正文(执行体消费 pageContext 的 extractFromTab) */
@@ -37,7 +53,7 @@ export function createReadPageToolDefinition(
     label: toolLabel('read_page'),
     risk: 'safe',
     description:
-      "Read the title, URL and main text content of a user-referenced browser tab. Call this with the corresponding tabId when the user's question may relate to a referenced page or needs its content. Long pages are truncated from the head by default — pass section: 'tail' to keep the END of the content (e.g. the latest messages in a chat). If the user's message contains a picked element and the question points at it, prefer read_element; an unreadable result usually means the tab was closed or navigated — do not retry the same tabId.",
+      "Read the title, URL and main text content of a user-referenced browser tab. Call this with the corresponding tabId when the user's question may relate to a referenced page or needs its content. Long pages are truncated from the head by default — pass section: 'tail' to keep the END of the content (e.g. the latest messages in a chat), or use the offset reported in a truncated result to read further. If the content comes back nearly empty the tool retries briefly by itself (client-rendered pages); if it stays empty, the page may still be loading or not extractable — say so rather than retrying the same tabId repeatedly. If the user's message contains a picked element and the question points at it, prefer read_element.",
     parameters: READ_PAGE_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;
@@ -56,7 +72,23 @@ export function createReadPageToolDefinition(
           ? Math.min(Math.round(args.waitStableMs), 30000)
           : 0;
       const waitText = typeof args?.waitText === 'string' && args.waitText.trim() ? args.waitText.trim() : undefined;
-      const page = await extractFromTab(tabId, section, waitStableMs, waitText);
+      const requestedOffset =
+        typeof args?.offset === 'number' && args.offset > 0 ? Math.round(args.offset) : 0;
+      let page = await extractFromTab(tabId, section, waitStableMs, waitText, requestedOffset);
+      let autoRetried = false;
+      // 首次读到空白/骨架且调用方没要求等待:自动有界重试(前端渲染页的常见情形)。
+      // 不回退到空结果让模型自己猜“等 8 秒再读”——真机记录里就是这么浪费掉一轮的。
+      if (page && waitStableMs === 0 && isThinExtraction(page.text)) {
+        for (const waitMs of THIN_RETRY_WAITS_MS) {
+          const retry = await extractFromTab(tabId, section, waitMs, waitText, requestedOffset);
+          if (!retry) break;
+          if (retry.text.trim().length > page.text.trim().length) {
+            page = retry;
+            autoRetried = true;
+          }
+          if (!isThinExtraction(page.text)) break;
+        }
+      }
       if (!page) {
         return {
           content: [
@@ -76,14 +108,31 @@ export function createReadPageToolDefinition(
       const authNote = /(log[-_]?in|sign[-_]?in|sign[-_]?up|register|authenticate)/i.test(page.url)
         ? 'Note: this page appears to be a login/signup flow — the site may require authentication before it can be used.'
         : '';
+      // 续读指引:截断时给出下一次调用所需的 offset(不再让模型自己摸索后半段怎么取)
+      const shownFrom = requestedOffset;
+      const shownTo = requestedOffset + page.text.length;
+      const truncationNote = page.truncated
+        ? continuationHint(tabId, {
+            text: page.text,
+            start: shownFrom,
+            truncated: true,
+            totalLength: page.totalLength ?? shownTo,
+            nextOffset: page.totalLength && shownTo < page.totalLength ? shownTo : null,
+          })
+        : '';
+      const retryNote = autoRetried
+        ? 'Note: the first extraction came back nearly empty, so the page was read again after a short wait (it appears to be client-rendered).'
+        : '';
       return {
         content: [
           {
             type: 'text',
             text:
               renderPageContext(page) +
+              (retryNote ? `\n\n${retryNote}` : '') +
               (waitNote ? `\n\n${waitNote}` : '') +
-              (authNote ? `\n\n${authNote}` : ''),
+              (authNote ? `\n\n${authNote}` : '') +
+              (truncationNote ? `\n\n${truncationNote}` : ''),
           },
         ],
         details: { title: page.title, url: page.url },

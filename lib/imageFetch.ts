@@ -12,6 +12,7 @@
  * PNG/JPEG 取小、base64 ≤4.5MB(Anthropic 5MB 限额下留余量)、仍超则按 0.75 逐级缩维。
  * 不引任何新库,纯 canvas 手写。
  */
+import { captureScreenshotViaCdp } from './cdp';
 
 const MAX_DIM = 2000;
 /** base64 字符数上限(pi 上游同款:4.5MB payload) */
@@ -107,6 +108,30 @@ export type CaptureVisibleResult =
   | { ok: true; image: ModelImage }
   | { ok: false; reason: 'inactive' | 'failed'; /** 浏览器拒绝原因原文(权限/限流等,用于精确错误提示) */
       detail?: string };
+
+/** 截图路径决策(纯函数):活动标签走扩展 API;后台标签优先 CDP(不抢用户前台);都不行才要求切前台 */
+export function capturePathFor(isActiveTab: boolean, cdpAllowed: boolean): 'visible' | 'cdp' | 'needs-activation' {
+  if (isActiveTab) return 'visible';
+  return cdpAllowed ? 'cdp' : 'needs-activation';
+}
+
+/**
+ * 后台标签截图:走 CDP Page.captureScreenshot——captureVisibleTab 只能截活动标签,
+ * 而“先激活再截”会抢用户前台。失败时返回 ok:false 由调用方降级为激活后截可见区。
+ * 编码管线与主路径同源(≤2000²、JPEG 逐级降质、base64 预算)。
+ */
+export async function captureTabViaCdpForModel(tabId: number): Promise<CaptureVisibleResult> {
+  const dataUrl = await captureScreenshotViaCdp(tabId);
+  if (!dataUrl) return { ok: false, reason: 'failed' };
+  const bitmap = await decodeToBitmap(dataUrl);
+  if (!bitmap) return { ok: false, reason: 'failed' };
+  try {
+    const image = encodeWithinBudget(bitmap);
+    return image ? { ok: true, image } : { ok: false, reason: 'failed' };
+  } finally {
+    bitmap.close();
+  }
+}
 
 export async function captureVisibleForModel(tabId: number): Promise<CaptureVisibleResult> {
   try {

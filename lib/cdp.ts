@@ -5,10 +5,9 @@
  * 行为(滚动/导航)不响应,校验 isTrusted 的页面监听器也会拒绝。CDP Input.*
  * 产生与真实鼠标/键盘等价的可信输入(Playwright 底层同机制)。
  *
- * 边界:白名单仅 Input 域输入方法(dispatchMouseEvent/synthesizeScrollGesture/
- * insertText/dispatchKeyEvent);按需 attach,60s 闲置自动 detach,不留常驻附加;
- * 附加失败(chrome:// 页、已有调试器、DevTools 占用)返回 not_dispatched,由上层
- * 降级合成/JS 路径。
+ * 边界:白名单仅 Input 域输入方法与只读的 Page.captureScreenshot(后台标签截图必须走 CDP——
+ * 扩展 API captureVisibleTab 只能截活动标签);按需 attach,60s 闲置自动 detach,不留常驻附加;
+ * 附加失败(chrome:// 页、已有调试器、DevTools 占用)返回 not_dispatched,由上层降级。
  *
  * 三态契约:not_dispatched = 确认未调用任何输入命令(可安全换路径重试);
  *  dispatched = 全部命令返回成功;partial_or_unknown = 已调用过输入命令但结果
@@ -43,6 +42,20 @@ export function withCdpInputLock<T>(fn: () => Promise<T>): Promise<T> {
 
 /** 输入派发状态(见文件头三态契约) */
 export type InputDispatchState = 'not_dispatched' | 'dispatched' | 'partial_or_unknown';
+
+/** CDP 白名单=单一来源:sessionsType 与运行时校验都读它,新增方法必须在此登记 */
+export const CDP_ALLOWED_METHODS = [
+  'Input.dispatchMouseEvent',
+  'Input.synthesizeScrollGesture',
+  'Input.insertText',
+  'Input.dispatchKeyEvent',
+  'Page.captureScreenshot',
+] as const;
+export type CdpMethod = (typeof CDP_ALLOWED_METHODS)[number];
+
+function isAllowedMethod(method: string): method is CdpMethod {
+  return (CDP_ALLOWED_METHODS as readonly string[]).includes(method);
+}
 
 /** 单命令发送结果:not_attached = 附加前置失败(未发命令);sent = 成功;failed = 已尝试发送但未确认 */
 type SendResult = 'not_attached' | 'sent' | 'failed';
@@ -109,10 +122,11 @@ function scheduleDetach(idleMs: number): void {
  */
 async function sendCommand(
   tabId: number,
-  method: 'Input.dispatchMouseEvent' | 'Input.synthesizeScrollGesture' | 'Input.insertText' | 'Input.dispatchKeyEvent',
+  method: CdpMethod,
   params: Record<string, unknown>,
   epoch?: number,
 ): Promise<SendResult> {
+  if (!isAllowedMethod(method)) return 'failed';
   if (epoch !== undefined && epoch !== detachEpoch) return 'failed';
   const attached = await ensureAttached(tabId);
   if (!attached) return 'not_attached';
@@ -219,4 +233,30 @@ export async function dispatchTrustedKey(
   if (down !== 'sent') return 'partial_or_unknown';
   const up = await sendCommand(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', ...base }, epoch);
   return up === 'sent' ? 'dispatched' : 'partial_or_unknown';
+}
+
+/**
+ * 后台标签截图:CDP Page.captureScreenshot 不要求目标 tab 处于活动态
+ * (扩展 API captureVisibleTab 只能截活动标签,这是浏览器限制)。
+ * 返回 data URL(PNG)供统一编码管线(imageFetch)消费;失败返回 null 由上层降级。
+ * 只读命令,不改页面状态;与输入原语共用 attach 生命周期与 60s 闲置 detach。
+ */
+export async function captureScreenshotViaCdp(tabId: number, lease?: number): Promise<string | null> {
+  const epoch = lease ?? detachEpoch;
+  const method: CdpMethod = 'Page.captureScreenshot';
+  if (!isAllowedMethod(method) || epoch !== detachEpoch) return null;
+  const attached = await ensureAttached(tabId);
+  if (!attached) return null;
+  try {
+    const result = (await browser.debugger.sendCommand({ tabId }, method, {
+      format: 'png',
+      // 只取可见视口,与 captureVisibleTab 语义对齐(全页截图会把长页面压成不可读小图)
+      captureBeyondViewport: false,
+    })) as { data?: string } | undefined;
+    scheduleDetach(60_000);
+    const data = result?.data;
+    return typeof data === 'string' && data.length > 0 ? `data:image/png;base64,${data}` : null;
+  } catch {
+    return null;
+  }
 }

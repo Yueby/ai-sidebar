@@ -6,6 +6,7 @@ import {
   SEARCH_ELEMENT_MESSAGE,
   SEARCH_ELEMENT_LIMIT,
 } from '@/lib/types';
+import { textWindow } from '@/lib/pageTextWindow';
 // type-only:编译期擦除,不引入运行时代码(载荷形状与 sidepanel 侧同源)
 import type { PageActionResult, ResolvedActionElement, SearchElementsResult } from '@/lib/pageContext';
 
@@ -387,12 +388,15 @@ export default defineContentScript({
       section: 'head' | 'tail',
       waitStableMs = 0,
       waitText?: string,
+      offset = 0,
     ): Promise<{
       title: string;
       url: string;
       text: string;
       truncated: boolean;
       fingerprint?: string;
+      /** 全文长度(仅续读窗口请求时回报) */
+      totalLength?: number;
     }> {
       await waitForComplete(READY_TIMEOUT);
       // 语义路径优先;门控不过/库不可用则手写兜底(含 isHidden 可见性过滤)
@@ -416,6 +420,18 @@ export default defineContentScript({
       }
       // tail 模式:路径内部已按头部锚定截断,这里重切为尾部窗口(聊天页最新内容在尾部)
       if (section === 'tail') result = tailSliceText(result.text, TEXT_LIMIT);
+      // 续读窗口:offset>0 时按 offset 取窗口(与 tail 互斥——已明确从哪开始读)
+      if (offset > 0) {
+        const w = textWindow(result.text, offset, TEXT_LIMIT);
+        result = { text: w.text, truncated: w.truncated };
+        return {
+          title: document.title,
+          url: location.href,
+          fingerprint: pageFingerprint(),
+          ...result,
+          totalLength: w.totalLength,
+        };
+      }
       return { title: document.title, url: location.href, fingerprint: pageFingerprint(), ...result };
     }
 
@@ -1517,7 +1533,12 @@ export default defineContentScript({
         return;
       }
       // 异步提取:返回 true 保持消息通道开放,完成后 sendResponse
-      extractStable(message.section === 'tail' ? 'tail' : 'head').then(sendResponse);
+      extractStable(
+        message.section === 'tail' ? 'tail' : 'head',
+        typeof message.waitStableMs === 'number' ? message.waitStableMs : 0,
+        typeof message.waitText === 'string' ? message.waitText : undefined,
+        typeof message.offset === 'number' && message.offset > 0 ? Math.round(message.offset) : 0,
+      ).then(sendResponse);
       return true;
     });
   },
