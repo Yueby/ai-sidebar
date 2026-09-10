@@ -12,7 +12,7 @@ import { SLASH_COMMANDS } from '@/lib/slashCommands';
 
 import { useGate } from './hooks/useGate';
 import { useSessionManager } from './hooks/useSessionManager';
-import { useChatTurn } from './hooks/useChatTurn';
+import { useChatTurn, flushActiveTranscripts } from './hooks/useChatTurn';
 import { usePageContextRefs } from './hooks/usePageContextRefs';
 import { useCompact } from './hooks/useCompact';
 import { useQuickPrompts } from './hooks/useQuickPrompts';
@@ -381,6 +381,41 @@ export default function App() {
   // 尾部 in-flight 消息刚从 live 流式气泡接管:跳过入场动画,交接不闪
   // (toolResult 不渲染独立气泡,不计入手数,避免过度抑制动画)
   const quietTailCount = appendedInFlight.filter((m) => m.role !== 'toolResult').length;
+
+  // ——— P0 诊断(仅 DEV):AI 回复“盯着屏幕时凭空消失”需要知道三源中哪个掉了。
+  // 运行中可见条数一旦下降就留证据(live 文本 / in-flight / 会话转录分别计数)。
+  const visibleCount = displayedMessages.length + (streamingContent ? 1 : 0);
+  const p0PrevRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const prev = p0PrevRef.current;
+    p0PrevRef.current = visibleCount;
+    if (prev !== null && isStreamingHere && visibleCount < prev) {
+      console.warn('[p0] 运行中可见条数下降', {
+        sessionId: currentSession?.id,
+        prev,
+        next: visibleCount,
+        sessionMsgs: currentSession?.messages.length ?? 0,
+        inFlight: appendedInFlight.length,
+        liveChars: streamingContent.length,
+        hasRun: isStreamingHere,
+      });
+    }
+  }, [visibleCount, isStreamingHere, currentSession?.id, currentSession?.messages.length, appendedInFlight.length, streamingContent.length]);
+
+  // 回合中途落盘兜底:面板即将隐藏/销毁时把进行中会话的转录补落盘(见 flushActiveTranscripts)
+  useEffect(() => {
+    const onPageHide = () => flushActiveTranscripts();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushActiveTranscripts();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
   // 编辑重发使能:非流式、非门控、非压缩时允许用户编辑已发送消息
   // 编辑重发走全局单 run(handleEditResend 的 busy 守卫):与按钮使能保持一致,避免可点但无效
   const canEditMessage = !isStreamingHere && !isGateHere && !isCompactingHere;

@@ -93,6 +93,33 @@ function persistTranscriptAfterFailure(sid: string, seq: number, rt: SessionRunt
 }
 
 /**
+ * 回合中途的落盘兜底(面板即将隐藏/关闭时由 App 调用)。
+ *
+ * 助手回复与工具结果在 finalize 前只存在于 Agent 转录(内存)，面板文档一旦被销毁
+ * (关侧边栏 / Chrome 回收 / dev 重载)就丢掉整轮——重开后只剩发送时写入的那条用户消息。
+ * 此处把进行中会话的转录按单调守卫规则补落盘;幂等,与 finalize 路径不冲突。
+ */
+export function flushActiveTranscripts(): void {
+  const state = useAppStore.getState();
+  const updated = new Map<string, Session>();
+  for (const session of state.sessions) {
+    if (!runtimeFor(session.id).isStreaming) continue;
+    const transcript = sessionAgentFor(session.id)?.state.messages as ChatMessage[] | undefined;
+    if (!transcript?.length) continue;
+    const { messages } = mergeTranscriptKeepingHistory(session.messages, transcript);
+    if (messages.length <= session.messages.length) continue;
+    // 不改 updatedAt:这是一次保全写入,不是新的会话活动,不应把会话顶到列表最前
+    updated.set(session.id, { ...session, messages });
+  }
+  if (updated.size === 0) return;
+  useAppStore
+    .getState()
+    .setSessions(useAppStore.getState().sessions.map((s) => updated.get(s.id) ?? s));
+  for (const session of updated.values()) void persistFinalizedSession(session);
+  console.info(`[flush] 面板隐藏前补落盘 ${updated.size} 个进行中会话的转录`);
+}
+
+/**
  * 落盘已 finalize 的会话。失败不得伪装成“请求失败”:内存已有、IDB 未写时,
  * 用户重开面板就表现为“内容突然消失”。单独捕获并给出可行动的**持久化**告警,
  * 不把已成功的轮次误判为失败。
