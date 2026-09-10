@@ -190,11 +190,24 @@ export class SessionRuntime {
     }
     this.pendingContent = '';
     this.pendingThinking = '';
+    if (import.meta.env?.DEV) {
+      // P0 诊断:live→in-flight 换手点(工具回合最频繁)。此行之后这段文本由 in-flight 那条承载,
+      // 若 in-flight 因任何原因没渲染出来,屏幕上就会当场整段消失。
+      console.info(
+        `[p0:handoff] ${this.sessionId} role=${message.role} liveChars=${this.snapshot.content.length}→0 inFlight=${this.snapshot.inFlight.length}→${this.snapshot.inFlight.length + 1}`,
+      );
+    }
     this.patch({ content: '', thinking: '', inFlight: [...this.snapshot.inFlight, message] });
   }
 
   clearInFlight(seq: number): void {
     if (!this.isOwner(seq)) return;
+    if (import.meta.env?.DEV && this.snapshot.inFlight.length > 0) {
+      // P0 诊断:回合中途清空 in-flight 会让尚未落盘的回复当场消失(若 live 也为空)
+      console.info(
+        `[p0:clear] ${this.sessionId} inFlight ${this.snapshot.inFlight.length}→0 liveChars=${this.snapshot.content.length}`,
+      );
+    }
     this.patch({ inFlight: [] });
   }
 
