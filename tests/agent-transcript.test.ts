@@ -15,6 +15,7 @@ import {
   disposeAllSessionAgents,
   disposeSessionAgent,
   hasSessionAgent,
+  sessionAgentFor,
 } from '../lib/agent';
 import { createUserMessage, messageText } from '../lib/storage';
 import type { ProviderConfig } from '../lib/types';
@@ -140,4 +141,33 @@ test('dispose 后旧 Agent 事件不再透出(epoch 失效)', async () => {
   await runAgentTurn({ ...baseOptions('t4', createUserMessage('second')), history: [] });
   assert.ok(seen.includes('t4:agent_start'));
   assert.equal(hasSessionAgent('t4'), true);
+});
+
+// 回归 P0(用户报“AI 说着说着,这一阶段的回复全没了,只剩刚发出的用户消息”):
+// pi 的 emit 逐调用订阅者且不吞异常(agent.js:417-419),而我们的事件 sink 就挂在其中。
+// 旧写法:投影层抛错 → 异常逃离 agent loop → runAgentTurn 的 catch 直接丢弃整轮转录。
+// 现在 sink 调用点兜异常:投影 bug 至多损失一次视图更新,轮次与内容必须完好。
+test('sink 抛异常不得炸掉轮次,Agent 转录须完整保留(回归 P0)', async () => {
+  installFaux();
+  setAgentEventSink(() => {
+    // 模拟畸形事件导致的投影异常
+    throw new TypeError("Cannot read properties of undefined (reading 'filter')");
+  });
+  faux.setResponses([fauxAssistantMessage('survives')]);
+
+  const result = await runAgentTurn({
+    ...baseOptions('t5', createUserMessage('hi')),
+    history: [],
+  });
+
+  assert.equal(result.errorMessage, undefined, '投影异常不得被当成轮次错误');
+  const transcript = (sessionAgentFor('t5')?.state.messages ?? []) as Array<
+    Parameters<typeof messageText>[0]
+  >;
+  assert.equal(transcript.length, 2, '用户消息 + 助手回复都必须留在转录里');
+  assert.equal(messageText(transcript[1]!), 'survives');
+  assert.ok(
+    result.messages.some((m) => messageText(m) === 'survives'),
+    '返回值仍含本轮助手回复(不得因投影异常而丢弃)',
+  );
 });
