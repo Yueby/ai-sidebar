@@ -383,25 +383,43 @@ export default function App() {
   const quietTailCount = appendedInFlight.filter((m) => m.role !== 'toolResult').length;
 
   // ——— P0 诊断(仅 DEV):AI 回复“盯着屏幕时凭空消失”需要知道三源中哪个掉了。
-  // 运行中可见条数一旦下降就留证据(live 文本 / in-flight / 会话转录分别计数)。
+  // 只记录可疑转换(live 清空但 in-flight 未接管 / in-flight 减少 / 转录减少 / 工具集变化),
+  // 不会因流式文本增长而刷屏;多次复现可拼出完整事件序列。
   const visibleCount = displayedMessages.length + (streamingContent ? 1 : 0);
-  const p0PrevRef = useRef<number | null>(null);
+  const p0PrevRef = useRef<{ visible: number; live: number; inFlight: number; msgs: number; tools: string } | null>(null);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
+    const now = {
+      visible: visibleCount,
+      live: streamingContent.length,
+      inFlight: appendedInFlight.length,
+      msgs: currentSession?.messages.length ?? 0,
+      tools: activeToolNames.join(','),
+    };
     const prev = p0PrevRef.current;
-    p0PrevRef.current = visibleCount;
-    if (prev !== null && isStreamingHere && visibleCount < prev) {
-      console.warn('[p0] 运行中可见条数下降', {
-        sessionId: currentSession?.id,
-        prev,
-        next: visibleCount,
-        sessionMsgs: currentSession?.messages.length ?? 0,
-        inFlight: appendedInFlight.length,
-        liveChars: streamingContent.length,
-        hasRun: isStreamingHere,
-      });
+    p0PrevRef.current = now;
+    if (!prev) return;
+    const events: string[] = [];
+    if (prev.live > 0 && now.live === 0 && now.inFlight <= prev.inFlight) {
+      events.push(`live 被清空但 in-flight 未接管 (${prev.live}→0, inFlight ${prev.inFlight}→${now.inFlight})`);
     }
-  }, [visibleCount, isStreamingHere, currentSession?.id, currentSession?.messages.length, appendedInFlight.length, streamingContent.length]);
+    if (now.inFlight < prev.inFlight) events.push(`in-flight 减少 ${prev.inFlight}→${now.inFlight}`);
+    if (now.msgs < prev.msgs) events.push(`会话转录减少 ${prev.msgs}→${now.msgs}`);
+    if (now.tools !== prev.tools) {
+      events.push(`工具集变化 [${prev.tools || '空'}]→[${now.tools || '空'}]`);
+    }
+    if (new Set(events).size > 0) {
+      console.warn(`[p0] ${currentSession?.id ?? '无会话'} hasRun=${isStreamingHere} | ${events.join(' | ')}`, now);
+    }
+  }, [
+    visibleCount,
+    isStreamingHere,
+    currentSession?.id,
+    currentSession?.messages.length,
+    appendedInFlight.length,
+    streamingContent.length,
+    activeToolNames,
+  ]);
 
   // 回合中途落盘兜底:面板即将隐藏/销毁时把进行中会话的转录补落盘(见 flushActiveTranscripts)
   useEffect(() => {
