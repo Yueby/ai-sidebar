@@ -69,6 +69,12 @@ export function createChatSlice(set: SliceSet): ChatSlice {
       set((s) => {
         if (!active) {
           if (!(sessionId in s.runs)) return s;
+          if (import.meta.env?.DEV) {
+            // P0 诊断:删除 run 条目会让 live 气泡与 in-flight 同时从屏幕消失(只剩 store 里的消息)
+            console.info(
+              `[p0:run] 删除 runs[${sessionId}] —— 若此刻 store 尚未含本轮消息,屏幕上就是“整轮消失”`,
+            );
+          }
           const next = { ...s.runs };
           delete next[sessionId];
           return { runs: next };

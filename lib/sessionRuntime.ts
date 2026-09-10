@@ -120,6 +120,13 @@ export class SessionRuntime {
       clearTimeout(this.throttleTimer);
       this.throttleTimer = null;
     }
+    if (import.meta.env?.DEV) {
+      // P0 诊断:beginRun 会把快照重置为空(含 inFlight)。若重置前 inFlight 非空且这些消息
+      // 还没进 store,屏幕上就会“整轮消失、只剩刚发出的用户消息”。
+      console.info(
+        `[p0:run] begin ${this.sessionId} seq=${seq} 重置前 inFlight=${this.snapshot.inFlight.length} liveChars=${this.snapshot.content.length}`,
+      );
+    }
     this.snapshot = { ...EMPTY_SNAPSHOT };
     this.emit();
     return { seq, signal: this.abortCtrl.signal };
@@ -140,6 +147,12 @@ export class SessionRuntime {
     this.abortCtrl = null;
     this.pendingContent = '';
     this.pendingThinking = '';
+    if (import.meta.env?.DEV) {
+      // P0 诊断:endRun 同样清空快照。正常情况下此刻 store 已含本轮全部消息(finalize 在前)。
+      console.info(
+        `[p0:run] end ${this.sessionId} seq=${seq} 清空前 inFlight=${this.snapshot.inFlight.length} liveChars=${this.snapshot.content.length}`,
+      );
+    }
     this.snapshot = { ...EMPTY_SNAPSHOT };
     this.emit();
     return true;
