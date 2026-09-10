@@ -113,7 +113,7 @@ export function ApprovalSection({
             <div className="text-xs font-semibold text-foreground truncate">
               {request.label || request.toolName}
             </div>
-            <p className="text-xs text-foreground/90 font-normal leading-relaxed break-all whitespace-pre-wrap">
+            <p className="text-xs text-foreground/90 font-normal leading-relaxed break-words whitespace-pre-wrap max-h-24 overflow-y-auto pr-1">
               {request.summary}
             </p>
           </div>
@@ -227,14 +227,14 @@ export function ApprovalSection({
         onSubmit={handleFormSubmit}
         className="gap-2.5"
       >
-        <QuestionnaireItem name="answer" required={false}>
+        <QuestionnaireItem name="answer" required={false} className="gap-2.5">
           {/* 标题栏: 图标 + 问题 (QuestionnaireTitle) */}
           <div className="flex items-start gap-2 min-w-0">
-            <div className="size-7 rounded-md border bg-muted flex items-center justify-center shrink-0 mt-0.5 text-muted-foreground">
+            <div className="size-7 rounded-md border border-border bg-muted flex items-center justify-center shrink-0 mt-0.5 text-muted-foreground">
               <HelpCircle className="size-4" />
             </div>
             <div className="flex-1 min-w-0 pt-0.5">
-              <QuestionnaireTitle className="text-xs font-semibold text-foreground leading-relaxed break-all whitespace-pre-wrap">
+              <QuestionnaireTitle className="text-xs font-semibold text-foreground leading-relaxed break-words whitespace-pre-wrap max-h-24 overflow-y-auto pr-1 !mb-0">
                 {request.question}
               </QuestionnaireTitle>
             </div>
@@ -242,8 +242,8 @@ export function ApprovalSection({
 
           {/* 选项模式 (choices 存在时: QuestionnaireChoices / QuestionnaireChoice) */}
           {hasChoices ? (
-            <div className="space-y-2 pl-9">
-              <QuestionnaireChoices className="max-h-52 overflow-y-auto pr-0.5 gap-1.5">
+            <div className="space-y-1.5 pl-9">
+              <QuestionnaireChoices className="max-h-44 overflow-y-auto pr-1 gap-1.5">
                 {request.options!.map((opt, i) => {
                   const isChecked = selectedChoice === opt && !isCustomInput;
                   return (
@@ -260,9 +260,9 @@ export function ApprovalSection({
                         setPendingAction('answer');
                         onAnswer(opt);
                       }}
-                      className="px-2.5 py-1.5 text-xs transition-colors"
+                      className="min-h-0 py-1.5 px-2.5 text-xs transition-colors"
                     >
-                      <span className="text-xs">{opt}</span>
+                      <span className="text-xs break-words">{opt}</span>
                     </QuestionnaireChoice>
                   );
                 })}
@@ -297,7 +297,7 @@ export function ApprovalSection({
                       }}
                       disabled={pendingAction !== null}
                       placeholder={i18n.t('approval.customPlaceholder')}
-                      className="h-6.5 text-[11px] flex-1 min-w-0 border-0 shadow-none focus-visible:ring-0 px-1.5 bg-transparent"
+                      className="min-h-0 h-6.5 text-[11px] flex-1 min-w-0 border-0 shadow-none focus-visible:ring-0 px-1.5 bg-transparent"
                       autoFocus
                     />
                   </div>
@@ -312,20 +312,20 @@ export function ApprovalSection({
                 onChange={(e) => setCustomText(e.target.value)}
                 disabled={pendingAction !== null}
                 placeholder={i18n.t('approval.customPlaceholder')}
-                className="h-7 text-xs bg-background/90"
+                className="min-h-0 h-7.5 text-xs px-2.5 py-1 bg-background/90"
                 autoFocus
               />
             </div>
           )}
 
           {/* 操作区: QuestionnaireActions 布局 QuestionnaireSkip + QuestionnaireSubmit */}
-          <QuestionnaireActions className="border-t border-border/40 pt-1.5">
+          <QuestionnaireActions className="min-h-0 border-t border-border/40 pt-1.5 gap-1.5">
             <QuestionnaireSkip
               size="sm"
               variant="ghost"
               disabled={pendingAction !== null}
               onClick={handleCancelClick}
-              className="h-6.5 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
+              className="min-h-0 h-6.5 text-[11px] px-2 text-muted-foreground hover:text-foreground gap-1"
             >
               {pendingAction === 'cancel' && <Spinner className="size-3 shrink-0" />}
               <span>{pendingAction === 'cancel' ? i18n.t('approval.skipping') : i18n.t('approval.skip')}</span>
@@ -338,7 +338,7 @@ export function ApprovalSection({
                 pendingAction !== null ||
                 (hasChoices ? !selectedChoice && !customText.trim() : !customText.trim())
               }
-              className="h-6.5 text-[11px] px-2.5 gap-1"
+              className="min-h-0 h-6.5 text-[11px] px-2.5 gap-1"
             >
               {pendingAction === 'answer' && <Spinner className="size-3 shrink-0" />}
               <span>{i18n.t('approval.submit')}</span>
