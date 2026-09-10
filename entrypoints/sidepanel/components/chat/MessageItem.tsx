@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { memo, useState, useMemo, useRef, useEffect } from 'react';
 import { i18n } from '#i18n';
 import {
   Copy,
@@ -155,7 +155,9 @@ function SmoothMarkdown({
   animate: boolean;
 }) {
   const shown = useSmoothText(text, animate);
-  return <MarkdownView content={shown} className={className} />;
+  // 逐字揭示期间不做语法高亮:文本每帧都在变,高亮是纯浪费(定型后 highlight=true 自动补上,
+  // 组件身份与子树结构不变,仅代码块从纯文本升级为着色,不重挂)
+  return <MarkdownView content={shown} className={className} highlight={!animate} />;
 }
 
 function renderUserMessageText(text: string, elementById?: Map<number, RefElementMeta> | null) {
@@ -575,7 +577,15 @@ function ToolCallCard({
   );
 }
 
-export function MessageItem({
+/**
+ * memo 化:流式期间 store 每 50ms 更新一次,若列表每一项都重渲染,
+ * 每条消息都会重跑 messageText 解析与整棵 markdown 子树评估(真机反馈:AI 回复时整体卡)。
+ * 数据 props 均为稳定引用(消息对象/数组由 store 持有),浅比较即可命中。
+ */
+/** DEV 性能诊断:MessageItem 渲染次数(流式期间应≈每次 flush 仅 live 一项,而非全部消息) */
+export const messageItemStats = { renders: 0 };
+
+export const MessageItem = memo(function MessageItem({
   message,
   isStreaming,
   isCancelled,
@@ -591,6 +601,7 @@ export function MessageItem({
   onEditResend,
   canEdit: canEditProp,
 }: MessageItemProps) {
+  if (import.meta.env?.DEV) messageItemStats.renders += 1;
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const rawText = messageText(message);
@@ -1144,4 +1155,4 @@ export function MessageItem({
       </Message>
     </div>
   );
-}
+});

@@ -15,6 +15,12 @@ import { highlightToHtml, normalizeShikiLang, onShikiReady } from '@/lib/shiki';
 interface MarkdownViewProps {
   content: string;
   className?: string;
+  /**
+   * 是否做语法高亮(默认 true)。
+   * 流式逐字揭示期间传 false:那一块文本每帧都在变,rAF 60fps × shiki 分词是 O(n²),
+   * 真机表现为“AI 回复时整体卡顿”;回复定型后自动升级为高亮。
+   */
+  highlight?: boolean;
 }
 
 /** 递归拉平 React 子树为纯文本(代码块复制与 shiki 输入用) */
@@ -92,6 +98,7 @@ function PreWithCopy({
 export const MarkdownView = memo(function MarkdownView({
   content,
   className = '',
+  highlight = true,
 }: MarkdownViewProps) {
   // 高亮器就绪后触发一次重渲染(未就绪期间渲染的纯文本代码块升级为 shiki)
   useShikiReady();
@@ -119,7 +126,7 @@ export const MarkdownView = memo(function MarkdownView({
               const lang = normalizeShikiLang(props.className);
               const text = extractText(props.children).replace(/\n$/, '');
               return (
-                <PreWithCopy html={highlightToHtml(text, lang)} copyText={text}>
+                <PreWithCopy html={highlight ? highlightToHtml(text, lang) : null} copyText={text}>
                   {codeEl}
                 </PreWithCopy>
               );

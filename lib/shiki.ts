@@ -90,18 +90,41 @@ export function onShikiReady(cb: () => void): () => void {
 /**
  * 同步高亮为 HTML(双主题 CSS 变量模式)。
  * 未就绪 / 语言不支持 / 异常 → null(调用方降级纯文本渲染)。
+ *
+ * 结果缓存:流式期间消息列表会高频重渲染,已完成的代码块不该反复分词——
+ * 无缓存时每个代码块每秒要被重新高亮 20 次(真机反馈:AI 回复时整体卡顿)。
+ * 上限 300 条 FIFO;命中/未命中计数供 DEV 诊断观察缓存效果。
  */
+const highlightCache = new Map<string, string | null>();
+const HIGHLIGHT_CACHE_MAX = 300;
+export const shikiStats = { calls: 0, hits: 0, ms: 0 };
+
 export function highlightToHtml(code: string, lang: string): string | null {
   if (!highlighter) return null;
+  shikiStats.calls += 1;
+  const key = `${lang}\u0000${code}`;
+  if (highlightCache.has(key)) {
+    shikiStats.hits += 1;
+    return highlightCache.get(key) ?? null;
+  }
+  const started = typeof performance !== 'undefined' ? performance.now() : 0;
+  let html: string | null = null;
   try {
-    return highlighter.codeToHtml(code, {
+    html = highlighter.codeToHtml(code, {
       lang: lang as BundledLanguage,
       themes: { light: 'github-light', dark: 'github-dark' } satisfies Record<string, BundledTheme>,
       defaultColor: false,
     });
   } catch {
-    return null;
+    html = null;
   }
+  if (started) shikiStats.ms += performance.now() - started;
+  if (highlightCache.size >= HIGHLIGHT_CACHE_MAX) {
+    const oldest = highlightCache.keys().next().value;
+    if (oldest !== undefined) highlightCache.delete(oldest);
+  }
+  highlightCache.set(key, html);
+  return html;
 }
 
 /** 语言名归一(react-markdown className 的 language-xxx → shiki lang;未知回退 text) */

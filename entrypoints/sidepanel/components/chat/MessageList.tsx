@@ -11,6 +11,8 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react';
 import type { AssistantMessage, ChatMessage, ToolResultMessage } from '@/lib/types';
+import { messageItemStats } from './MessageItem';
+import { shikiStats } from '@/lib/shiki';
 import type { GateRequest } from '@/entrypoints/sidepanel/gateAdapter';
 import type { QuickPromptsState } from '@/entrypoints/sidepanel/hooks/useQuickPrompts';
 import { EMPTY_USAGE } from '@/lib/storage';
@@ -224,6 +226,35 @@ export function MessageList({
     quietFrom,
     compaction,
   ]);
+
+  // 性能诊断(仅 DEV):流式期间每 2s 汇报渲染压力,用于验证「回复时卡顿」是否真的被压下去。
+  // 期望:rendersIn2s ≈ flush 次数(live 一项),shikiCalls ≈ 0(逐字揭示期间不高亮),历史项不动。
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isStreaming) return;
+    let prev = {
+      renders: messageItemStats.renders,
+      calls: shikiStats.calls,
+      hits: shikiStats.hits,
+      ms: shikiStats.ms,
+    };
+    const timer = setInterval(() => {
+      const now = {
+        renders: messageItemStats.renders,
+        calls: shikiStats.calls,
+        hits: shikiStats.hits,
+        ms: shikiStats.ms,
+      };
+      console.info('[perf] 流式 2s 压力', {
+        items: itemsToRender.length,
+        rendersIn2s: now.renders - prev.renders,
+        shikiCalls: now.calls - prev.calls,
+        shikiHits: now.hits - prev.hits,
+        shikiMs: Math.round(now.ms - prev.ms),
+      });
+      prev = now;
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [isStreaming, itemsToRender.length]);
 
   return (
     <div className="relative flex flex-1 min-h-0 flex-col overflow-hidden bg-background">

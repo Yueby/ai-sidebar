@@ -438,6 +438,16 @@ export default function App() {
   // 编辑重发走全局单 run(handleEditResend 的 busy 守卫):与按钮使能保持一致,避免可点但无效
   const canEditMessage = !isStreamingHere && !isGateHere && !isCompactingHere;
 
+  // 编辑重发回调必须**身份稳定**:它传给 memo 化的消息列表,若每次渲染新建箭头函数,
+  // 列表每一项都会被强制重渲(流式期间 20 次/秒 × 全部消息 = 可感卡顿)。
+  // 用 latest-ref 写法:身份永远不变,调用时取最新闭包(无失效风险)。
+  const editResendRef = useRef({ followUps, chat });
+  editResendRef.current = { followUps, chat };
+  const handleEditResendForList = useCallback((timestamp: number, newText: string) => {
+    editResendRef.current.followUps.clearSuggestions();
+    void editResendRef.current.chat.handleEditResend(timestamp, newText);
+  }, []);
+
   // 新会话快捷指令:空会话展示时异步生成(模型失败静默回退静态四条)
   const quickPrompts = useQuickPrompts(
     settings,
@@ -628,10 +638,7 @@ export default function App() {
             }
             onOpenSettings={handleOpenSettings}
             quickPrompts={quickPrompts}
-            onEditResend={(timestamp, newText) => {
-              followUps.clearSuggestions();
-              void chat.handleEditResend(timestamp, newText);
-            }}
+            onEditResend={handleEditResendForList}
             canEditMessage={canEditMessage}
           />
 
