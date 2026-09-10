@@ -9,6 +9,8 @@ import { createClickElementToolDefinition } from './click-element';
 import { createFillElementToolDefinition } from './fill-element';
 import { createScrollPageToolDefinition } from './scroll-page';
 import { createOpenPageToolDefinition } from './open-page';
+import { createActivatePageToolDefinition } from './activate-page';
+import { createClosePageToolDefinition } from './close-page';
 import { createScreenshotPageToolDefinition } from './screenshot-page';
 import { createFetchUrlToolDefinition } from './fetch-url';
 import { createWebSearchToolDefinition } from './web-search';
@@ -70,7 +72,9 @@ export function createPageDiscoveryTools(options: GetToolsOptions): AgentTool[] 
 }
 
 /** 页面动作组:click/fill(confirm + 会话级 grant,grantScope=工具@tabId)+ scroll(safe);
- *  寻址与 search_element 同源(role+name+序号),默认 focused tab、无条件注册。
+ *  寻址与 search_element 同源(role+name+序号),默认 focused tab、无条件注册;
+ *  open/activate/close = 标签页生命周期(open: safe;activate: safe,截图与前台读取的前置;
+ *  close: confirm 且仅限本 agent 开启的 tab)。
  *  screenshot_page(confirm+grant)仅 vision 模型注册(非 vision 截图不可见,不占工具面) */
 export function createPageActionTools(options: GetToolsOptions): AgentTool[] {
   const tools: AgentTool[] = [
@@ -78,6 +82,8 @@ export function createPageActionTools(options: GetToolsOptions): AgentTool[] {
     createFillElementToolDefinition(options.sessionId),
     createScrollPageToolDefinition(),
     createOpenPageToolDefinition(options.sessionId),
+    createActivatePageToolDefinition(),
+    createClosePageToolDefinition(options.sessionId),
   ];
   if (options.canUseImage) {
     tools.push(createScreenshotPageToolDefinition(options.refTabs ?? [], options.sessionId));

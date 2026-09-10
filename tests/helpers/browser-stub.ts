@@ -40,4 +40,7 @@ const eventStub = { addListener: noop, removeListener: noop, hasListener: () => 
     onDetach: eventStub,
   },
   sidePanel: { setPanelBehavior: asyncUndefined },
+  // @wxt-dev/i18n 在浏览器外调用 getMessage 会崩;stub 成「返回 key」
+  // 足以让 toolLabel 等纯拼接路径在 node 测试里通过。
+  i18n: { getMessage: (key: string) => key },
 };
