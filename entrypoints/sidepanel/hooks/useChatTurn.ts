@@ -22,6 +22,7 @@ import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
 import { parsePageRefs } from '@/lib/pageRefs';
 import { runtimeFor } from '@/lib/sessionRuntime';
+import type { SessionRuntime } from '@/lib/sessionRuntime';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
 
@@ -56,6 +57,39 @@ function mergeFinalizedMessages(
     );
   }
   return messages;
+}
+
+/**
+ * 异常/中止路径的转录保全。
+ *
+ * 旧行为是 catch 里直接 rt.clearInFlight(seq):整轮 Agent 转录(历史 + 本轮已完成的助手消息)
+ * 被当垃圾丢掉,store 里只剩发送时写入的那条用户消息 —— 用户可见症状正是“AI 说着说着,
+ * 这一阶段的回复全没了,只剩我刚发出去的用户消息”。Agent 自持转录即真相源,错误不是丢数据的理由。
+ */
+function persistTranscriptAfterFailure(sid: string, seq: number, rt: SessionRuntime): void {
+  const latest = useAppStore.getState().sessions.find((s) => s.id === sid);
+  const transcript = sessionAgentFor(sid)?.state.messages as ChatMessage[] | undefined;
+  if (!latest || !transcript?.length) {
+    // 拿不到转录(会话已被删/替换)时维持旧行为:清空 in-flight,避免悬空气泡
+    rt.clearInFlight(seq);
+    return;
+  }
+  const { messages, shrank } = mergeTranscriptKeepingHistory(latest.messages, transcript);
+  if (shrank) {
+    console.error(
+      `[turn:${sid}] failure-finalize: Agent transcript shrank ` +
+        `(${latest.messages.length} → ${transcript.length}); kept existing.`,
+    );
+  }
+  const finalized: Session = { ...latest, messages, updatedAt: Date.now() };
+  const latestDraft = useAppStore.getState().sessions.find((s) => s.id === sid)?.draft;
+  if (latestDraft) finalized.draft = latestDraft;
+  dropPendingDraftSave(sid);
+  useAppStore.getState().setSessions(
+    useAppStore.getState().sessions.map((s) => (s.id === sid ? finalized : s)),
+  );
+  rt.clearInFlight(seq);
+  void persistFinalizedSession(finalized);
 }
 
 /**
@@ -233,7 +267,8 @@ export function useChatTurn(params: {
       } catch (err: unknown) {
         if (!rt.isOwner(seq)) return;
         autoCompactPending = false;
-        rt.clearInFlight(seq);
+        // 异常同样不得丢本轮转录:以 Agent 转录落盘(旧行为直接清空 → 整轮回复消失)
+        persistTranscriptAfterFailure(sid, seq, rt);
         if (signal.aborted) rt.markCancelled(seq);
         else setErrorMessage(getErrorMessage(err) || '请求失败,请检查网络或提供商配置', sid);
       } finally {
@@ -391,8 +426,9 @@ export function useChatTurn(params: {
           return;
         }
         autoCompactPending = false;
-        // 异常路径不落盘转录,in-flight 无处可归 → 清空避免残留悬空气泡
-        rt.clearInFlight(seq);
+        // 异常路径保全 Agent 已产出的转录:旧行为在此直接清空 in-flight、不落盘,
+        // 于是“这一阶段的回复”整段消失、只剩发送时的用户消息。
+        persistTranscriptAfterFailure(sid, seq, rt);
         if (signal.aborted) {
           rt.markCancelled(seq);
         } else {

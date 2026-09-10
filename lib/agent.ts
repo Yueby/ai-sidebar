@@ -415,7 +415,13 @@ function ensureSessionAgent(options: RunAgentOptions): Agent {
     // epoch 校验:实例被替换/释放后,旧实例的迟到事件直接丢弃。
     agent.subscribe((event) => {
       if (sessionAgents.get(sid) !== entry) return;
-      agentEventSink?.(sid, event);
+      try {
+        agentEventSink?.(sid, event);
+      } catch (err: unknown) {
+        // 投影层出错绝不能回流进 Agent 循环:那样整轮(含已完成的回复)会被上层 catch 丢弃,
+        // 用户看到的就是“AI 说着说着,这一阶段的回复全没了”。视图少更新一次是小事,丢内容不是。
+        console.error('[agent] event sink failed:', event?.type, err);
+      }
     });
   }
   return agent;

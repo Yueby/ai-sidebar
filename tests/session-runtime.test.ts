@@ -134,3 +134,23 @@ test('user message_end 经 bridgeAgentEvent 进入 in-flight 保持可见,同一
   // 不污染 live 流式态:后续 assistant 增量仍属同一快照字段
   disposeRuntime(sid);
 });
+
+// 回归:投影桥抛异常会沿事件链炸掉整轮 Agent 运行(上层 catch 曾经直接丢弃整轮转录)。
+// 桥必须对畸形负载自防御:宁少更新一次视图,不得把异常抛回 Agent。
+test('bridgeAgentEvent 对畸形 content 不抛异常(历史事故:整轮回复消失)', () => {
+  const sid = 'bridge-malformed';
+  const rt = runtimeFor(sid);
+  rt.beginRun();
+
+  const events = [
+    { type: 'message_update', message: { role: 'assistant', content: undefined } },
+    { type: 'message_update', message: { role: 'assistant', content: null } },
+    { type: 'message_update', message: { role: 'assistant', content: 'x' } },
+  ] as unknown as AgentEvent[];
+
+  for (const event of events) {
+    assert.doesNotThrow(() => bridgeAgentEvent(sid, event), '畸形 message_update 不得抛异常');
+  }
+  assert.equal(rt.getSnapshot().content, '', '畸形负载不得产生幻影内容');
+  disposeRuntime(sid);
+});

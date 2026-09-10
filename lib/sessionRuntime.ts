@@ -334,11 +334,14 @@ export function bridgeAgentEvent(sessionId: string, event: AgentEvent): void {
   const seq = rt.currentSeq;
   if (event.type === 'message_update' && event.message.role === 'assistant') {
     if (!rt.isOwner(seq)) return;
-    const text = event.message.content
+    // content 形状防御:某些 provider/阶段的 message_update 可能不带数组 content,
+    // 直接 .filter 会抛 TypeError 并沿事件链炸掉整轮(历史事故)。
+    const content = Array.isArray(event.message.content) ? event.message.content : [];
+    const text = content
       .filter((b) => b.type === 'text')
       .map((b) => b.text)
       .join('');
-    const thinking = event.message.content
+    const thinking = content
       .filter((b) => b.type === 'thinking')
       .map((b) => b.thinking)
       .join('');
