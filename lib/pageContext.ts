@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import type { PageContext } from './types';
 import {
   PAGE_ACTION_MESSAGE,
@@ -373,19 +374,19 @@ export async function startPickElement(tabId: number): Promise<void> {
     const url = await getTabUrl(tabId);
     const restricted = url ? classifyRestrictedUrl(url) : null;
     if (restricted === 'internal') {
-      throw new Error('无法在该页面启动元素选择:浏览器内部页面无法注入扩展脚本');
+      throw new Error(i18n.t('pick.blockedInternal'));
     }
     if (restricted === 'webstore') {
-      throw new Error('无法在该页面启动元素选择:Chrome 应用商店页面受 Chrome 保护,禁止扩展注入');
+      throw new Error(i18n.t('pick.blockedStore'));
     }
     const injected = await ensureContentScript(tabId);
     if (!injected) {
-      throw new Error('无法在该页面启动元素选择:此页面不允许扩展注入脚本');
+      throw new Error(i18n.t('pick.blockedPage'));
     }
     try {
       await sendPickStart(tabId);
     } catch {
-      throw new Error('无法在该页面启动元素选择:页面尚未加载完成或已被关闭');
+      throw new Error(i18n.t('pick.pageNotReady'));
     }
   }
 }

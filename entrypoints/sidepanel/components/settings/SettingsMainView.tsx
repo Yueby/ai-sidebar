@@ -13,7 +13,7 @@ import {
   Layers,
 } from 'lucide-react';
 import type { Settings, ProviderConfig, AuxThinkingLevel, ReasoningLevel } from '@/lib/types';
-import { REASONING_LEVEL_LABELS } from '@/lib/types';
+import { reasoningLabelText } from '@/lib/reasoningLabels';
 import { apiTypeLabel, getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { toast } from '@/components/ui/toast';
 import { testConnection } from '@/lib/models';
@@ -80,11 +80,12 @@ interface SettingsMainViewProps {
 
 type SettingsTab = 'providers' | 'models' | 'prompt' | 'search' | 'appearance' | 'backup' | 'about';
 
-const AUX_THINKING_OPTIONS: { value: AuxThinkingLevel; label: string }[] = [
-  { value: 'off', label: REASONING_LEVEL_LABELS.off.full },
-  { value: 'low', label: REASONING_LEVEL_LABELS.low.full },
-  { value: 'medium', label: REASONING_LEVEL_LABELS.medium.full },
-  { value: 'high', label: REASONING_LEVEL_LABELS.high.full },
+/** 辅助模型思考档位选项:文案在渲染时按当前语言求值(模块级常量会固定成加载时语言) */
+const auxThinkingOptions = (): { value: AuxThinkingLevel; label: string }[] => [
+  { value: 'off', label: reasoningLabelText('off') },
+  { value: 'low', label: reasoningLabelText('low') },
+  { value: 'medium', label: reasoningLabelText('medium') },
+  { value: 'high', label: reasoningLabelText('high') },
 ];
 
 const REASONING_DISPLAY_ORDER: ReasoningLevel[] = [
@@ -163,7 +164,7 @@ export function SettingsMainView({
 
   // 辅助思考等级 items
   const auxThinkingSelectItems = useMemo(() => {
-    return AUX_THINKING_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }));
+    return auxThinkingOptions().map((opt) => ({ value: opt.value, label: opt.label }));
   }, []);
 
   // 渲染按提供商分组的模型选项
@@ -235,7 +236,7 @@ export function SettingsMainView({
     { value: 'off', label: i18n.t('settings.assignment.thinkingOff') },
     ...chatSupportedLevels.map((lvl) => ({
       value: lvl,
-      label: REASONING_LEVEL_LABELS[lvl]?.full || lvl,
+      label: reasoningLabelText(lvl),
     })),
   ], [chatSupportedLevels]);
 
@@ -682,7 +683,7 @@ export function SettingsMainView({
                             </SelectItem>
                             {chatSupportedLevels.map((lvl) => (
                               <SelectItem key={lvl} value={lvl}>
-                                {REASONING_LEVEL_LABELS[lvl]?.full || lvl}
+                                {reasoningLabelText(lvl)}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -759,7 +760,7 @@ export function SettingsMainView({
                             </TooltipContent>
                           </Tooltip>
                           <SelectContent align="end" className="w-28">
-                            {AUX_THINKING_OPTIONS.map((opt) => (
+                            {auxThinkingOptions().map((opt) => (
                               <SelectItem key={opt.value} value={opt.value}>
                                 {opt.label}
                               </SelectItem>
@@ -838,7 +839,7 @@ export function SettingsMainView({
                             </TooltipContent>
                           </Tooltip>
                           <SelectContent align="end" className="w-28">
-                            {AUX_THINKING_OPTIONS.map((opt) => (
+                            {auxThinkingOptions().map((opt) => (
                               <SelectItem key={opt.value} value={opt.value}>
                                 {opt.label}
                               </SelectItem>

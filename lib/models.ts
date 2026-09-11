@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import type { ModelConfig, ProviderConfig } from './types';
 import { normalizeBaseUrl } from './providers';
 
@@ -23,7 +24,7 @@ export async function fetchProviderModels(
     } catch {
       // 无响应体
     }
-    throw new Error(`拉取模型列表失败 (HTTP ${res.status})${detail ? `: ${detail}` : ''}`);
+    throw new Error(`${i18n.t('errors.modelsFetchFailed', { status: res.status })}${detail ? `: ${detail}` : ''}`);
   }
   const json = (await res.json()) as { data?: Array<{ id?: string }> };
   return (json.data ?? [])
@@ -112,5 +113,5 @@ export async function testConnection(
   p: Pick<ProviderConfig, 'api' | 'baseUrl' | 'apiKey'>,
 ): Promise<string> {
   const ids = await fetchProviderModels(p);
-  return `连接成功,共 ${ids.length} 个可用模型`;
+  return i18n.t('errors.modelsFetchOk', { count: ids.length });
 }

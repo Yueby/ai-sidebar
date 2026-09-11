@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
 import {
@@ -256,7 +257,7 @@ function buildAgentInputs(options: RunAgentOptions, transcript: ChatMessage[]): 
   const models = createModels();
   models.setProvider(buildProvider(options.provider));
   const model = agentOverrides?.resolveModel?.(options) ?? models.getModel(options.provider.id, options.modelId);
-  if (!model) throw new Error(`模型 ${options.modelId} 不存在,请检查提供商配置`);
+  if (!model) throw new Error(i18n.t('errors.modelMissing', { model: options.modelId }));
 
   // 工具白名单 = 当前草稿引用 ∪ 历史 <page-refs> 块引用。
   // 后者保证「追问旧页面」时(草稿已清空)工具句柄仍在,LLM 能读此前引用的标签页/元素。
@@ -491,7 +492,7 @@ async function runTurnCore(
     .find((m): m is AssistantMessage => m.role === 'assistant');
   const errorMessage =
     lastAssistant?.stopReason === 'error'
-      ? lastAssistant.errorMessage || '请求失败,请检查提供商配置'
+      ? lastAssistant.errorMessage || i18n.t('errors.requestFailed')
       : undefined;
 
   return { messages, newMessages, errorMessage };

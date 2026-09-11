@@ -9,6 +9,8 @@
  * 扩展新权限 = 在对应表加定义,设置页签自动跟随;不采用运行时授权流程(2026-09 备案)。
  */
 
+import { i18n } from '#i18n';
+
 /** 权限定义(UI 展示 + 可扩展注册表) */
 export interface PermissionDef {
   id: string;
@@ -25,39 +27,38 @@ export const INSTALL_PERMISSIONS: PermissionDef[] = [
   {
     id: 'storage',
     raw: 'storage',
-    name: '本地存储',
-    description: '保存你的提供商配置与 API Key(仅存本机,不上传)',
+    name: i18n.t('permissions.storage.name'),
+    description: i18n.t('permissions.storage.description'),
   },
   {
     id: 'sidePanel',
     raw: 'sidePanel',
-    name: '侧边栏',
-    description: '在浏览器侧边栏展示对话界面',
+    name: i18n.t('permissions.sidePanel.name'),
+    description: i18n.t('permissions.sidePanel.description'),
   },
   {
     id: 'scripting',
     raw: 'scripting',
-    name: '脚本注入',
-    description: '向网页注入读取与交互脚本(页面读取、元素点击/填充的执行基础)',
+    name: i18n.t('permissions.scripting.name'),
+    description: i18n.t('permissions.scripting.description'),
   },
   {
     id: 'activeTab',
     raw: 'activeTab',
-    name: '当前标签页',
-    description: '你点击工具栏图标时,对当前标签页的临时访问授权',
+    name: i18n.t('permissions.activeTab.name'),
+    description: i18n.t('permissions.activeTab.description'),
   },
   {
     id: 'userScripts',
     raw: 'userScripts',
-    name: '用户脚本',
-    description:
-      'execute_js 的首选执行通道:隔离环境、不受页面 CSP 限制(Chrome 135+);面板启动时会引导开启,未开启时自动降级执行',
+    name: i18n.t('permissions.userScripts.name'),
+    description: i18n.t('permissions.userScripts.description'),
   },
   {
     id: 'unlimitedStorage',
     raw: 'unlimitedStorage',
-    name: '无限存储',
-    description: '本地会话历史不设容量上限',
+    name: i18n.t('permissions.unlimitedStorage.name'),
+    description: i18n.t('permissions.unlimitedStorage.description'),
   },
 ];
 
@@ -65,9 +66,8 @@ export const INSTALL_PERMISSIONS: PermissionDef[] = [
 export const WEB_ACCESS_PERMISSION: PermissionDef = {
   id: 'web-access',
   raw: '<all_urls>',
-  name: '网页访问',
-  description:
-    '读取与操作网页的宿主权限:页面截图与图片兜底取图的硬依赖;页面读取、元素清单、点击/填充由 content_scripts 声明同样随安装授予。',
+  name: i18n.t('permissions.webAccess.name'),
+  description: i18n.t('permissions.webAccess.description'),
 };
 
 /** 直达扩展详情页(「允许运行用户脚本」开关所在;Chrome 无 API 可代开,只能引导) */

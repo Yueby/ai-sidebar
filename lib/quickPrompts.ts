@@ -5,6 +5,7 @@
  * 起步建议;任何失败(无模型/请求失败/解析失败)由调用方回退 FALLBACK_PROMPTS,
  * 不产生错误 UI。Model-facing 文本一律英文,建议正文语言跟随页面语言(由模型决定)。
  */
+import { i18n } from '#i18n';
 import { createModels, type AssistantMessage, type Context, type SimpleStreamOptions } from '@earendil-works/pi-ai';
 import type { Settings } from '@/lib/types';
 import { resolveAuxModel } from '@/lib/providers';
@@ -21,24 +22,24 @@ export interface QuickPrompt {
 /** 生成失败/无模型时的静态兜底(原固定四条) */
 export const FALLBACK_PROMPTS: QuickPrompt[] = [
   {
-    title: '总结此网页',
-    desc: '提炼 3-5 个核心要点',
-    prompt: '请用清晰结构总结当前网页的核心内容,列出 3-5 个关键要点。',
+    title: i18n.t('quickPrompts.summarize.title'),
+    desc: i18n.t('quickPrompts.summarize.desc'),
+    prompt: i18n.t('quickPrompts.summarize.prompt'),
   },
   {
-    title: '提炼核心观点',
-    desc: '分析论点与核心逻辑',
-    prompt: '提炼当前网页的核心观点和结论,分析其主要论据与支持论点。',
+    title: i18n.t('quickPrompts.viewpoints.title'),
+    desc: i18n.t('quickPrompts.viewpoints.desc'),
+    prompt: i18n.t('quickPrompts.viewpoints.prompt'),
   },
   {
-    title: '通俗解释概念',
-    desc: '用平实语言拆解内容',
-    prompt: '用通俗易懂、生动的语言解释当前网页所讨论的主题和关键概念。',
+    title: i18n.t('quickPrompts.explain.title'),
+    desc: i18n.t('quickPrompts.explain.desc'),
+    prompt: i18n.t('quickPrompts.explain.prompt'),
   },
   {
-    title: '提取行动建议',
-    desc: '提炼可落地的待办事项',
-    prompt: '根据当前网页的内容,提取出可以落地的实用行动建议或待办清单。',
+    title: i18n.t('quickPrompts.actions.title'),
+    desc: i18n.t('quickPrompts.actions.desc'),
+    prompt: i18n.t('quickPrompts.actions.prompt'),
   },
 ];
 

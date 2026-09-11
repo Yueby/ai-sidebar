@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import type { ChatMessage, Session, SessionCompaction, SessionDraft } from './types';
 
 /**
@@ -259,7 +260,7 @@ export function jsonlToSession(jsonl: string): ParsedSessionRecord {
     id: header.id,
     createdAt: Date.parse(header.timestamp) || lastTs,
     updatedAt: lastTs,
-    title: title || '新会话',
+    title: title || i18n.t('sessionTitle.default'),
     customTitle,
     messages,
     compaction,

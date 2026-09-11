@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { ModelConfig, ReasoningLevel } from '@/lib/types';
-import { REASONING_LEVELS, REASONING_LEVEL_LABELS } from '@/lib/types';
+import { REASONING_LEVELS } from '@/lib/types';
+import { reasoningLabel } from '@/lib/reasoningLabels';
 import { i18n } from '#i18n';
 import {
   Dialog,
@@ -23,10 +24,10 @@ interface ModelConfigDialogProps {
   onSave: (model: ModelConfig) => void;
 }
 
-// 候选档位 = 除 off 外的全部等级,文案统一取自 lib 的 REASONING_LEVEL_LABELS
+// 候选档位 = 除 off 外的全部等级,文案统一取自 lib/reasoningLabels(收敛 i18n)
 const CANDIDATE_REASONING_LEVELS: Array<{ value: ReasoningLevel; label: string }> = REASONING_LEVELS.filter(
   (l) => l !== 'off',
-).map((value) => ({ value, label: REASONING_LEVEL_LABELS[value].full }));
+).map((value) => ({ value, label: reasoningLabel(value).full }));
 
 export function ModelConfigDialog({
   open,

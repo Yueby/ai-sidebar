@@ -163,6 +163,13 @@ slash:
   aria: Quick commands
   title: Quick commands
   hint: Tab to complete · Enter to run
+  compact:
+    description: Compact the context — fold earlier conversation into a structured summary
+    argumentHint: '[extra focus]'
+  clear:
+    description: Clear every message in this session
+  help:
+    description: Show the available slash commands
 
 gate:
   title: Enable "Allow User Scripts"
@@ -451,3 +458,124 @@ sync:
     invalidFile: Not a valid backup file
     corruptFile: The backup file is corrupted or incomplete
     streaming: A reply is in progress — finish or stop it before restoring
+
+reasoning:
+  off:
+    short: Off
+    full: Off
+  minimal:
+    short: Minimal
+    full: Minimal
+  low:
+    short: Low
+    full: Low
+  medium:
+    short: Medium
+    full: Medium
+  high:
+    short: High
+    full: High
+  xhigh:
+    short: Very high
+    full: Very high
+  max:
+    short: Max
+    full: Max
+
+errors:
+  modelMissing: Model {model} was not found — check the provider configuration
+  noProvider: Configure an AI provider and model in settings first
+  requestFailed: The request failed — check your network and provider configuration
+  modelsFetchFailed: Failed to fetch the model list (HTTP {status})
+  modelsFetchOk: Connected — {count} models available
+
+pick:
+  tabNotFound: Cannot start element picking — that tab was not found
+  activateFailed: Cannot activate that tab, so element picking was cancelled
+  notRegularPage: The current page is not a regular web page, so elements cannot be picked
+  startFailed: Failed to start element picking — please try again
+  invalidResult: Element picking returned an invalid result — please pick again
+  unknownTab: Could not tell which tab the element belongs to — please pick again
+  refMetaFailed: Could not add the element reference — its tab is unreachable and may have been closed
+  refSaveFailed: Could not add the element reference — saving failed, please try again
+  blockedInternal: Cannot start element picking — browser-internal pages do not allow extension scripts
+  blockedStore: Cannot start element picking — Chrome protects the Web Store from extension injection
+  blockedPage: Cannot start element picking — this page does not allow extension scripts
+  pageNotReady: Cannot start element picking — the page is still loading or was closed
+
+quickPrompts:
+  summarize:
+    title: Summarize this page
+    desc: Pull out 3-5 key points
+    prompt: Summarize the main content of the current page in a clear structure, listing 3-5 key points.
+  viewpoints:
+    title: Extract the core argument
+    desc: Analyse the claims and reasoning
+    prompt: Extract the core claims and conclusions of the current page and analyse its main evidence and supporting arguments.
+  explain:
+    title: Explain the concepts plainly
+    desc: Break the content down
+    prompt: Explain the topics and key concepts of the current page in plain, vivid language.
+  actions:
+    title: Suggest action items
+    desc: Turn this into a to-do list
+    prompt: Based on the current page, suggest practical, actionable next steps or a to-do list.
+
+apiType:
+  openaiCompletions: OpenAI-compatible · Chat Completions
+  openaiResponses: OpenAI-compatible · Responses
+  anthropicMessages: Anthropic Messages
+
+sessionTitle:
+  default: New chat
+  untitled: Untitled session
+
+permissions:
+  webAccess:
+    name: Web access
+    description: Host permission to read and operate on web pages — required for page screenshots and for the image fallback capture; page reading, element listing and click/fill come from the content_scripts declaration, granted at install as well.
+  storage:
+    name: Local storage
+    description: Stores your provider configuration and API keys (on this machine only, never uploaded)
+  sidePanel:
+    name: Side panel
+    description: Shows the chat interface in the browser side panel
+  scripting:
+    name: Script injection
+    description: Injects reading and interaction scripts into pages (the basis for page reading and element click/fill)
+  activeTab:
+    name: Active tab
+    description: Temporary access to the current tab when you click the toolbar icon
+  userScripts:
+    name: User scripts
+    description: The preferred channel for execute_js — isolated context, exempt from page CSP (Chrome 135+); the panel offers to enable it at startup and falls back when it is off
+  unlimitedStorage:
+    name: Unlimited storage
+    description: No size cap on local session history
+
+exportFile:
+  image: '[image]'
+  pickedElement: '📎 Referenced element: {label}'
+  unknownElement: unknown element
+  omitted: '…(middle omitted, {count} characters in total)…'
+  args: '**Arguments**'
+  result: '**Result**'
+  errorSuffix: ' (error)'
+  empty: '(empty)'
+  noResult: '**Result**: no matching result message'
+  toolCall: '🔧 Tool call: {name}'
+  toolResult: '🔧 Tool result: {name}'
+  thinking: '💭 Thinking'
+  turnError: '> ⚠️ This turn failed: {message}'
+  exportedAt: '- Exported: {time}'
+  createdAt: '- Session created: {time}'
+  messageCount: '- Messages: {count}'
+  compactedNote: '- Note: this session was compacted; earlier content exists as a summary and is not part of this export'
+  refTab: '- Tab {id}: {title} — {url}'
+  noTitle: '(untitled)'
+  refs: '📎 Pages referenced in this session'
+  userRole: '## 🧑 User'
+  assistantRole: '## 🤖 Assistant'
+  model: '*Model: {model}*'
+  emptyReply: '*(empty reply)*'
+  filenameFallback: Session

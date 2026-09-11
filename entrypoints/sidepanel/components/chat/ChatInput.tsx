@@ -20,7 +20,7 @@ import {
 import type { FollowUpSuggestion } from '@/lib/followUpSuggestions';
 import type { QueuedMessage } from '../../store/chatSlice';
 import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
-import { REASONING_LEVEL_LABELS } from '@/lib/types';
+import { reasoningLabel } from '@/lib/reasoningLabels';
 import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
@@ -89,7 +89,7 @@ interface ChatInputProps {
   overlap?: boolean;
 }
 
-const REASONING_LABEL_MAP = REASONING_LEVEL_LABELS;
+const REASONING_LABEL_MAP = reasoningLabel;
 
 // 菜单展示顺序:按档位升序(能力数组顺序来自模型配置,不保证有序;未知档沉底)
 const REASONING_DISPLAY_ORDER: ReasoningLevel[] = ['off', 'low', 'medium', 'high', 'max'];
@@ -383,7 +383,7 @@ export function ChatInput({
     ? resolveReasoningLevel(activeModel, settings.reasoningLevel)
     : 'off';
   const currentReasoningShort =
-    REASONING_LABEL_MAP[effectiveReasoningLevel]?.short || '关';
+    REASONING_LABEL_MAP(effectiveReasoningLevel).short;
 
   // Dropdown menu content for the unified [+] add menu
   const renderAddTabMenuContent = (align: 'start' | 'end' = 'start') => (
@@ -821,7 +821,7 @@ export function ChatInput({
                   {/* Supported levels */}
                   {sortReasoningLevels(supportedLevels).map((lvl) => {
                     const isSelected = effectiveReasoningLevel === lvl;
-                    const label = REASONING_LABEL_MAP[lvl]?.full || lvl;
+                    const label = REASONING_LABEL_MAP(lvl).full;
                     return (
                       <DropdownMenuItem
                         key={lvl}

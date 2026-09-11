@@ -130,7 +130,7 @@ export function useSessionManager() {
 
       if (initialSessions.length === 0) {
         // 首个会话 = 新会话(当前页由发送时聚焦注入承载,决策 13 修订)
-        const newSess = createSession('新会话');
+        const newSess = createSession();
         initialSessions = [newSess];
         initialActiveId = newSess.id;
         await saveSession(newSess);
@@ -300,7 +300,7 @@ export function useSessionManager() {
     // 会话隔离:新建仅新增视图,后台门控/队列按会话归属保留
     flushDraftSaves();
     // 删空后自动补一个新会话(当前页由发送时聚焦注入承载)
-    const newSess = createSession('新会话');
+    const newSess = createSession();
     const next = [newSess, ...useAppStore.getState().sessions];
     setSessions(next);
     setActiveSessionId(newSess.id);
@@ -329,7 +329,7 @@ export function useSessionManager() {
           nextActiveId = remaining[0]!.id;
         } else {
           // 删空后自动补一个新会话(当前页由发送时聚焦注入承载)
-          const fresh = createSession('新会话');
+          const fresh = createSession();
           remaining.push(fresh);
           nextActiveId = fresh.id;
           await saveSession(fresh);

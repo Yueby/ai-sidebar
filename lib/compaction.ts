@@ -8,6 +8,7 @@ import {
   type SimpleStreamOptions,
   type Usage,
 } from '@earendil-works/pi-ai';
+import { i18n } from '#i18n';
 import type { ChatMessage } from './types';
 import { estimateContextTokens, estimateTokens } from './contextTokens';
 
@@ -177,7 +178,7 @@ export async function runCompact(opts: {
   const models = createModels();
   models.setProvider(opts.provider);
   const model = models.getModel(opts.provider.id, opts.modelId);
-  if (!model) throw new Error(`模型 ${opts.modelId} 不存在,请检查提供商配置`);
+  if (!model) throw new Error(i18n.t('errors.modelMissing', { model: opts.modelId }));
 
   const window = model.contextWindow > 0 ? model.contextWindow : 128000;
   const tokensBefore = estimateContextTokens(opts.messages, window).tokens;

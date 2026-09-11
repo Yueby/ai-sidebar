@@ -7,6 +7,7 @@
  * - 工具结果文本截断(TOOL_OUTPUT_LIMIT),图片块以 [图片] 占位
  * - 纯函数 buildSessionMarkdown + downloadSessionMarkdown(Blob 触发浏览器下载)
  */
+import { i18n } from '#i18n';
 import type { Session } from '@/lib/types';
 import type { AssistantMessage, ToolResultMessage, UserMessage } from '@earendil-works/pi-ai';
 import { collectPageRefs } from './pageRefs';
@@ -30,7 +31,7 @@ function userContentText(m: UserMessage): string {
       : m.content
           .map((b) => {
             if (b.type === 'text') return b.text;
-            if (b.type === 'image') return '[图片]';
+            if (b.type === 'image') return i18n.t('exportFile.image');
             return '';
           })
           .join('\n');
@@ -41,7 +42,7 @@ function userContentText(m: UserMessage): string {
       const label = attr('label');
       const tagName = attr('tagName');
       const tabId = attr('tabId');
-      return `📎 引用元素:${label || tagName || '未知元素'}${tabId ? `(tab ${tabId})` : ''}`;
+      return `${i18n.t('exportFile.pickedElement', { label: label || tagName || i18n.t('exportFile.unknownElement') })}${tabId ? ` (tab ${tabId})` : ''}`;
     })
     .trim();
 }
@@ -57,23 +58,23 @@ function truncate(text: string, limit: number): string {
   const tailKeep = Math.min(TOOL_OUTPUT_TAIL_KEEP, Math.floor(limit / 4));
   const head = text.slice(0, limit - tailKeep);
   const tail = text.slice(-tailKeep);
-  return `${head}\n…(中间省略,原文共 ${text.length} 字符)…\n${tail}`;
+  return `${head}\n${i18n.t('exportFile.omitted', { count: text.length })}\n${tail}`;
 }
 
 /** 工具调用折叠段:参数 JSON + 结果文本 */
 function toolCallSection(call: { name: string; arguments: Record<string, unknown> }, result: ToolResultMessage | undefined): string {
   const args = JSON.stringify(call.arguments, null, 2) ?? '{}';
-  let body = `**参数**\n\n\`\`\`json\n${truncate(args, 800)}\n\`\`\``;
+  let body = `${i18n.t('exportFile.args')}\n\n\`\`\`json\n${truncate(args, 800)}\n\`\`\``;
   if (result) {
     const text = result.content
-      .map((b) => (b.type === 'text' ? b.text : '[图片]'))
+      .map((b) => (b.type === 'text' ? b.text : i18n.t('exportFile.image')))
       .join('\n')
       .trim();
-    body += `\n\n**结果**${result.isError ? '(错误)' : ''}\n\n\`\`\`\n${truncate(text || '(空)', TOOL_OUTPUT_LIMIT)}\n\`\`\``;
+    body += `\n\n${i18n.t('exportFile.result')}${result.isError ? i18n.t('exportFile.errorSuffix') : ''}\n\n\`\`\`\n${truncate(text || i18n.t('exportFile.empty'), TOOL_OUTPUT_LIMIT)}\n\`\`\``;
   } else {
-    body += '\n\n**结果**:无对应结果消息';
+    body += `\n\n${i18n.t('exportFile.noResult')}`;
   }
-  return details(`🔧 工具调用:${call.name}`, body);
+  return details(i18n.t('exportFile.toolCall', { name: call.name }), body);
 }
 
 /** 助手消息正文:文本平铺;思考/工具调用折叠 */
@@ -95,7 +96,7 @@ function assistantSections(
     .join('\n\n');
 
   if (text) sections.push(text);
-  if (thinking) sections.push(details('💭 思考过程', thinking));
+  if (thinking) sections.push(details(i18n.t('exportFile.thinking'), thinking));
 
   const calls = m.content.filter((b) => b.type === 'toolCall') as Array<{
     type: 'toolCall';
@@ -109,7 +110,7 @@ function assistantSections(
   }
 
   if (m.stopReason === 'error' && m.errorMessage) {
-    sections.push(`> ⚠️ 本轮出错:${m.errorMessage}`);
+    sections.push(i18n.t('exportFile.turnError', { message: m.errorMessage }));
   }
   return sections;
 }
@@ -126,21 +127,25 @@ export function buildSessionMarkdown(session: Session): string {
 
   const refs = collectPageRefs(session.messages);
   const lines: string[] = [
-    `# ${session.title || '未命名会话'}`,
+    `# ${session.title || i18n.t('sessionTitle.untitled')}`,
     '',
-    `- 导出时间:${fmtTime(Date.now())}`,
-    `- 会话创建:${fmtTime(session.createdAt)}`,
-    `- 消息数:${session.messages.length}`,
+    i18n.t('exportFile.exportedAt', { time: fmtTime(Date.now()) }),
+    i18n.t('exportFile.createdAt', { time: fmtTime(session.createdAt) }),
+    i18n.t('exportFile.messageCount', { count: session.messages.length }),
   ];
   if (session.compaction) {
-    lines.push('- 注:此会话经过上下文压缩,较早内容以摘要形式存在,未包含在导出中');
+    lines.push(i18n.t('exportFile.compactedNote'));
   }
   lines.push('', '---');
 
   const refTabs = [...refs.tabs.values()];
   if (refTabs.length > 0) {
-    const refList = refTabs.map((t) => `- Tab ${t.tabId}:${t.title || '(无标题)'} — ${t.url}`).join('\n');
-    lines.push('', details('📎 本会话引用的页面', refList));
+    const refList = refTabs
+      .map((t) =>
+        i18n.t('exportFile.refTab', { id: t.tabId, title: t.title || i18n.t('exportFile.noTitle'), url: t.url }),
+      )
+      .join('\n');
+    lines.push('', details(i18n.t('exportFile.refs'), refList));
   }
 
   let lastModel = '';
@@ -148,23 +153,23 @@ export function buildSessionMarkdown(session: Session): string {
     if (m.role === 'user') {
       const text = userContentText(m);
       if (!text) continue;
-      lines.push('', `## 🧑 用户`, '', text);
+      lines.push('', i18n.t('exportFile.userRole'), '', text);
     } else if (m.role === 'assistant') {
       const modelLabel = `${m.provider}/${m.model}`;
       if (modelLabel !== lastModel) {
-        lines.push('', `## 🤖 助手`, '', `*模型:${modelLabel}*`, '');
+        lines.push('', i18n.t('exportFile.assistantRole'), '', i18n.t('exportFile.model', { model: modelLabel }), '');
         lastModel = modelLabel;
       } else {
-        lines.push('', `## 🤖 助手`, '');
+        lines.push('', i18n.t('exportFile.assistantRole'), '');
       }
       const sections = assistantSections(m, resultsByCallId, consumedResults);
-      lines.push(sections.length > 0 ? sections.join('\n\n') : '*(空回复)*');
+      lines.push(sections.length > 0 ? sections.join('\n\n') : i18n.t('exportFile.emptyReply'));
     } else if (m.role === 'toolResult' && consumedResults.has(m.toolCallId)) {
       // 已挂到对应调用下,跳过;只有找不到主的孤儿结果才独立渲染
       continue;
     } else if (m.role === 'toolResult') {
-      const text = m.content.map((b) => (b.type === 'text' ? b.text : '[图片]')).join('\n').trim();
-      lines.push('', details(`🔧 工具结果:${m.toolName}${m.isError ? '(错误)' : ''}`, `\`\`\`\n${truncate(text || '(空)', TOOL_OUTPUT_LIMIT)}\n\`\`\``));
+      const text = m.content.map((b) => (b.type === 'text' ? b.text : i18n.t('exportFile.image'))).join('\n').trim();
+      lines.push('', details(`${i18n.t('exportFile.toolResult', { name: m.toolName })}${m.isError ? i18n.t('exportFile.errorSuffix') : ''}`, `\`\`\`\n${truncate(text || i18n.t('exportFile.empty'), TOOL_OUTPUT_LIMIT)}\n\`\`\``));
     }
   }
 
@@ -173,7 +178,7 @@ export function buildSessionMarkdown(session: Session): string {
 
 /** 导出文件名:标题净化(非法字符/长度) + 日期 */
 function exportFilename(session: Session): string {
-  const safe = (session.title || '未命名会话').replace(/[\\/:*?"<>|]/g, ' ').trim().slice(0, 40) || '会话';
+  const safe = (session.title || i18n.t('sessionTitle.untitled')).replace(/[\\/:*?"<>|]/g, ' ').trim().slice(0, 40) || i18n.t('exportFile.filenameFallback');
   const d = new Date(session.updatedAt);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${safe}_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.md`;

@@ -302,7 +302,7 @@ export function useChatTurn(params: {
         // 异常同样不得丢本轮转录:以 Agent 转录落盘(旧行为直接清空 → 整轮回复消失)
         persistTranscriptAfterFailure(sid, seq, rt);
         if (signal.aborted) rt.markCancelled(seq);
-        else setErrorMessage(getErrorMessage(err) || '请求失败,请检查网络或提供商配置', sid);
+        else setErrorMessage(getErrorMessage(err) || i18n.t('errors.requestFailed'), sid);
       } finally {
         if (rt.endRun(seq)) {
           if (autoCompactPending) {
@@ -464,7 +464,7 @@ export function useChatTurn(params: {
         if (signal.aborted) {
           rt.markCancelled(seq);
         } else {
-          setErrorMessage(getErrorMessage(err) || '请求失败，请检查网络或提供商配置', sid);
+          setErrorMessage(getErrorMessage(err) || i18n.t('errors.requestFailed'), sid);
         }
       } finally {
         // 仅当前 turn 的所有者才能拆卸本会话运行态(不弄坏同会话新 turn)
@@ -598,13 +598,17 @@ export function useChatTurn(params: {
 
         const active = findActiveModel(store.settings);
         if (!active) {
-          setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
+          setErrorMessage(i18n.t('errors.noProvider'));
           // 保留该条(不逐条丢弃);模型配置恢复后由下一次轮末/手动发送重新触发调度
           return;
         }
 
         const session = target;
-        const isFirstMessage = session.messages.length === 0 || session.title === '新会话';
+        // 默认标题来自 i18n(创建时写入),此处必须用同一来源比较——写死字面量会在非中文界面下失效。
+        // 另兼容已落库的历史默认标题:标题是**持久化数据**,换语言后旧会话不应失配而漏掉自动命名。
+        const DEFAULT_SESSION_TITLES = new Set([i18n.t('sessionTitle.default'), '新会话']);
+        const isFirstMessage =
+          session.messages.length === 0 || DEFAULT_SESSION_TITLES.has(session.title);
         // 发送瞬间把草稿引用做成 <page-refs> 块内嵌进 user 消息 content。
         // 逐 tab 刷新元信息(getTabMeta 失败回退草稿值,绝不丢引用);focused 标注发送时刻的活动 tab。
         const draftAtSend = session.draft ?? EMPTY_DRAFT;
@@ -723,7 +727,7 @@ export function useChatTurn(params: {
 
       const active = findActiveModel(store.settings);
       if (!active) {
-        setErrorMessage('请先在设置中配置可用的 AI 提供商与模型');
+        setErrorMessage(i18n.t('errors.noProvider'));
         return;
       }
 

@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { storage } from 'wxt/utils/storage';
 import type { AssistantMessage, ToolResultMessage, UserMessage } from '@earendil-works/pi-ai';
 import type { RefTab } from './pageContext';
@@ -272,7 +273,7 @@ export function sanitizeSessions(value: unknown): Session[] {
     const customTitle = s.customTitle === true;
     out.push({
       id: s.id,
-      title: typeof s.title === 'string' ? s.title : '新会话',
+      title: typeof s.title === 'string' ? s.title : i18n.t('sessionTitle.default'),
       messages,
       createdAt: typeof s.createdAt === 'number' ? s.createdAt : Date.now(),
       updatedAt: typeof s.updatedAt === 'number' ? s.updatedAt : Date.now(),
@@ -288,7 +289,7 @@ export function uid(): string {
   return crypto.randomUUID();
 }
 
-export function createSession(title = '新会话', draft?: SessionDraft): Session {
+export function createSession(title = i18n.t('sessionTitle.default'), draft?: SessionDraft): Session {
   const now = Date.now();
   return { id: uid(), title, messages: [], createdAt: now, updatedAt: now, ...(draft ? { draft } : {}) };
 }
@@ -322,5 +323,5 @@ export function messageText(m: ChatMessage): string {
 /** 用首条用户消息生成会话标题(截断到 24 字符) */
 export function titleFromText(text: string): string {
   const first = text.trim().split('\n')[0]?.trim() ?? '';
-  return first.length > 24 ? `${first.slice(0, 24)}…` : first || '新会话';
+  return first.length > 24 ? `${first.slice(0, 24)}…` : first || i18n.t('sessionTitle.default');
 }

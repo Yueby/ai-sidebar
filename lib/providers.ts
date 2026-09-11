@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import type { ApiType, ModelConfig, ProviderConfig, ReasoningLevel, Settings } from './types';
 import { REASONING_LEVELS } from './types';
 
@@ -8,17 +9,17 @@ export const API_TYPE_OPTIONS: Array<{
 }> = [
   {
     value: 'openai-completions',
-    label: 'OpenAI 兼容 · Chat Completions',
+    label: i18n.t('apiType.openaiCompletions'),
     defaultBaseUrl: 'https://api.openai.com/v1',
   },
   {
     value: 'openai-responses',
-    label: 'OpenAI 兼容 · Responses',
+    label: i18n.t('apiType.openaiResponses'),
     defaultBaseUrl: 'https://api.openai.com/v1',
   },
   {
     value: 'anthropic-messages',
-    label: 'Anthropic Messages',
+    label: i18n.t('apiType.anthropicMessages'),
     defaultBaseUrl: 'https://api.anthropic.com',
   },
 ];

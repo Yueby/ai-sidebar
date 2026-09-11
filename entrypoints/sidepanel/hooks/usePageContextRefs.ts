@@ -1,3 +1,4 @@
+import { i18n } from '#i18n';
 import { useCallback, useEffect, useRef } from 'react';
 import type { PickedElement, Settings, Session, SessionDraft } from '@/lib/types';
 import { PICK_ELEMENT_RESULT_MESSAGE } from '@/lib/types';
@@ -281,14 +282,14 @@ export function usePageContextRefs(params: {
           (currentSession?.draft?.refTabs ?? []).find((t) => t.id === tabId) ??
           (await getTabMeta(tabId).catch(() => null));
         if (!meta) {
-          setErrorMessage('无法在该标签页启动元素选择:找不到该标签页');
+          setErrorMessage(i18n.t('pick.tabNotFound'));
           return;
         }
         try {
           await browser.tabs.update(tabId, { active: true });
         } catch {
           // 标签页可能已被关闭
-          setErrorMessage('无法激活该标签页,元素选择已取消');
+          setErrorMessage(i18n.t('pick.activateFailed'));
           return;
         }
       } else {
@@ -296,7 +297,7 @@ export function usePageContextRefs(params: {
       }
       if (!meta) {
         // 目标页不是普通网页(chrome:// 等),无法框选
-        setErrorMessage('当前页面不是普通网页,无法框选元素');
+        setErrorMessage(i18n.t('pick.notRegularPage'));
         return;
       }
       // 框选启动时不自动加引用;框选成功返回时才「引用页面 + 元素 chip」
@@ -305,7 +306,7 @@ export function usePageContextRefs(params: {
         pendingPickRef.current = { tabId: meta.id, meta };
       } catch (err) {
         // 兜底注入失败/页面不可达:给用户可见的错误反馈,不无声失败
-        setErrorMessage(err instanceof Error ? err.message : '启动元素选择失败,请重试');
+        setErrorMessage(err instanceof Error ? err.message : i18n.t('pick.startFailed'));
       }
     },
     [setErrorMessage]
@@ -338,12 +339,12 @@ export function usePageContextRefs(params: {
       // 兜底用启动框选时记录的 tabId
       const selector = message.selector;
       if (typeof selector !== 'string' || !selector) {
-        setErrorMessage('元素选择返回结果无效,请重新框选');
+        setErrorMessage(i18n.t('pick.invalidResult'));
         return;
       }
       const tabId = typeof sender?.tab?.id === 'number' ? sender.tab.id : pendingPickRef.current?.tabId;
       if (typeof tabId !== 'number') {
-        setErrorMessage('无法确定元素所属标签页,请重新框选');
+        setErrorMessage(i18n.t('pick.unknownTab'));
         return;
       }
       const startMeta = pendingPickRef.current?.tabId === tabId ? pendingPickRef.current.meta : null;
@@ -354,7 +355,7 @@ export function usePageContextRefs(params: {
         // 避免结果已回传却因一次查询失败而静默丢掉引用与元素
         const meta = (await getTabMeta(tabId).catch(() => null)) ?? startMeta;
         if (!meta) {
-          setErrorMessage('添加元素引用失败:无法获取该标签页信息,可能已被关闭');
+          setErrorMessage(i18n.t('pick.refMetaFailed'));
           return;
         }
         try {
@@ -362,7 +363,7 @@ export function usePageContextRefs(params: {
             await updateSettings({ ...useAppStore.getState().settings, includePageContext: true });
           }
         } catch {
-          setErrorMessage('添加元素引用失败:写入设置时出错,请重试');
+          setErrorMessage(i18n.t('pick.refSaveFailed'));
           return;
         }
         // 「引用页面 + 元素 chip」一次性写入当前会话草稿(原子,避免两次 commit)。

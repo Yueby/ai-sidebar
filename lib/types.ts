@@ -43,7 +43,8 @@ export const REASONING_LEVELS: ReasoningLevel[] = [
 
 /** 思考等级展示文案(short=按钮/紧凑位,full=下拉/完整位),UI 统一消费此处 */
 export const REASONING_LEVEL_LABELS: Record<ReasoningLevel, { short: string; full: string }> = {
-  // 文案只保留当前语言文本,不带英文注记;多语言时本表收敛进 i18n 词条
+  // 本表是**兜底**(key 缺失时用);当前语言文案在 locales/*.yml 的 reasoning.* 段,
+  // 由 lib/reasoningLabels.ts 解析——本文件被 content script 引用,不能引 #i18n。
   off: { short: '关', full: '关闭' },
   minimal: { short: '极低', full: '极低' },
   low: { short: '低', full: '低' },
