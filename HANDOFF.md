@@ -100,6 +100,11 @@
 **改法**:移除按 tab 来源的前置拒绝(以及为此引入的 `agentCreatedTabs` 集合,撤销 `ecefdf8` 的该部分);护栏回到**确认卡本身**——模型可对任意标签页发起关闭请求,用户在卡上逐次审批,卡面展示标签页标题+URL(知情同意而非盲批);未批准一律不关(`close_page` 的“谎报成功”修复保留)。
 **边界仍在**:①`close_page`/`click`/`fill` 等 confirm 型工具一律弹卡,不存在静默执行;②`read_page` 等读工具的**可读白名单**(决策 27)不变,未引用/未打开的页面仍不可读。
 
+45. **i18n 收敛收口**(2026-09,发布前最后一项):原先仅剩的硬编码中文 UI 文案(19 文件)全部入 locale,新增 **91 键 × 2 语言**(zh 362 = en 362,零孤儿键、占位符全一致),命名空间:`exportFile`/`permissions`/`reasoning`/`pick`/`quickPrompts`/`errors`/`apiType`/`sessionTitle` + 扩展 `slash`。
+**关键约束(改法由此决定)**:`lib/types.ts`、`lib/pageTextWindow.ts` **被 content script 引用,绝不能引 `#i18n`** → 思考档位文案保留兜底表 + 新增 sidepanel 侧解析器 `lib/reasoningLabels.ts`(范式同 `toolLabels.ts`,含未知档位原样返回);**消费处必须全量切换**(复审抓到设置页模型分工卡仍在直接读兜底表,已修)。
+**有意保留**:DEV 诊断日志(`[perf]`/`[p0:run]`/`[flush]`)、`lib/language.ts` 的原生语言名、全部中文注释、全部模型可见英文文案。剩余中文**字面量 32 处**,逐类有据(兜底表 14 / DEV 日志 10 / 语言名 3 / 历史标题兼容 1 / 扫描器误报 4)。
+**顺带修掉两个耦合 bug**:①首条消息判定用字面量比持久化标题 + 忽略历史默认标题(换语言后自动命名失效)→ 改为 i18n 来源 ∪ `'新会话'` 兼容集;②`createSession('新会话')` ×3 绕过 i18n 默认值 → 改 `createSession()`。
+
 ## 4. 当前代码状态
 
 lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_element/框选、vision 读图、websearch 十源、fetch_url、compact_context、三期步①②③、设置抽屉/引导弹窗/模型分工/语言/导出);最新提交见 `git log`(本文档与 2026-09 同步)。
