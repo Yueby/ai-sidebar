@@ -16,8 +16,9 @@
 **当前领先候选(待真机验证,复审 P1)**:助记/工具结果只进内存 `runs[sid].inFlight`,**直到 finalize 才落盘**;回合中途面板文档被销毁(关闭侧边栏/Chrome 回收/dev 重载)即丢掉整轮,重开后只剩发送时写入的那条用户消息——与症状高度吻合。**待真机确认**:G1 是否复现 + 代码块着色。确认通过后接:i18n 收敛 → 发布(图标 + `wxt zip`)。
 
 1. **用户手动回归** —— ✅ 已完成(2026-09,覆盖:普通对话、read/search/fetch/click 全链、点击 _blank 跳转修复、导出、设置抽屉/模型分工/语言/思考档、引导弹窗、删除确认);后续每次新功能按验收标准随批回归。
+1b. ~~fake-indexeddb 补 sessionStore 覆盖~~ ✅ **已完成(2026-09-11)**:`tests/session-store.test.ts` 用 `fake-indexeddb` 在 node 里跑真实 IDB 语义,覆盖六条契约——往返无损(消息/引用块/草稿/压缩标记)、幂等、updatedAt 降序、坏行容错(非法 JSON 与缺 header 各告警一次且不炸全表)、单事务原子替换、单条删除。**由此钉住两条原本只在代码里的契约**:①`sanitizeDraft` 要求 `elementId` 为**正整数**才保留元素引用,并自动补 `id`(tabId:selector)与 `preview`;②compaction 标记**必须由一条 user 摘要消息承载**才落盘,无该消息时标记被归一化丢弃(不留指向空处的指针)。**有效性经注入实验验证**:改坏 `fromRow` 的 compaction 映射,往返用例立即失败。A 组真机回归不再是唯一覆盖。
 2. ~~websearch / fetch_url 工具~~ **已完成**(2026-09,十源 + fetch_url;见 §4 状态表与 §6 API 参考)。
-3. 多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)。
+3. ~~多语言:TOOL_LABELS 等文案收敛到 i18n~~ ✅ **已完成**(2026-09,决策 45:362 键 × 2 语言,剩余中文仅 DEV 日志/原生语言名/兜底表)。
 4. **三期规格 v2:ARIA 定位与页面动作原语**(原"页面操作"粗粒度条目替换;chrome.debugger 条件触发行保留,见 ⑤):
    - **引库决策**:唯一新依赖 `dom-accessibility-api`(~12KB gzip,零依赖,114M/周)——getRole(含隐式 role,原生反射不算)/computeAccessibleName(AccName 全算法)/isDisabled;aria-query/axe-core/@testing-library/原生反射全否决;交互判定白名单自研 ~30 行(button/link/input/select/textarea/combobox/slider/tab 等 role 子集 + tabIndex≥0)
    - **五个新工具**(命名矩阵内):
@@ -53,7 +54,7 @@
    - **大件批(独立 milestone,开发者自己做)**:MessageScroller 替换 overflow-anchor 钉底 —— 每轮首条用户消息标 scrollAnchor、启 autoScroll(上翻自动退避)、preserveScrollOnPrepend、defaultScrollPosition=last-anchor 恢复会话;数据流把 turnSeq/滚动协议对齐 messageId;窄栏流式+多轮工具循环回归
    - **保留自造**:ToolCallCard 内容体、ApprovalSection、ContextRing/ContextPanel、元素 chip、md-body 排版
    - **验收标尺**:流式追加零跳动、上翻挂起/回到底、会话重开滚动位置正确、窄栏 360px 密度不退化
-7. 发布:图标 + `wxt zip`。
+7. 发布:图标 + `wxt zip` —— ✅ 包已产出(2026-09-11,`0.1.0`,`.output/ai-sidebar-0.1.0-chrome.zip`);剩余 = 商店 listing(截图 + 文案,用户决定暂缓)。
 
 > 已完成(2026-09-02):`err: any` → `unknown`(lib/utils.ts `getErrorMessage` helper,App/SettingsMainView/ProviderDialog 5 处收窄);dev 可观测性(content.ts 对未知 `ai-sidebar/` 消息 DEV 下 console.warn)。用户拍板不做:highlight.js 语言包裁剪(当时本地加载 941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。**该条已被取代**:决策 40 换 shiki 双主题后,`highlight.js`/`rehype-highlight` 已整体移除(`517648c`)。
 >
