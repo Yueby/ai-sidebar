@@ -46,6 +46,21 @@ export function textWindow(full: string, offset: number, limit: number): TextWin
 }
 
 /**
+ * 下一次续读的 offset(纯函数)。
+ * 只有知道**截断前全文长度**时才能判断“还有没有后半段”——初版 H3 因为 totalLength
+ * 报的是截断后长度,导致续读提示永远不出现(工具在真机上不会主动续读)。
+ */
+export function nextOffsetFor(
+  offset: number,
+  returnedLength: number,
+  totalLength: number | null | undefined,
+): number | null {
+  if (!totalLength || totalLength <= 0) return null;
+  const consumed = offset + returnedLength;
+  return consumed < totalLength ? consumed : null;
+}
+
+/**
  * 模型可见的续读指引(英文)。
  * 只在确实被截断时给出,并带上可直接照用的一次调用——否则模型会像真机记录里
  * 那样自己摸索"再读一次能不能拿到后半段"。

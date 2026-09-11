@@ -265,10 +265,19 @@ export default defineContentScript({
     }
 
     /** 提取流水线:选根 → 块级遍历 → 轻量 Markdown → 块边界截断 */
-    function extractMarkdown(section: 'head' | 'tail'): { text: string; truncated: boolean } {
+    function extractMarkdown(section: 'head' | 'tail', full = false): {
+      text: string;
+      truncated: boolean;
+      /** 全文长度(截断前) */
+      totalLength: number;
+    } {
       const root = selectRoot();
-      if (!root) return { text: '', truncated: false };
-      return truncateBlocks(renderChildren(root), TEXT_LIMIT, section);
+      if (!root) return { text: '', truncated: false, totalLength: 0 };
+      const blocks = renderChildren(root);
+      const joined = blocks.join('\n\n');
+      // full=true 供续读窗口:返回全文,由调用方按 offset 取窗口后再截断
+      if (full) return { text: joined, truncated: false, totalLength: joined.length };
+      return { ...truncateBlocks(blocks, TEXT_LIMIT, section), totalLength: joined.length };
     }
 
     /** 页面状态指纹(步④):URL+标题+正文规模+正交采样的 FNV-1a;模型跨两次读取比对即可判断页面是否/如何变化 */
@@ -340,9 +349,11 @@ export default defineContentScript({
      * 语义提取路径:Readability 正文抽取 + dom-to-semantic-markdown 转 Markdown。
      * 门控不过/库加载失败/解析失败返回 null,由调用方走手写兜底,提取永不挂掉。
      */
-    async function extractSemanticMarkdown(): Promise<{
+    async function extractSemanticMarkdown(full = false): Promise<{
       text: string;
       truncated: boolean;
+      /** 全文长度(截断前);续读提示需要它判断“还有没有后半段” */
+      totalLength: number;
     } | null> {
       try {
         const libs = await loadSemanticLibs();
@@ -356,7 +367,9 @@ export default defineContentScript({
         if (!root) return null;
         const markdown = libs.convertElementToMarkdown(root).trim();
         if (!markdown) return null;
-        return truncateMarkdownText(markdown, TEXT_LIMIT);
+        // full=true 供续读窗口:返回全文,由调用方按 offset 取窗口后再截断
+        if (full) return { text: markdown, truncated: false, totalLength: markdown.length };
+        return { ...truncateMarkdownText(markdown, TEXT_LIMIT), totalLength: markdown.length };
       } catch {
         return null;
       }
@@ -399,8 +412,11 @@ export default defineContentScript({
       totalLength?: number;
     }> {
       await waitForComplete(READY_TIMEOUT);
+      // 续读请求(offset>0)必须拿**未截断**全文才能取到 12000 之后的窗口——
+      // 先截断再取窗口正是初版 H3 失效的原因(offset>12000 永远空,totalLength 也是假值)。
+      const wantFull = offset > 0;
       // 语义路径优先;门控不过/库不可用则手写兜底(含 isHidden 可见性过滤)
-      let result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
+      let result = (await extractSemanticMarkdown(wantFull)) ?? extractMarkdown(section, wantFull);
       if (result.text.length < SHORT_THRESHOLD) {
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
         result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
@@ -412,27 +428,35 @@ export default defineContentScript({
         const needle = waitText?.trim().toLowerCase();
         while (Date.now() < deadline) {
           await new Promise((resolve) => setTimeout(resolve, 500));
-          result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
+          result = (await extractSemanticMarkdown(wantFull)) ?? extractMarkdown(section, wantFull);
           const found = needle ? result.text.toLowerCase().includes(needle) : false;
           if (found || result.text.length === lastLen) break;
           lastLen = result.text.length;
         }
       }
       // tail 模式:路径内部已按头部锚定截断,这里重切为尾部窗口(聊天页最新内容在尾部)
-      if (section === 'tail') result = tailSliceText(result.text, TEXT_LIMIT);
-      // 续读窗口:offset>0 时按 offset 取窗口(与 tail 互斥——已明确从哪开始读)
+      if (section === 'tail') result = { ...tailSliceText(result.text, TEXT_LIMIT), totalLength: result.totalLength };
+      // 续读窗口:offset>0 时在**全文**上按 offset 取窗口(与 tail 互斥——已明确从哪开始读)
       if (offset > 0) {
         const w = textWindow(result.text, offset, TEXT_LIMIT);
-        result = { text: w.text, truncated: w.truncated };
         return {
           title: document.title,
           url: location.href,
           fingerprint: pageFingerprint(),
-          ...result,
+          text: w.text,
+          truncated: w.truncated,
           totalLength: w.totalLength,
         };
       }
-      return { title: document.title, url: location.href, fingerprint: pageFingerprint(), ...result };
+      // totalLength 恒回报(截断前真实长度):否则工具侧算不出“还有没有后半段”,续读提示不会出现
+      return {
+        title: document.title,
+        url: location.href,
+        fingerprint: pageFingerprint(),
+        text: result.text,
+        truncated: result.truncated,
+        totalLength: result.totalLength,
+      };
     }
 
     // ===== 页面元素选择模式 =====

@@ -7,7 +7,7 @@
 import './helpers/browser-stub';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { textWindow, continuationHint } from '../lib/pageTextWindow';
+import { textWindow, continuationHint, nextOffsetFor } from '../lib/pageTextWindow';
 import { capturePathFor } from '../lib/imageFetch';
 import { isThinExtraction } from '../lib/tools/read-page';
 
@@ -100,4 +100,14 @@ test('click 开出的新 tab 被登记为 agent-opened(可读可关)', async () 
   } finally {
     stub.tabs.query = original;
   }
+});
+
+// 初版 H3 的失效点:续读提示依赖“截断前全文长度”,报错长度 → 提示永不出现(真机上模型不会续读)。
+test('nextOffsetFor:只有知道全文长度时才给下一次 offset', () => {
+  assert.equal(nextOffsetFor(0, 12000, 30000), 12000, '有后半段 → 给出下一个 offset');
+  assert.equal(nextOffsetFor(12000, 12000, 30000), 24000, '续读到底前一直前进');
+  assert.equal(nextOffsetFor(24000, 6000, 30000), null, '读到末尾 → 不再引导续读');
+  assert.equal(nextOffsetFor(0, 500, 400), null, '长度自洽异常时不虚报');
+  assert.equal(nextOffsetFor(0, 12000, undefined), null, '拿不到全文长度 → 不给调用指引');
+  assert.equal(nextOffsetFor(0, 12000, 0), null, '空页同理');
 });

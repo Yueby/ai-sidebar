@@ -3,7 +3,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { extractFromTab, renderPageContext, buildUnreadableTabError, type RefTab } from '../pageContext';
-import { continuationHint } from '../pageTextWindow';
+import { continuationHint, nextOffsetFor } from '../pageTextWindow';
 
 /** 首次抽取过薄(SPA 未渲染完)时的自动重试节奏:有界、总时长封顶,避免模型自己摸索“再等等再读” */
 const THIN_RETRY_WAITS_MS = [1200, 2500];
@@ -117,7 +117,7 @@ export function createReadPageToolDefinition(
             start: shownFrom,
             truncated: true,
             totalLength: page.totalLength ?? shownTo,
-            nextOffset: page.totalLength && shownTo < page.totalLength ? shownTo : null,
+            nextOffset: nextOffsetFor(shownFrom, page.text.length, page.totalLength),
           })
         : '';
       const retryNote = autoRetried
