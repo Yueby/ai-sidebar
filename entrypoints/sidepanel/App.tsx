@@ -1,4 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+
+/** 稳定空数组:memo 化的列表项做浅比较,`[]` 字面量每次渲染都是新引用 → 会击穿 memo */
+const NO_LABELS: string[] = [];
 import { i18n } from '#i18n';
 import { X } from 'lucide-react';
 import type {
@@ -254,7 +257,7 @@ export default function App() {
       : [];
   const streamingContent = currentRun?.content ?? '';
   const streamingThinking = currentRun?.thinking ?? '';
-  const activeToolNames = currentRun?.toolNames ?? [];
+  const activeToolNames = currentRun?.toolNames ?? NO_LABELS;
   const isCancelled = currentRun?.cancelled ?? false;
 
 
@@ -622,7 +625,7 @@ export default function App() {
             isStreaming={isStreamingHere}
             streamingContent={isStreamingHere ? streamingContent : ''}
             streamingThinking={isStreamingHere ? streamingThinking : ''}
-            activeToolLabels={isStreamingHere ? activeToolNames : []}
+            activeToolLabels={isStreamingHere ? activeToolNames : NO_LABELS}
             gateRequest={isGateHere ? (currentGate?.request ?? null) : null}
             pendingGateTotal={isGateHere ? gatePagination.total : 0}
             quietTailCount={quietTailCount}
