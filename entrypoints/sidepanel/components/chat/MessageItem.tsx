@@ -155,9 +155,9 @@ function SmoothMarkdown({
   animate: boolean;
 }) {
   const shown = useSmoothText(text, animate);
-  // 逐字揭示期间不做语法高亮:文本每帧都在变,高亮是纯浪费(定型后 highlight=true 自动补上,
-  // 组件身份与子树结构不变,仅代码块从纯文本升级为着色,不重挂)
-  return <MarkdownView content={shown} className={className} highlight={!animate} />;
+  // 逐字揭示期间**实时上色**(节流约 5Hz,见 MarkdownView 的 CodeBlock):
+  // 旧做法完全不高亮 → “说完了才变色”;每帧高亮 → O(n²) 卡顿。两者之间的折中。
+  return <MarkdownView content={shown} className={className} live={animate} />;
 }
 
 function renderUserMessageText(text: string, elementById?: Map<number, RefElementMeta> | null) {

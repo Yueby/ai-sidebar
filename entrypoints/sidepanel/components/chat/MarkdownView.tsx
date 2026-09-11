@@ -16,11 +16,11 @@ interface MarkdownViewProps {
   content: string;
   className?: string;
   /**
-   * 是否做语法高亮(默认 true)。
-   * 流式逐字揭示期间传 false:那一块文本每帧都在变,rAF 60fps × shiki 分词是 O(n²),
-   * 真机表现为“AI 回复时整体卡顿”;回复定型后自动升级为高亮。
+   * 文本仍在逐字揭示(流式)。
+   * true 时代码块做**节流高亮**:每帧都重新分词是 O(n²)(曾导致"回复时整页卡"),
+   * 但完全不高亮又会"说完了才上色"。折中 = 实时着色 + 节流,已完成的块走 shiki 缓存(零成本)。
    */
-  highlight?: boolean;
+  live?: boolean;
 }
 
 /** 递归拉平 React 子树为纯文本(代码块复制与 shiki 输入用) */
@@ -45,6 +45,71 @@ function useShikiReady(): boolean {
 import { isShikiReady as isShikiReadyLocal } from '@/lib/shiki';
 
 /** 代码块容器:shiki HTML(双主题变量)或降级纯文本;右上角常驻复制按钮 */
+/** 流式期间的最小高亮间隔(ms):块越大间隔越长,避免大块高频分词 */
+const LIVE_HIGHLIGHT_MIN_MS = 200;
+const LIVE_HIGHLIGHT_BIG_MS = 400;
+const LIVE_HIGHLIGHT_BIG_CHARS = 4000;
+
+/**
+ * 代码块高亮容器:定型后同步高亮;流式中**节流高亮**(约 5Hz)。
+ * 组件身份恒定,reveal 过程中不重挂,只在节流点更新 html。
+ */
+function CodeBlock({
+  code,
+  lang,
+  live,
+  children,
+}: {
+  code: string;
+  lang: string;
+  live: boolean;
+  children?: React.ReactNode;
+}) {
+  const [html, setHtml] = useState<string | null>(() => (live ? null : highlightToHtml(code, lang)));
+  const lastAtRef = useRef(0);
+  const timerRef = useRef<number | null>(null);
+  const codeRef = useRef(code);
+  codeRef.current = code;
+
+  useEffect(() => {
+    const clearTimer = () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+    if (!live) {
+      // 定型:清掉挂起的节流回调,同步高亮一次(cache 命中即几乎零成本)
+      clearTimer();
+      lastAtRef.current = Date.now();
+      setHtml(highlightToHtml(code, lang));
+      return;
+    }
+    const interval = code.length > LIVE_HIGHLIGHT_BIG_CHARS ? LIVE_HIGHLIGHT_BIG_MS : LIVE_HIGHLIGHT_MIN_MS;
+    const run = () => {
+      timerRef.current = null;
+      lastAtRef.current = Date.now();
+      setHtml(highlightToHtml(codeRef.current, lang));
+    };
+    const since = Date.now() - lastAtRef.current;
+    if (since >= interval) run();
+    else if (timerRef.current === null) timerRef.current = window.setTimeout(run, interval - since);
+  }, [code, lang, live]);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  return (
+    <PreWithCopy html={html} copyText={code}>
+      {children}
+    </PreWithCopy>
+  );
+}
+
 function PreWithCopy({
   children,
   html,
@@ -98,7 +163,7 @@ function PreWithCopy({
 export const MarkdownView = memo(function MarkdownView({
   content,
   className = '',
-  highlight = true,
+  live = false,
 }: MarkdownViewProps) {
   // 高亮器就绪后触发一次重渲染(未就绪期间渲染的纯文本代码块升级为 shiki)
   useShikiReady();
@@ -126,9 +191,9 @@ export const MarkdownView = memo(function MarkdownView({
               const lang = normalizeShikiLang(props.className);
               const text = extractText(props.children).replace(/\n$/, '');
               return (
-                <PreWithCopy html={highlight ? highlightToHtml(text, lang) : null} copyText={text}>
+                <CodeBlock code={text} lang={lang} live={live}>
                   {codeEl}
-                </PreWithCopy>
+                </CodeBlock>
               );
             }
             return (
