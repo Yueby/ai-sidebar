@@ -21,7 +21,7 @@ import { i18n } from '#i18n';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
 import { parsePageRefs } from '@/lib/pageRefs';
-import { runtimeFor } from '@/lib/sessionRuntime';
+import { activeRuntimeSessionIds, runtimeFor } from '@/lib/sessionRuntime';
 import type { SessionRuntime } from '@/lib/sessionRuntime';
 import { useAppStore, selectCurrentSession } from '../store';
 import { dropPendingDraftSave, EMPTY_DRAFT } from '../store/sessionSlice';
@@ -100,16 +100,21 @@ function persistTranscriptAfterFailure(sid: string, seq: number, rt: SessionRunt
  * 此处把进行中会话的转录按单调守卫规则补落盘;幂等,与 finalize 路径不冲突。
  */
 export function flushActiveTranscripts(): void {
+  // 只遍历“确有活动 run/发送准备”的会话:activeRuntimeSessionIds 读已有实例,
+  // 不会为闲置会话凭空 new 出 runtime(本函数挂在面板隐藏的生命周期上,不该有副作用)。
+  const activeIds = activeRuntimeSessionIds();
+  if (activeIds.length === 0) return;
   const state = useAppStore.getState();
   const updated = new Map<string, Session>();
-  for (const session of state.sessions) {
-    if (!runtimeFor(session.id).isStreaming) continue;
-    const transcript = sessionAgentFor(session.id)?.state.messages as ChatMessage[] | undefined;
+  for (const id of activeIds) {
+    const session = state.sessions.find((s) => s.id === id);
+    if (!session) continue;
+    const transcript = sessionAgentFor(id)?.state.messages as ChatMessage[] | undefined;
     if (!transcript?.length) continue;
     const { messages } = mergeTranscriptKeepingHistory(session.messages, transcript);
     if (messages.length <= session.messages.length) continue;
     // 不改 updatedAt:这是一次保全写入,不是新的会话活动,不应把会话顶到列表最前
-    updated.set(session.id, { ...session, messages });
+    updated.set(id, { ...session, messages });
   }
   if (updated.size === 0) return;
   useAppStore
