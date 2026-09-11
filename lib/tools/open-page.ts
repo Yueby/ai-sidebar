@@ -3,7 +3,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { i18n } from '#i18n';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
-import { openTab, findTabByUrl, registerAgentOpenedTab, markAgentCreatedTab } from '../pageContext';
+import { openTab, findTabByUrl, registerAgentOpenedTab } from '../pageContext';
 import { requestGate } from '../gate';
 
 const OPEN_PAGE_PARAMS = Type.Object({
@@ -87,7 +87,7 @@ export function createOpenPageToolDefinition(sessionId?: string): AgentTool<type
           return {
             content: [{
               type: 'text',
-              text: `Reused existing tab #${existing.id} (${existing.url || url})${background ? ' (left in background)' : ' — it is now the focused tab'}. Its tabId is readable (read_page / click_element / fill_element); note this tab already existed, so close_page will still refuse to close it.`,
+              text: `Reused existing tab #${existing.id} (${existing.url || url})${background ? ' (left in background)' : ' — it is now the focused tab'}. Its tabId is readable (read_page / click_element / fill_element); this tab already existed, so closing it needs the user's approval like any other tab.`,
             }],
             details: { tabId: existing.id, url: existing.url || url, reused: true },
           };
@@ -102,8 +102,6 @@ export function createOpenPageToolDefinition(sessionId?: string): AgentTool<type
         };
       }
       registerAgentOpenedTab(meta.id);
-      // 新建路径:由 agent 创建 → 同时获得关闭权
-      markAgentCreatedTab(meta.id);
       return {
         content: [
           {

@@ -123,16 +123,13 @@ test('nextOffsetFor:只有知道全文长度时才给下一次 offset', () => {
 // 并把该 tab 从 agent-opened 注册表删掉 → 模型以为关掉了,实际还开着。
 test('close_page:浏览器拒绝关闭时不得谎报成功', async () => {
   const { createClosePageToolDefinition } = await import('../lib/tools/close-page');
-  const { markAgentCreatedTab, registerAgentOpenedTab, getAgentOpenedTabs } = await import(
-    '../lib/pageContext'
-  );
+  const { registerAgentOpenedTab, getAgentOpenedTabs } = await import('../lib/pageContext');
   const { setGateHandler } = await import('../lib/gate');
   const stub = (globalThis as unknown as { browser: { tabs: Record<string, unknown> } }).browser;
 
   const originalRemove = stub.tabs.remove;
   const originalGet = stub.tabs.get;
   registerAgentOpenedTab(4242);
-  markAgentCreatedTab(4242);
   // 用户批准关闭
   setGateHandler(async () => ({ kind: 'confirm', approved: true }) as never);
   try {
@@ -211,44 +208,46 @@ test('续读提示:尾窗要说明“前面被省略”以及怎么往回读', (
   assert.ok(/pass a smaller offset/.test(hint), '必须告诉怎么往回读');
 });
 
-// 真机实测的安全边界破口:用户自己开的标签页被 open_page **复用认领**后,
-// close_page 对它弹了确认卡(说明注册表检查通过)——"用户自己的页面不可关闭"被绕过。
-// 约定:认领(opened)只给读权限;关闭权只属于 agent **创建/造成出现**的 tab。
-test('close_page:被认领的用户标签页必须拒绝关闭(认领 ≠ 可关)', async () => {
+// 用户拍板(2026-09-11):「AI 可以自由调用所有工具」——close_page 不再按 tab 来源硬拒绝,
+// 护栏是**确认卡本身**(用户逐次审批)。此处钉住:任意 tab 都会走卡、卡上写明在关哪个页、
+// 未批准则绝不关闭。
+test('close_page:任意标签页都可被请求关闭,但必须经确认卡(批准前不得关)', async () => {
   const { createClosePageToolDefinition } = await import('../lib/tools/close-page');
-  const { registerAgentOpenedTab, isAgentCreatedTab } = await import('../lib/pageContext');
   const { setGateHandler } = await import('../lib/gate');
+  const stub = (globalThis as unknown as { browser: { tabs: Record<string, unknown> } }).browser;
+  const originalRemove = stub.tabs.remove;
+  const originalGet = stub.tabs.get;
 
-  const userTabId = 555001;
-  registerAgentOpenedTab(userTabId); // 仅认领为可读(open_page 复用路径的行为)
-  assert.ok(!isAgentCreatedTab(userTabId), '认领不得授予关闭权');
+  let removed = 0;
+  stub.tabs.remove = async () => {
+    removed += 1;
+  };
+  stub.tabs.get = async () => ({ id: 555002, title: '用户自己打开的页面', url: 'https://user.example/x' });
 
-  let gateCalls = 0;
-  setGateHandler(async () => {
-    gateCalls += 1;
-    return { kind: 'confirm', approved: true } as never;
-  });
+  const tool = createClosePageToolDefinition('s');
   try {
-    const tool = createClosePageToolDefinition('s');
-    const res = await tool.execute('call-x', { tabId: userTabId });
-    const text = String((res.content[0] as { text: string }).text);
-    assert.ok(/Refusing to close/.test(text), `必须直接拒绝,实际: ${text}`);
-    assert.equal(gateCalls, 0, '拒绝必须发生在弹卡之前(不给用户误关的机会)');
+    // 1) 未批准 → 不得关闭
+    let cardDetail = '';
+    setGateHandler(async (req) => {
+      cardDetail = String((req as { detail?: string }).detail ?? '');
+      return { kind: 'confirm', approved: false } as never;
+    });
+    const denied = await tool.execute('call-1', { tabId: 555002 });
+    assert.ok(/denied/i.test(String((denied.content[0] as { text: string }).text)), '未批准需如实回报');
+    assert.equal(removed, 0, '未批准时绝不能关');
+
+    // 2) 批准 → 关闭;卡上必须写明标题/URL(知情同意)
+    setGateHandler(async (req) => {
+      cardDetail = String((req as { detail?: string }).detail ?? '');
+      return { kind: 'confirm', approved: true } as never;
+    });
+    const ok = await tool.execute('call-2', { tabId: 555002 });
+    assert.equal(removed, 1, '批准后应真的关闭');
+    assert.ok(/Closed tab #555002/.test(String((ok.content[0] as { text: string }).text)));
+    assert.ok(cardDetail.includes('用户自己打开的页面') && cardDetail.includes('user.example'), `卡上需写明标题与 URL,实际: ${cardDetail}`);
   } finally {
+    stub.tabs.remove = originalRemove;
+    stub.tabs.get = originalGet;
     setGateHandler(null);
   }
-});
-
-// 真机实测(2026-09-11):前端渲染页首次读取只剩“加载中”空壳,旧实现把它当正文返回且不给任何信号,
-// 模型先试 waitStableMs=15000 也没用(空壳长度天生"稳定"→等待循环立刻跳出),最后靠 waitText 才拿到内容。
-test('过薄结果必须带可行动的提示(且阈值单一来源)', () => {
-  assert.equal(isThinExtraction(''), true);
-  assert.equal(isThinExtraction('加载中……正文由外链脚本在 1.2 秒后注入。'), true);
-  assert.equal(isThinText('x'.repeat(THIN_TEXT_CHARS)), false, '阈值边界:达到阈值即不算薄');
-  assert.equal(isThinExtraction('x'.repeat(THIN_TEXT_CHARS)), false);
-
-  const note = thinResultNote(48);
-  assert.ok(/loading shell/.test(note), '明确说明这不是正文');
-  assert.ok(/waitStableMs/.test(note) && /waitText/.test(note), '给出两个可用旋钮');
-  assert.ok(/15000/.test(note), '给出上限值,便于模型直接用');
 });

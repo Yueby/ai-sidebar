@@ -95,6 +95,11 @@
 
 43. **官方 questionnaire 的 44px 触控尺寸撑爆 ask_user 卡**(2026-09,用户报「提问面板被拉长、控件都变高」):官方 `components/ui/questionnaire.tsx`(`f8067c7` 引入)在 Choice/Input/Actions/Skip/Submit **5 处写死 `min-h-11`**(移动端触控规范),部分配 `sm:min-h-0` 但 **Tailwind `sm`=640px、侧边栏仅 320-400px → 永不生效**;调用处传的 `h-6.5`(26px)在盒模型里**被 min-height 压过** → 控件全变 44px。另 `.cn-questionnaire-title` 在“标题无 description 兄弟节点”时注入 `mb-4`(本场景恒成立),叠加 item `gap-4` → 标题下 32px 空白。**修法**(只在使用处 `ApprovalSection.tsx`,官方组件零改动):`min-h-0` 恢复 26-30px、标题 `!mb-0` + `max-h-24 overflow-y-auto` 限高内滚、间距收 10px 与 confirm 卡一致;confirm 卡长摘要同样限高防拉伸。**教训**:`min-h-*`/`sm:` 这类组件内建约束在窄侧边栏里必须在使用处显式解除——`sm:` 前缀在此尺寸下等于“永不生效”。
 
+44. **AI 可自由调用所有工具 = close_page 不按来源硬拒绝**(2026-09-11,用户拍板修正设计):
+`close_page` 曾实现为“安全边界:仅关闭 agent 自己开的 tab,用户手动打开的标签页拒绝关闭”(源自 close-page 初版注释与决策 28 的“已是 gate 卡”),并在真机测试(H1)中表现为**直接拒绝**;用户明确:这不是他要的设计——**本意是 AI 可以自由调用所有工具**。
+**改法**:移除按 tab 来源的前置拒绝(以及为此引入的 `agentCreatedTabs` 集合,撤销 `ecefdf8` 的该部分);护栏回到**确认卡本身**——模型可对任意标签页发起关闭请求,用户在卡上逐次审批,卡面展示标签页标题+URL(知情同意而非盲批);未批准一律不关(`close_page` 的“谎报成功”修复保留)。
+**边界仍在**:①`close_page`/`click`/`fill` 等 confirm 型工具一律弹卡,不存在静默执行;②`read_page` 等读工具的**可读白名单**(决策 27)不变,未引用/未打开的页面仍不可读。
+
 ## 4. 当前代码状态
 
 lib 层 + sidepanel 全部 UI 已完成(含 picked-element 块协议、read_element/框选、vision 读图、websearch 十源、fetch_url、compact_context、三期步①②③、设置抽屉/引导弹窗/模型分工/语言/导出);最新提交见 `git log`(本文档与 2026-09 同步)。

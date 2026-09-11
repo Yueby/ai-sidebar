@@ -188,8 +188,6 @@ export async function describeTabChanges(before: TabSnapshot): Promise<TabChange
     // 点击导致的“新开页”是 agent 造成的,按 agent-opened 登记:否则模型事后连自己开的页
     // 都读不了也关不掉(真机记录:只能请用户 Ctrl+W)。close_page 仍需用户确认,安全边界不变。
     registerAgentOpenedTab(t.id);
-    // 由 agent 行为(点击)造成出现 → 同时获得关闭权
-    markAgentCreatedTab(t.id);
     openedTabIds.push(t.id);
     notes.push(
       `The click opened new tab #${t.id}${t.url ? ` (${t.url})` : ''}${t.active ? ' — it is now the focused tab' : ''}. It is registered as readable and closable via its tabId (read_page / click_element / fill_element / close_page).`,
@@ -220,25 +218,6 @@ export function unregisterAgentOpenedTab(tabId: number): void {
   agentOpenedTabs.delete(tabId);
 }
 
-// ── agent **真正创建**的标签页(关闭权限的唯一依据)────────────────────────────────
-// 与“可读”分开:open_page 复用用户已有的 tab 时只是**认领为可读**,不得因此获得关闭权
-// (真机实测:用户开的 delay 页被认领后,close_page 对它弹了确认卡 —— “用户自己的标签页
-// 不可关闭”这条边界被绕过)。可关 = 由 agent 创建(open_page 新建)或由 agent 行为
-// 造成出现(click 开新页)。
-const agentCreatedTabs = new Set<number>();
-
-/** 标记为 agent 创建/造成出现的 tab(因此可被 close_page 关闭) */
-export function markAgentCreatedTab(tabId: number): void {
-  agentCreatedTabs.add(tabId);
-}
-
-export function isAgentCreatedTab(tabId: number): boolean {
-  return agentCreatedTabs.has(tabId);
-}
-
-export function unregisterAgentCreatedTab(tabId: number): void {
-  agentCreatedTabs.delete(tabId);
-}
 
 /** 把指定标签页切到前台(activate_page 底层);返回最新元信息,失败 null */
 export async function activateTab(tabId: number): Promise<RefTab | null> {

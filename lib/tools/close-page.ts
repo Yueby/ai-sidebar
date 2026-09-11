@@ -5,8 +5,7 @@ import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import {
   closeTab,
-  isAgentCreatedTab,
-  unregisterAgentCreatedTab,
+  getTabMeta,
   unregisterAgentOpenedTab,
 } from '../pageContext';
 import { requestGate } from '../gate';
@@ -18,8 +17,10 @@ const CLOSE_PAGE_PARAMS = Type.Object({
 });
 
 /**
- * close_page 工具定义(confirm):关闭本 agent 开启的标签页(任务完成后的清理)。
- * 安全边界:仅限运行时注册表内的 tab(agent 自己开的);用户手动打开的标签页拒绝关闭。
+ * close_page 工具定义(confirm):关闭指定标签页(任务完成后的清理)。
+ *
+ * **不按 tab 来源硬拒绝**(用户拍板 2026-09-11:“AI 可以自由调用所有工具”):模型可对任意
+ * 标签页发起关闭请求,护栏是**确认卡本身**——用户逐次审批。卡上展示标题+URL,便于判断在关什么。
  */
 export function createClosePageToolDefinition(sessionId?: string): AgentTool<
   typeof CLOSE_PAGE_PARAMS
@@ -30,7 +31,7 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
     label: toolLabel('close_page'),
     risk: 'confirm',
     description:
-      'Close a browser tab that this agent opened earlier (via open_page, or a tab a click opened) — use it for cleanup when a working tab is no longer needed. Tabs the USER opened cannot be closed with this tool (refused). Every call requires explicit user approval via a confirmation card.',
+      'Close a browser tab — use it for cleanup when a working tab is no longer needed. Any tab can be requested, including ones the user opened; every call shows a confirmation card naming the tab, and nothing is closed unless the user approves it. If a tab should stay open, do not call this tool.',
     parameters: CLOSE_PAGE_PARAMS,
     execute: async (toolCallId, args) => {
       const tabId = args?.tabId;
@@ -40,26 +41,15 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
           details: null,
         };
       }
-      // 关闭权 = agent **创建**的 tab(open_page 新建 / click 开出);
-      // 仅“认领为可读”的用户 tab 不在内 —— 否则用户自己的页面会被误关。
-      if (!isAgentCreatedTab(tabId)) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Refusing to close tab #${tabId}: this agent did not create it. Only tabs it opened itself (open_page) or that a click opened can be closed; tabs the user opened stay off-limits even if the agent adopted them for reading.`,
-            },
-          ],
-          details: { tabId, denied: true },
-        };
-      }
-
+      // 关闭权不再按来源判定(用户设计意图:模型可自由调用所有工具,确认卡就是护栏)。
+      // 卡上带上标题/URL,让审批是“知情同意”而不是盲批。
+      const meta = await getTabMeta(tabId).catch(() => null);
       const approved = await gateForRun({
         kind: 'confirm',
         toolName: 'close_page',
         label: toolLabel('close_page'),
         summary: i18n.t('gateCard.closePage.summary'),
-        detail: `Close tab #${tabId}`,
+        detail: `Close tab #${tabId}${meta?.title ? ` — ${meta.title}` : ''}${meta?.url ? `\n${meta.url}` : ''}`,
         toolCallId,
       });
       if (!(approved.kind === 'confirm' && approved.approved)) {
@@ -94,7 +84,6 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
           }
         }
         unregisterAgentOpenedTab(tabId);
-        unregisterAgentCreatedTab(tabId);
         return {
           content: [{ type: 'text', text: `Closed tab #${tabId}.` }],
           details: { tabId },
