@@ -98,21 +98,33 @@ export function createScreenshotPageToolDefinition(
         };
       }
 
-      // 批准后再截图。后台 tab 优先走 CDP 直接截(不抢用户前台),失败才降级为「激活后截可见区」(旧行为)。
-      // captureVisibleTab 只能截活动标签——这才是之前“后台标签被拒”的根因。
-      const path = capturePathFor((await getActiveTabMeta())?.id === tabId, true);
+      // 批准后再截图。活动 tab 走扩展 API(captureVisibleTab,不经 debugger);后台 tab 优先 CDP 直接截
+      // (不抢用户前台);**任一路径失败都换另一条**——限流(2 次/秒)、debugger 被占、后台非活动
+      // 都能被另一条路接住,而不是把可恢复的失败直接丢给模型。
+      const isActiveTab = (await getActiveTabMeta())?.id === tabId;
+      const path = capturePathFor(isActiveTab, true);
       let result: Awaited<ReturnType<typeof captureVisibleForModel>>;
       let viaCdp = false;
-      if (path === 'cdp') {
+      if (path === 'visible') {
+        result = await captureVisibleForModel(tabId);
+      } else {
         result = await captureTabViaCdpForModel(tabId);
         viaCdp = result.ok;
-        if (!result.ok) {
-          // CDP 不可用(debugger 被占用 / 受限页):降级激活后截可见区
+      }
+      if (!result.ok) {
+        // 通用兑底:CDP(不抢前台);若仍未拿到且目标本就不是活动 tab,再试“激活后截可见区”
+        const fallback = await captureTabViaCdpForModel(tabId);
+        if (fallback.ok) {
+          result = fallback;
+          viaCdp = true;
+        } else if (!isActiveTab) {
           await browser.tabs.update(tabId, { active: true }).catch(() => {});
-          result = await captureVisibleForModel(tabId);
+          const activated = await captureVisibleForModel(tabId);
+          if (activated.ok) {
+            result = activated;
+            viaCdp = false;
+          }
         }
-      } else {
-        result = await captureVisibleForModel(tabId);
       }
       if (!result.ok) {
         const text =

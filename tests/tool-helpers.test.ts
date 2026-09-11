@@ -155,3 +155,17 @@ test('close_page:浏览器拒绝关闭时不得谎报成功', async () => {
     setGateHandler(null);
   }
 });
+
+// H5 能成立依赖一个隐式契约:getAgentOpenedTabs() 返回**活引用**(不是拷贝),
+// 因此 click 登记的新 tab 在同一轮就能被 read_page 的白名单工具看到。
+// 若将来有人改成返回副本,读取会在当轮失效而不会报错——这里把它钉住。
+test('getAgentOpenedTabs 返回活引用(登记后当轮即可见)', async () => {
+  const { getAgentOpenedTabs, registerAgentOpenedTab, unregisterAgentOpenedTab } = await import(
+    '../lib/pageContext'
+  );
+  const view = getAgentOpenedTabs();
+  registerAgentOpenedTab(777001);
+  assert.ok(view.has(777001), '登记必须对已持有的集合视图可见(工具在轮内捕获的正是它)');
+  unregisterAgentOpenedTab(777001);
+  assert.ok(!view.has(777001), '注销同样即时可见');
+});
