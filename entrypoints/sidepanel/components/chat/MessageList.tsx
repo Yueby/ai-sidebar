@@ -227,6 +227,29 @@ export function MessageList({
     compaction,
   ]);
 
+  // 性能汇总累计(仅 DEV):每个回合结束打一行,便于直接复制(不必在每 2s 行里翻找)
+  const perfRunRef = useRef<{ renders: number; shikiCalls: number; shikiMs: number; peakItems: number; startedAt: number } | null>(null);
+
+  // 回合结束的汇总行(仅 DEV):一行给出该轮的渲染/高亮总量与每秒渲染数
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (isStreaming) {
+      const run =
+        perfRunRef.current ?? { renders: 0, shikiCalls: 0, shikiMs: 0, peakItems: 0, startedAt: Date.now() };
+      run.peakItems = Math.max(run.peakItems, itemsToRender.length);
+      perfRunRef.current = run;
+      return;
+    }
+    const run = perfRunRef.current;
+    if (!run) return;
+    perfRunRef.current = null;
+    const secs = Math.max(0.1, (Date.now() - run.startedAt) / 1000);
+    console.info(
+      `[perf] 汇总 items峰值=${run.peakItems} renders=${run.renders} renders每秒=${Math.round(run.renders / secs)} ` +
+        `shikiCalls=${run.shikiCalls} shikiMs=${Math.round(run.shikiMs)} 历时=${secs.toFixed(1)}s`,
+    );
+  }, [isStreaming, itemsToRender.length]);
+
   // 性能诊断(仅 DEV):流式期间每 2s 汇报渲染压力,用于验证「回复时卡顿」是否真的被压下去。
   // 期望:rendersIn2s ≈ flush 次数(live 一项),shikiCalls ≈ 0(逐字揭示期间不高亮),历史项不动。
   useEffect(() => {
@@ -244,6 +267,13 @@ export function MessageList({
         hits: shikiStats.hits,
         ms: shikiStats.ms,
       };
+      const run = perfRunRef.current;
+      if (run) {
+        run.renders += now.renders - prev.renders;
+        run.shikiCalls += now.calls - prev.calls;
+        run.shikiMs += now.ms - prev.ms;
+        run.peakItems = Math.max(run.peakItems, itemsToRender.length);
+      }
       // 单行字符串:对象在 DevTools 里会折叠成 Object,粘贴出来一个数字都没有
       console.info(
         `[perf] 2s items=${itemsToRender.length} renders=${now.renders - prev.renders} ` +
