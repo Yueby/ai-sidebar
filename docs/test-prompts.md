@@ -9,11 +9,13 @@
 
 1. **dev 在跑**:`netstat -ano | grep :3000`。不在就 `pnpm dev`。
    （今天 dev 曾静默退出;清理进程时**别按 `*ai-sidebar*` 过滤杀 node**,会误杀 pi 自身。）
-2. **起本地测试页**（避免依赖外网、长度可控）:
+2. **本地测试页已由我启动**（`http-server` 占用 **8789**，服务目录 `fixtures/long-page`）:
+   直接打开 `http://localhost:8789/`，并**刷新一次**（确保吃到 content script 修复）。
+   若端口没监听，重新起:
    ```bash
-   npx http-server fixtures/long-page -p 8789
+   npx http-server fixtures/long-page -p 8789 -c-1
    ```
-   然后浏览器打开 `http://localhost:8789/`（**刷新一次**，确保吃到 content script 修复）。
+   页面结构:`index.html` 是空壳（~505B），长正文由外链 `content.js` 在 **1.2s 后**注入 → 1.2s 前抽取只能拿到 ~50 字占位符，因此 H2 会真实走到新加的自动重试路径；正文约 19500 字符，末尾埋了唯一标记 `ZEBRA-7391`。
 3. **重开一次侧边栏面板**（确保吃到 sidepanel 侧修复:性能、审批卡）。
 4. **截图项(H4/I2/B7)需要 vision 模型**;当前模型不支持图片就跳过 H4。
 
