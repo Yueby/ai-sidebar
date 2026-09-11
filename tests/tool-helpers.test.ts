@@ -116,13 +116,16 @@ test('nextOffsetFor:只有知道全文长度时才给下一次 offset', () => {
 // 并把该 tab 从 agent-opened 注册表删掉 → 模型以为关掉了,实际还开着。
 test('close_page:浏览器拒绝关闭时不得谎报成功', async () => {
   const { createClosePageToolDefinition } = await import('../lib/tools/close-page');
-  const { registerAgentOpenedTab, getAgentOpenedTabs } = await import('../lib/pageContext');
+  const { markAgentCreatedTab, registerAgentOpenedTab, getAgentOpenedTabs } = await import(
+    '../lib/pageContext'
+  );
   const { setGateHandler } = await import('../lib/gate');
   const stub = (globalThis as unknown as { browser: { tabs: Record<string, unknown> } }).browser;
 
   const originalRemove = stub.tabs.remove;
   const originalGet = stub.tabs.get;
   registerAgentOpenedTab(4242);
+  markAgentCreatedTab(4242);
   // 用户批准关闭
   setGateHandler(async () => ({ kind: 'confirm', approved: true }) as never);
   try {
@@ -199,4 +202,32 @@ test('续读提示:尾窗要说明“前面被省略”以及怎么往回读', (
   assert.ok(/showing characters \d+-\d+ of \d+/.test(hint), '必须如实告知展示的是哪一段');
   assert.ok(/Characters before \d+ were omitted/.test(hint), '必须说明前面还有内容');
   assert.ok(/pass a smaller offset/.test(hint), '必须告诉怎么往回读');
+});
+
+// 真机实测的安全边界破口:用户自己开的标签页被 open_page **复用认领**后,
+// close_page 对它弹了确认卡(说明注册表检查通过)——"用户自己的页面不可关闭"被绕过。
+// 约定:认领(opened)只给读权限;关闭权只属于 agent **创建/造成出现**的 tab。
+test('close_page:被认领的用户标签页必须拒绝关闭(认领 ≠ 可关)', async () => {
+  const { createClosePageToolDefinition } = await import('../lib/tools/close-page');
+  const { registerAgentOpenedTab, isAgentCreatedTab } = await import('../lib/pageContext');
+  const { setGateHandler } = await import('../lib/gate');
+
+  const userTabId = 555001;
+  registerAgentOpenedTab(userTabId); // 仅认领为可读(open_page 复用路径的行为)
+  assert.ok(!isAgentCreatedTab(userTabId), '认领不得授予关闭权');
+
+  let gateCalls = 0;
+  setGateHandler(async () => {
+    gateCalls += 1;
+    return { kind: 'confirm', approved: true } as never;
+  });
+  try {
+    const tool = createClosePageToolDefinition('s');
+    const res = await tool.execute('call-x', { tabId: userTabId });
+    const text = String((res.content[0] as { text: string }).text);
+    assert.ok(/Refusing to close/.test(text), `必须直接拒绝,实际: ${text}`);
+    assert.equal(gateCalls, 0, '拒绝必须发生在弹卡之前(不给用户误关的机会)');
+  } finally {
+    setGateHandler(null);
+  }
 });

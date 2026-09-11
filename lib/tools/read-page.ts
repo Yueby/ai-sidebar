@@ -130,7 +130,7 @@ export function createReadPageToolDefinition(
           {
             type: 'text',
             text:
-              renderPageContext(page) +
+              renderPageContext(page, { truncationNote: !truncationNote }) +
               (retryNote ? `\n\n${retryNote}` : '') +
               (waitNote ? `\n\n${waitNote}` : '') +
               (authNote ? `\n\n${authNote}` : '') +

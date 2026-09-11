@@ -5,7 +5,8 @@ import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import {
   closeTab,
-  getAgentOpenedTabs,
+  isAgentCreatedTab,
+  unregisterAgentCreatedTab,
   unregisterAgentOpenedTab,
 } from '../pageContext';
 import { requestGate } from '../gate';
@@ -39,12 +40,14 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
           details: null,
         };
       }
-      if (!getAgentOpenedTabs().has(tabId)) {
+      // 关闭权 = agent **创建**的 tab(open_page 新建 / click 开出);
+      // 仅“认领为可读”的用户 tab 不在内 —— 否则用户自己的页面会被误关。
+      if (!isAgentCreatedTab(tabId)) {
         return {
           content: [
             {
               type: 'text',
-              text: `Refusing to close tab #${tabId}: it was not opened by this agent (only tabs created via open_page can be closed).`,
+              text: `Refusing to close tab #${tabId}: this agent did not create it. Only tabs it opened itself (open_page) or that a click opened can be closed; tabs the user opened stay off-limits even if the agent adopted them for reading.`,
             },
           ],
           details: { tabId, denied: true },
@@ -91,6 +94,7 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
           }
         }
         unregisterAgentOpenedTab(tabId);
+        unregisterAgentCreatedTab(tabId);
         return {
           content: [{ type: 'text', text: `Closed tab #${tabId}.` }],
           details: { tabId },
