@@ -89,7 +89,7 @@ function sanitizeWebSearch(value: unknown): Settings['webSearch'] {
   };
 }
 
-/** 字段预算(与 HANDOFF 四期规格一致) */
+/** 字段预算(与 docs/decisions.md 四期规格一致) */
 const SYSTEM_PROMPT_MAX = 4000;
 const RULE_NAME_MAX = 100;
 const RULE_CONTENT_MAX = 4000;

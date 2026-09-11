@@ -1,10 +1,10 @@
 # ai-sidebar — 项目代号
 
-> **交接注(2026-09,文档已同步)**:UI 已全部实现,agent 运行时 = pi-agent-core 会话 Agent(每会话一实例自持转录,决策 36);会话存储 = **JSONL 记录**(库 `ai-sidebar-sessions` 单 store,决策 38 零旧版兼容);引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ 工具面(read/read_element/search_element/search_page/click/fill/scroll/screenshot/open/activate/close/fetch_url/search_web/execute_js/compact_context/read_time/ask_user)。**设置页 = 全高 Drawer**(七视图:提供商/模型/提示词/搜索/外观/备份/关于,权限 tab 已删);userScripts 强引导;模型分工卡(per-role 思考档)+ 全局语言偏好 + 动态快捷指令 + 会话导出 Markdown;动作可靠性三件套(click tab 变化报告/open_page 同 URL 复用/settle 隐藏短路 + 8s 看门狗);聊天视觉改版(决策 40:AI 平铺无气泡/头像顶部/用户气泡 secondary/代码块 shiki 双主题/composer 四层堆叠);页面动作测试台 `fixtures/page-actions`。当前唯一权威现状、最新决策与 API 契约见 **`HANDOFF.md`**,以它为准;本文件与它已同步。
+> **交接注(2026-09,文档已同步)**:UI 已全部实现,agent 运行时 = pi-agent-core 会话 Agent(每会话一实例自持转录,决策 36);会话存储 = **JSONL 记录**(库 `ai-sidebar-sessions` 单 store,决策 38 零旧版兼容);引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ 工具面(read/read_element/search_element/search_page/click/fill/scroll/screenshot/open/activate/close/fetch_url/search_web/execute_js/compact_context/read_time/ask_user)。**设置页 = 全高 Drawer**(七视图:提供商/模型/提示词/搜索/外观/备份/关于,权限 tab 已删);userScripts 强引导;模型分工卡(per-role 思考档)+ 全局语言偏好 + 动态快捷指令 + 会话导出 Markdown;动作可靠性三件套(click tab 变化报告/open_page 同 URL 复用/settle 隐藏短路 + 8s 看门狗);聊天视觉改版(决策 40:AI 平铺无气泡/头像顶部/用户气泡 secondary/代码块 shiki 双主题/composer 四层堆叠);页面动作测试台 `fixtures/page-actions`。**实施细节一律以代码为准**;决策日志 `docs/decisions.md`、避坑与环境备注 `docs/pitfalls.md`、当前阶段与开放项 `docs/status-and-open-issues.md`、回归清单 `docs/regression-jsonl.md`。
 
 开源 **BYOK 浏览器 AI 侧边栏扩展**(Chromium 系:Chrome/Edge/Brave),对标 Chrome 内置 Gemini 侧边栏,但用你自己的 API Key、UI 现代化。
 
-**产品北极星:浏览器 Agentic 侧边栏**——从聊天助手演进为能在浏览器里自治完成多步任务的 agent(六大支柱:感知/动作/自治/获取/记忆/底座,详见 HANDOFF.md)。
+**产品北极星:浏览器 Agentic 侧边栏**——从聊天助手演进为能在浏览器里自治完成多步任务的 agent(六大支柱:感知/动作/自治/获取/记忆/底座,详见 docs/status-and-open-issues.md)。
 
 > 命名约定:`ai-sidebar` 是**永久内部代号**(目录名/包名),不要改目录名——pi 的会话历史按工作目录存储,改目录会"丢"对话。以后要改的只是产品名(`package.json` name、manifest name、商店上架名),这些随时可改、零影响。
 
@@ -17,7 +17,7 @@
   - 网络搜索:设置页"搜索"页签配置十源(duckduckgo/searxng/brave/tavily/bocha/serper/exa/zhipu/metaso/bing),`search_web` 条件注册(未配置不占工具面)
   - BYOK 多提供商:三种协议 —— **OpenAI 兼容 · Chat Completions / OpenAI 兼容 · Responses / Anthropic Messages**(OpenAI / DeepSeek / OpenRouter / Kimi / GLM / Ollama / 自定义 baseUrl+key+model)
 - **二期**:划词快捷提问(未做);会话重命名(AI 命名 + 行内改名)、多模型快捷切换(输入框全提供商分组菜单)、会话导出 Markdown(历史行 hover)已完成
-- **三期(规格 v2,详见 HANDOFF.md §8.4)**:ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;步①②③已实施(search_element 发现层 + click/fill/scroll/screenshot_page 页面动作原语 + 会话级 grant + 权限架构定案),步④返回模板 v2 待做
+- **三期(规格 v2,详见 docs/status-and-open-issues.md)**:ARIA 定位与页面动作原语——search/click/fill/scroll/screenshot 五工具 + 会话级 grant + Before/After 反馈;步①②③已实施(search_element 发现层 + click/fill/scroll/screenshot_page 页面动作原语 + 会话级 grant + 权限架构定案),步④返回模板 v2 待做
 
 ## UI 方向(已确认)
 
@@ -101,12 +101,12 @@ components/ui/        # shadcn 组件(保持官方原样)
 
 1. **用户手动回归** —— 本轮(决策 36-40)清单 `docs/regression-jsonl.md`:A 组迁移项已随决策 38 作废(新库无旧数据),重点 B 组并发/队列、E 组压缩(8k 窗口预算自适应)、C 组动作(测试台 `fixtures/page-actions`,`npx http-server fixtures/page-actions -p 8788`)、F 组通用、D 组 WebDAV;历史批次(普通对话/read/search/fetch/click 全链/导出/设置抽屉/模型分工/语言/思考档/引导弹窗/删除确认)已随批回归
 2. ~~多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)~~ ✅ 已完成(2026-09,决策 45:新增 91 键 ×2 语言、剩余仅 DEV 日志/原生语言名/兜底表)
-3. 三期规格 v2(全文见 HANDOFF.md §8.4):**ARIA 定位与页面动作原语**——引库唯一新依赖 `dom-accessibility-api`;五新工具 `search_element`(safe,AX 交互元素清单紧凑行式)/ `click_element` / `fill_element`(confirm+会话 grant)/ `scroll_page`(safe)/ `screenshot_page`(confirm);时序等待内置有界 settle 不设独立工具;反馈 Before/After + 结构化错误前缀;寻址双轨(用户框选 = picked-element 块 CSS selector 不变,模型动作 = ARIA role+name locator,默认 focused tab;search_element 已按默认 focused tab、无白名单实施——用户拍板);会话级 grant 扩展进 gate.ts(execute_js 永不可 grant);实施序列 ①search(✅ 已完成 2026-09)→ ②click/fill+scroll+grant+高亮(✅ 已完成 2026-09)→ ③screenshot(✅ 已完成 2026-09)→ ④返回模板 v2(✅ 已完成 2026-09:页面指纹 + click/fill after 注记,lib/sessionExport 无关)→ ⑤chrome.debugger(✅ 已启用 2026-09:scroll_page JS 链无位移时 CDP 可信滚轮兜底,lib/cdp.ts 白名单单方法 + 60s 闲置 detach,见 HANDOFF 决策 35);验收标尺 = search→click 链完成登录页填字点按钮零手写 JS(✅ 真实登录页已通过;execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
+3. 三期规格 v2(见 docs/status-and-open-issues.md):**ARIA 定位与页面动作原语**——引库唯一新依赖 `dom-accessibility-api`;五新工具 `search_element`(safe,AX 交互元素清单紧凑行式)/ `click_element` / `fill_element`(confirm+会话 grant)/ `scroll_page`(safe)/ `screenshot_page`(confirm);时序等待内置有界 settle 不设独立工具;反馈 Before/After + 结构化错误前缀;寻址双轨(用户框选 = picked-element 块 CSS selector 不变,模型动作 = ARIA role+name locator,默认 focused tab;search_element 已按默认 focused tab、无白名单实施——用户拍板);会话级 grant 扩展进 gate.ts(execute_js 永不可 grant);实施序列 ①search(✅ 已完成 2026-09)→ ②click/fill+scroll+grant+高亮(✅ 已完成 2026-09)→ ③screenshot(✅ 已完成 2026-09)→ ④返回模板 v2(✅ 已完成 2026-09:页面指纹 + click/fill after 注记,lib/sessionExport 无关)→ ⑤chrome.debugger(✅ 已启用 2026-09:scroll_page JS 链无位移时 CDP 可信滚轮兜底,lib/cdp.ts 白名单单方法 + 60s 闲置 detach,见 docs/decisions.md 决策 35);验收标尺 = search→click 链完成登录页填字点按钮零手写 JS(✅ 真实登录页已通过;execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
 4. 发布:图标 + `wxt zip`
 
 > 已完成(2026-09-02):`err: any` → `unknown`(getErrorMessage helper);dev 可观测性(未知 `ai-sidebar/` 消息 console.warn);execute_js 工具(userScripts.execute 主路线 + scripting MAIN world 兜底,confirm 门控动态预览代码,Chrome 135+ / Allow User Scripts 开关引导)。用户拍板不做:highlight.js 语言包裁剪(当时本地加载 941KB 不构成瓶颈;rehype-highlight@7 的 `languages` 选项可随时按需裁)。**该条已被取代**:决策 40 改换 shiki 双主题后,`highlight.js` 与 `rehype-highlight` 已整体移除(`517648c`),无需再考虑裁剪。
 >
-> 已完成批次(2026-09,交接前):fetch_url(私有内网拒绝+重定向复检);**元素引用统一 `<picked-element …/>` 块协议**(标记层废除,旧数据可弃);token 瘦身(system prompt/工具描述压缩,单轮 ~17000→~500);finalize 闪烁修复(sessionKey 重估);流式跟底重做(overflow-anchor 钉底);**websearch 十源**(设置"搜索"页签,search_web 条件注册);注释叙事清扫。详见 HANDOFF.md。
+> 已完成批次(2026-09,交接前):fetch_url(私有内网拒绝+重定向复检);**元素引用统一 `<picked-element …/>` 块协议**(标记层废除,旧数据可弃);token 瘦身(system prompt/工具描述压缩,单轮 ~17000→~500);finalize 闪烁修复(sessionKey 重估);流式跟底重做(overflow-anchor 钉底);**websearch 十源**(设置"搜索"页签,search_web 条件注册);注释叙事清扫。详见 docs/decisions.md。
 
 ## 约定
 
@@ -123,4 +123,4 @@ oh-my-opencode-slim before aligning against upstream; the two that mattered were
 
 - `earendil-works/pi` — pi upstream monorepo (pi-ai / pi-agent-core / pi-coding-agent):对齐 BYOK 模型 compat(如 `supportsDeveloperRole`)、agent 循环与 compaction 的上游做法。
   **注意**:运行时依赖已装在 `node_modules/@earendil-works/pi-agent-core/dist/`(读 dist 即可核事件与循环语义),克隆只用于看源码。
-- `AhYi8/browser-ai-assistant` — CDP 驱动的浏览器自动化助手;三期页面动作工具的参考仓(AX 行格式/受控 fill 法/遮挡检测/有界轮询——搬模式,特权层仅滚动可信滚轮白名单:lib/cdp.ts,三期规格见 HANDOFF.md §8.4)。
+- `AhYi8/browser-ai-assistant` — CDP 驱动的浏览器自动化助手;三期页面动作工具的参考仓(AX 行格式/受控 fill 法/遮挡检测/有界轮询——搬模式,特权层仅滚动可信滚轮白名单:lib/cdp.ts,三期规格见 docs/status-and-open-issues.md)。

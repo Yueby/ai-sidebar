@@ -115,7 +115,7 @@ export function buildSystemPrompt(
   // 用户自定义内容注入:系统提示词框在前(定义角色与行为),规则列表在后(分段补充)
   const promptBlock = renderCustomPromptBlock(customPrompt);
   if (promptBlock) parts.push('', promptBlock);
-  // 规则注入:常驻,超预算按序丢整条(与 HANDOFF 四期规格预算一致)
+  // 规则注入:常驻,超预算按序丢整条(与 docs/status-and-open-issues.md 的四期规格预算一致)
   const rulesBlock = renderRulesBlock(rules);
   if (rulesBlock) parts.push('', rulesBlock);
   return parts.join('\n');
