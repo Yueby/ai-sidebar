@@ -83,3 +83,25 @@ export function continuationHint(tabId: number, window: TextWindow): string {
     `(offset reads forward from that character position; section is ignored when offset is set).`
   );
 }
+
+/** 抽取"过薄"的阈值(空壳页/骨架屏/加载中文案):低于它一律视为尚未渲染完 */
+export const THIN_TEXT_CHARS = 200;
+
+/** 正文是否过薄(纯判定) */
+export function isThinText(text: string, threshold = THIN_TEXT_CHARS): boolean {
+  return text.trim().length < threshold;
+}
+
+/**
+ * 过薄结果的模型可见提示(英文)。
+ * 真机实测:前端渲染页首次读取常只剩"加载中"空壳,而旧实现把它当正文返回、不给任何信号,
+ * 模型只能自己猜"再等等"或误以为页面就这么点内容。这里明确给出两个可用的旋钮。
+ */
+export function thinResultNote(charCount: number): string {
+  return (
+    `(Note: only ${charCount} characters were extracted and the text looks like a loading shell. ` +
+    `This page appears to be client-rendered and may not have finished. ` +
+    `Call read_page again with waitStableMs (up to 15000) or waitText — waiting is skipped early ` +
+    `when the page still looks empty, so a longer wait is meaningful here.)`
+  );
+}

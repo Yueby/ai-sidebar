@@ -6,7 +6,7 @@ import {
   SEARCH_ELEMENT_MESSAGE,
   SEARCH_ELEMENT_LIMIT,
 } from '@/lib/types';
-import { textWindow } from '@/lib/pageTextWindow';
+import { isThinText, textWindow } from '@/lib/pageTextWindow';
 // type-only:编译期擦除,不引入运行时代码(载荷形状与 sidepanel 侧同源)
 import type { PageActionResult, ResolvedActionElement, SearchElementsResult } from '@/lib/pageContext';
 
@@ -428,7 +428,9 @@ export default defineContentScript({
           await new Promise((resolve) => setTimeout(resolve, 500));
           result = (await extractSemanticMarkdown(wantFull)) ?? extractMarkdown(section, wantFull);
           const found = needle ? result.text.toLowerCase().includes(needle) : false;
-          if (found || result.text.length === lastLen) break;
+          // 过薄(空壳/骨架)不算“稳定”:否则 length 相同会立刻跳出,waitStableMs 对前端渲染页形同虚设
+          const settled = result.text.length === lastLen && !isThinText(result.text);
+          if (found || settled) break;
           lastLen = result.text.length;
         }
       }

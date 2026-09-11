@@ -3,15 +3,14 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { extractFromTab, renderPageContext, buildUnreadableTabError, type RefTab } from '../pageContext';
-import { continuationHint, nextOffsetFor } from '../pageTextWindow';
+import { continuationHint, isThinText, nextOffsetFor, thinResultNote } from '../pageTextWindow';
 
 /** 首次抽取过薄(SPA 未渲染完)时的自动重试节奏:有界、总时长封顶,避免模型自己摸索“再等等再读” */
 const THIN_RETRY_WAITS_MS = [1200, 2500];
-const THIN_TEXT_CHARS = 200;
 
-/** 抽取是否过薄(纯判定,便于单测):前端渲染页首次读取常见“只剩骨架/空白” */
+/** 抽取是否过薄(单一来源:`lib/pageTextWindow` 的阈值与判定) */
 export function isThinExtraction(text: string): boolean {
-  return text.trim().length < THIN_TEXT_CHARS;
+  return isThinText(text);
 }
 
 const READ_PAGE_PARAMS = Type.Object({
@@ -125,12 +124,16 @@ export function createReadPageToolDefinition(
       const retryNote = autoRetried
         ? 'Note: the first extraction came back nearly empty, so the page was read again after a short wait (it appears to be client-rendered).'
         : '';
+      // 自动重试是**有界**的(约 3.7s):若仍然过薄,必须明确告知“这不是正文,可以继续等”,
+      // 否则模型会把“加载中…”当内容,或自己猜要不要再读一次(真机实测正是如此)。
+      const stillThinNote = isThinExtraction(page.text) ? thinResultNote(page.text.trim().length) : '';
       return {
         content: [
           {
             type: 'text',
             text:
               renderPageContext(page, { truncationNote: !truncationNote }) +
+              (stillThinNote ? `\n\n${stillThinNote}` : '') +
               (retryNote ? `\n\n${retryNote}` : '') +
               (waitNote ? `\n\n${waitNote}` : '') +
               (authNote ? `\n\n${authNote}` : '') +

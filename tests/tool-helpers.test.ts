@@ -7,7 +7,14 @@
 import './helpers/browser-stub';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { textWindow, continuationHint, nextOffsetFor } from '../lib/pageTextWindow';
+import {
+  textWindow,
+  continuationHint,
+  nextOffsetFor,
+  isThinText,
+  thinResultNote,
+  THIN_TEXT_CHARS,
+} from '../lib/pageTextWindow';
 import { capturePathFor } from '../lib/imageFetch';
 import { isThinExtraction } from '../lib/tools/read-page';
 
@@ -230,4 +237,18 @@ test('close_page:被认领的用户标签页必须拒绝关闭(认领 ≠ 可关
   } finally {
     setGateHandler(null);
   }
+});
+
+// 真机实测(2026-09-11):前端渲染页首次读取只剩“加载中”空壳,旧实现把它当正文返回且不给任何信号,
+// 模型先试 waitStableMs=15000 也没用(空壳长度天生"稳定"→等待循环立刻跳出),最后靠 waitText 才拿到内容。
+test('过薄结果必须带可行动的提示(且阈值单一来源)', () => {
+  assert.equal(isThinExtraction(''), true);
+  assert.equal(isThinExtraction('加载中……正文由外链脚本在 1.2 秒后注入。'), true);
+  assert.equal(isThinText('x'.repeat(THIN_TEXT_CHARS)), false, '阈值边界:达到阈值即不算薄');
+  assert.equal(isThinExtraction('x'.repeat(THIN_TEXT_CHARS)), false);
+
+  const note = thinResultNote(48);
+  assert.ok(/loading shell/.test(note), '明确说明这不是正文');
+  assert.ok(/waitStableMs/.test(note) && /waitText/.test(note), '给出两个可用旋钮');
+  assert.ok(/15000/.test(note), '给出上限值,便于模型直接用');
 });
