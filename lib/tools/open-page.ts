@@ -106,7 +106,7 @@ export function createOpenPageToolDefinition(sessionId?: string): AgentTool<type
         content: [
           {
             type: 'text',
-            text: `Opened tab #${meta.id} (${meta.url})${background ? ' in the background' : ' — it is now the focused tab'}. Its tabId is registered: read_page / click_element / fill_element can address it via tabId.`,
+            text: `Opened tab #${meta.id}${meta.title ? ` — ${meta.title}` : ''} (${meta.url})${background ? ' in the background' : ' — it is now the focused tab'}. Its tabId is registered: read_page / click_element / fill_element can address it via tabId.`,
           },
         ],
         details: { tabId: meta.id, url: meta.url },
