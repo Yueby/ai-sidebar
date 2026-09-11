@@ -111,3 +111,47 @@ test('nextOffsetFor:只有知道全文长度时才给下一次 offset', () => {
   assert.equal(nextOffsetFor(0, 12000, undefined), null, '拿不到全文长度 → 不给调用指引');
   assert.equal(nextOffsetFor(0, 12000, 0), null, '空页同理');
 });
+
+// close_page 曾谎报成功:closeTab 返回 false(浏览器拒绝关闭)时仍回 “Closed tab #N.”,
+// 并把该 tab 从 agent-opened 注册表删掉 → 模型以为关掉了,实际还开着。
+test('close_page:浏览器拒绝关闭时不得谎报成功', async () => {
+  const { createClosePageToolDefinition } = await import('../lib/tools/close-page');
+  const { registerAgentOpenedTab, getAgentOpenedTabs } = await import('../lib/pageContext');
+  const { setGateHandler } = await import('../lib/gate');
+  const stub = (globalThis as unknown as { browser: { tabs: Record<string, unknown> } }).browser;
+
+  const originalRemove = stub.tabs.remove;
+  const originalGet = stub.tabs.get;
+  registerAgentOpenedTab(4242);
+  // 用户批准关闭
+  setGateHandler(async () => ({ kind: 'confirm', approved: true }) as never);
+  try {
+    // 场景一:关闭失败且 tab 仍在 → 必须报失败,且不得注销注册表
+    stub.tabs.remove = async () => {
+      throw new Error('browser refused');
+    };
+    stub.tabs.get = async () => ({ id: 4242, url: 'https://x.example/' });
+    const tool = createClosePageToolDefinition('s');
+    const res = await tool.execute('call-1', { tabId: 4242 });
+    const text = String((res.content[0] as { text: string }).text);
+    assert.ok(!/^Closed tab/.test(text), `不得报成功,实际: ${text}`);
+    assert.ok(/still open/.test(text), '必须明确说明还开着');
+    assert.ok(getAgentOpenedTabs().has(4242), '关闭失败时不得注销(否则后续误判)');
+
+    // 场景二:tab 已经不存在(目标已达成)→ 报成功并注销
+    stub.tabs.remove = async () => {
+      throw new Error('no such tab');
+    };
+    stub.tabs.get = async () => {
+      throw new Error('no such tab');
+    };
+    const res2 = await tool.execute('call-2', { tabId: 4242 });
+    const text2 = String((res2.content[0] as { text: string }).text);
+    assert.ok(/^Closed tab/.test(text2), `已不存在应视为成功,实际: ${text2}`);
+    assert.ok(!getAgentOpenedTabs().has(4242), '成功关闭后应注销');
+  } finally {
+    stub.tabs.remove = originalRemove;
+    stub.tabs.get = originalGet;
+    setGateHandler(null);
+  }
+});

@@ -29,7 +29,7 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
     label: toolLabel('close_page'),
     risk: 'confirm',
     description:
-      'Close a browser tab that this agent opened earlier (via open_page) — use it for cleanup when a working tab is no longer needed. Tabs the USER opened cannot be closed with this tool (refused). Requires user approval unless granted this session.',
+      'Close a browser tab that this agent opened earlier (via open_page, or a tab a click opened) — use it for cleanup when a working tab is no longer needed. Tabs the USER opened cannot be closed with this tool (refused). Every call requires explicit user approval via a confirmation card.',
     parameters: CLOSE_PAGE_PARAMS,
     execute: async (toolCallId, args) => {
       const tabId = args?.tabId;
@@ -67,7 +67,29 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
       }
 
       try {
-        await closeTab(tabId);
+        const ok = await closeTab(tabId);
+        if (!ok) {
+          // closeTab 失败可能是“已经不存在”(达成目标),也可能是浏览器拒绝关闭。
+          // 旧写法忽略返回值、永远报成功,模型会以为关掉了而实际还开着——必须区分。
+          let stillOpen = false;
+          try {
+            await browser.tabs.get(tabId);
+            stillOpen = true;
+          } catch {
+            stillOpen = false;
+          }
+          if (stillOpen) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Failed to close tab #${tabId}: the browser refused to close it, so it is still open. Do not assume it is gone.`,
+                },
+              ],
+              details: { tabId },
+            };
+          }
+        }
         unregisterAgentOpenedTab(tabId);
         return {
           content: [{ type: 'text', text: `Closed tab #${tabId}.` }],
