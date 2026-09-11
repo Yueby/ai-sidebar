@@ -109,8 +109,9 @@ export function createReadPageToolDefinition(
         ? 'Note: this page appears to be a login/signup flow — the site may require authentication before it can be used.'
         : '';
       // 续读指引:截断时给出下一次调用所需的 offset(不再让模型自己摸索后半段怎么取)
-      const shownFrom = requestedOffset;
-      const shownTo = requestedOffset + page.text.length;
+      // 起点取 content 侧回报的**真实窗口起点**(尾窗不为 0)——否则提示会说错“展示的是哪一段”
+      const shownFrom = page.windowStart ?? requestedOffset;
+      const shownTo = shownFrom + page.text.length;
       const truncationNote = page.truncated
         ? continuationHint(tabId, {
             text: page.text,
@@ -118,6 +119,7 @@ export function createReadPageToolDefinition(
             truncated: true,
             totalLength: page.totalLength ?? shownTo,
             nextOffset: nextOffsetFor(shownFrom, page.text.length, page.totalLength),
+            omittedBefore: shownFrom > 0,
           })
         : '';
       const retryNote = autoRetried

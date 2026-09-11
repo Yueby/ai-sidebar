@@ -26,6 +26,8 @@ export interface ExtractedPage extends PageContext {
   truncated?: boolean;
   /** 该页全文长度(仅续读窗口请求时由 content 侧回报,用于告知还差多少) */
   totalLength?: number;
+  /** 窗口在全文中的真实起点(尾窗不为 0) */
+  windowStart?: number;
 }
 
 /** 被引用的标签页(实时元信息,不含正文) */
@@ -279,6 +281,7 @@ export async function extractFromTab(
       truncated: res.truncated === true,
       fingerprint: typeof res.fingerprint === 'string' ? res.fingerprint : undefined,
       totalLength: typeof res.totalLength === 'number' ? res.totalLength : undefined,
+      windowStart: typeof res.windowStart === 'number' ? res.windowStart : undefined,
     };
   } catch {
     // 该页没有 content script(如刚加载的 chrome:// 页)或提取失败

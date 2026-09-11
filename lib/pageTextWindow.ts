@@ -17,6 +17,8 @@ export interface TextWindow {
   totalLength: number;
   /** 下一次续读的 offset;无剩余时为 null */
   nextOffset: number | null;
+  /** 本段之前还有内容被省略(尾窗/中段阅读时成立):应提示如何往回读 */
+  omittedBefore?: boolean;
 }
 
 /** 按 offset 取窗口(段落边界对齐);offset<=0 时退化为普通头部窗口 */
@@ -69,9 +71,13 @@ export function continuationHint(tabId: number, window: TextWindow): string {
   const head =
     `(Note: the page content above is truncated — showing characters ` +
     `${window.start}-${window.start + window.text.length} of ${window.totalLength}.)`;
-  if (window.nextOffset === null) return head;
+  const earlier =
+    window.omittedBefore || window.start > 0
+      ? ` Characters before ${window.start} were omitted; pass a smaller offset (e.g. 0) to read them.`
+      : '';
+  if (window.nextOffset === null) return head + earlier;
   return (
-    `${head}\n` +
+    `${head}${earlier}\n` +
     `To read the rest, call read_page with the same tabId and offset: ` +
     `${JSON.stringify({ tabId, offset: window.nextOffset })} ` +
     `(offset reads forward from that character position; section is ignored when offset is set).`

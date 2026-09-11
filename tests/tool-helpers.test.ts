@@ -169,3 +169,34 @@ test('getAgentOpenedTabs 返回活引用(登记后当轮即可见)', async () =>
   unregisterAgentOpenedTab(777001);
   assert.ok(!view.has(777001), '注销同样即时可见');
 });
+
+// 真机踩到的回归(用户实测 2026-09-11):对 19500 字长页请求 section:'tail',
+// 返回的却是**头部**内容且在 12000 处静默截断(truncated 被覆盖成 false)→ 文末标记丢失且无续读提示,
+// 模型只好改走 execute_js 兜底。根因:先按头部截断、再对截断结果做尾切片。
+test('尾窗必须落在文末且标记可见(先截断再切片会丢文末)', () => {
+  const LIMIT = 12000;
+  const full = 'A'.repeat(13000) + '\n文末标记：ZEBRA-7391';
+  assert.ok(full.length > LIMIT, '前提:全文超过上限');
+
+  // 正确做法:在**全文**上取尾窗
+  const tail = textWindow(full, Math.max(0, full.length - LIMIT), LIMIT);
+  assert.ok(tail.text.includes('ZEBRA-7391'), '尾窗必须包含文末标记');
+  assert.equal(tail.truncated, true, '被省略了开头 → 必须标记为截断(旧 bug 在此报 false)');
+  assert.ok(tail.start > 0, '尾窗起点不为 0');
+  assert.equal(tail.nextOffset, null, '尾窗已到文末,无“向后读”指引');
+
+  // 错误做法(旧实现)会让标记丢失:截断到 12000 后再尾切同一长度 → 仍是那 12000
+  const headTruncated = full.slice(0, LIMIT);
+  const stale = textWindow(headTruncated, 0, LIMIT);
+  assert.ok(!stale.text.includes('ZEBRA-7391'), '这正是旧实现丢标记的原因');
+});
+
+test('续读提示:尾窗要说明“前面被省略”以及怎么往回读', () => {
+  const LIMIT = 200;
+  const full = 'x'.repeat(500) + '\n文末标记：ZEBRA-7391';
+  const tail = textWindow(full, Math.max(0, full.length - LIMIT), LIMIT);
+  const hint = continuationHint(7, { ...tail, omittedBefore: tail.start > 0 });
+  assert.ok(/showing characters \d+-\d+ of \d+/.test(hint), '必须如实告知展示的是哪一段');
+  assert.ok(/Characters before \d+ were omitted/.test(hint), '必须说明前面还有内容');
+  assert.ok(/pass a smaller offset/.test(hint), '必须告诉怎么往回读');
+});

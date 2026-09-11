@@ -255,14 +255,6 @@ export default defineContentScript({
       return { text: blocks.join('\n\n'), truncated: false };
     }
 
-    /** 尾部窗口切片(语义路径产出的整段文本用;段落边界对齐) */
-    function tailSliceText(text: string, limit: number): { text: string; truncated: boolean } {
-      if (text.length <= limit) return { text, truncated: false };
-      const sliced = text.slice(text.length - limit);
-      const nl = sliced.indexOf('\n');
-      const aligned = nl > 0 ? sliced.slice(nl + 1) : sliced;
-      return { text: `…(前段内容已截断)\n\n${aligned}`, truncated: true };
-    }
 
     /** 提取流水线:选根 → 块级遍历 → 轻量 Markdown → 块边界截断 */
     function extractMarkdown(section: 'head' | 'tail', full = false): {
@@ -410,16 +402,22 @@ export default defineContentScript({
       fingerprint?: string;
       /** 全文长度(仅续读窗口请求时回报) */
       totalLength?: number;
+      /** 窗口在全文中的真实起点(尾窗不为 0):供上层如实告知“展示的是哪一段” */
+      windowStart?: number;
     }> {
       await waitForComplete(READY_TIMEOUT);
       // 续读请求(offset>0)必须拿**未截断**全文才能取到 12000 之后的窗口——
       // 先截断再取窗口正是初版 H3 失效的原因(offset>12000 永远空,totalLength 也是假值)。
-      const wantFull = offset > 0;
+      // tail 与 offset 都必须在**全文**上取窗口:先截断再取窗口会让 tail 拿到中段、
+      // 让 offset 拿不到 12000 之后的内容。真机实测:tail 读 19500 字长页返回的是头部内容、
+      // 且 truncated 被覆盖成 false → 静默丢末尾且不给续读提示(模型只能改走 execute_js)。
+      const wantFull = offset > 0 || section === 'tail';
       // 语义路径优先;门控不过/库不可用则手写兜底(含 isHidden 可见性过滤)
       let result = (await extractSemanticMarkdown(wantFull)) ?? extractMarkdown(section, wantFull);
       if (result.text.length < SHORT_THRESHOLD) {
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
-        result = (await extractSemanticMarkdown()) ?? extractMarkdown(section);
+        // 必须同样传 wantFull:否则过薄重试会把全文覆盖成截断版
+        result = (await extractSemanticMarkdown(wantFull)) ?? extractMarkdown(section, wantFull);
       }
       // 有界稳定等待:文本长度连续两次采样一致才算稳定(流式输出/迟到的渲染);后台 tab 节流由 deadline 兜底
       if (waitStableMs > 0) {
@@ -434,9 +432,9 @@ export default defineContentScript({
           lastLen = result.text.length;
         }
       }
-      // tail 模式:路径内部已按头部锚定截断,这里重切为尾部窗口(聊天页最新内容在尾部)
-      if (section === 'tail') result = { ...tailSliceText(result.text, TEXT_LIMIT), totalLength: result.totalLength };
-      // 续读窗口:offset>0 时在**全文**上按 offset 取窗口(与 tail 互斥——已明确从哪开始读)
+      // 窗口化统一走 textWindow(尾窗 = 从 max(0,total-limit) 起取),并回报**真实窗口起点**:
+      // 上层要据此告诉模型“展示的是全文哪一段、还有多少没给”。
+      const total = result.totalLength;
       if (offset > 0) {
         const w = textWindow(result.text, offset, TEXT_LIMIT);
         return {
@@ -446,6 +444,19 @@ export default defineContentScript({
           text: w.text,
           truncated: w.truncated,
           totalLength: w.totalLength,
+          windowStart: w.start,
+        };
+      }
+      if (section === 'tail') {
+        const w = textWindow(result.text, Math.max(0, total - TEXT_LIMIT), TEXT_LIMIT);
+        return {
+          title: document.title,
+          url: location.href,
+          fingerprint: pageFingerprint(),
+          text: w.text,
+          truncated: w.truncated,
+          totalLength: w.totalLength,
+          windowStart: w.start,
         };
       }
       // totalLength 恒回报(截断前真实长度):否则工具侧算不出“还有没有后半段”,续读提示不会出现
@@ -456,6 +467,7 @@ export default defineContentScript({
         text: result.text,
         truncated: result.truncated,
         totalLength: result.totalLength,
+        windowStart: 0,
       };
     }
 
