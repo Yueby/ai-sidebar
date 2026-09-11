@@ -2,7 +2,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-A BYOK (bring-your-own-key) AI sidebar for Chromium browsers. ChatGPT-in-the-sidebar, except the key is yours, the model is your choice, and the agent can actually read and operate the page you are looking at.
+An open-source, BYOK (bring-your-own-key) AI sidebar for Chromium browsers. ChatGPT-in-the-sidebar, except the key is yours, the model is your choice, and the agent can actually read and operate the page you are looking at.
 
 Built with [WXT](https://wxt.dev) + React 19, running entirely on your machine: API keys and conversations never leave the browser except as requests to the provider you configured.
 
@@ -187,4 +187,4 @@ Feature-complete for the planned scope, packaged as `0.1.0`. Manual regression h
 
 ## License
 
-No license file exists yet, so all rights are reserved by default. If you intend this repository to be open source, add a LICENSE (MIT or Apache-2.0 are the usual picks) — the file is all that is missing.
+[MIT](LICENSE) © 2026 Yueby.

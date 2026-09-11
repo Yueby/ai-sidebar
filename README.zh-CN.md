@@ -2,7 +2,7 @@
 
 [English](README.md) · **简体中文**
 
-一个 BYOK(Bring Your Own Key,自带密钥)的浏览器 AI 侧边栏。类似"侧边栏里的 ChatGPT",区别在于:密钥是你自己的、模型由你选、而且 agent 真的**能读、能操作**你正在看的那个页面。
+一个**开源**的 BYOK(Bring Your Own Key,自带密钥)浏览器 AI 侧边栏。类似"侧边栏里的 ChatGPT",区别在于:密钥是你自己的、模型由你选、而且 agent 真的**能读、能操作**你正在看的那个页面。
 
 基于 [WXT](https://wxt.dev) + React 19 构建,全部在你的机器上运行:除了向你自己配置的服务商发起请求,API Key 与会话数据不出浏览器。
 
@@ -187,4 +187,4 @@ npx tsx --test "tests/*.test.ts"    # 测试(node:test)
 
 ## 许可
 
-仓库尚未添加 LICENSE 文件,因此默认保留所有权利。若确实要开源,补一个 LICENSE 即可(MIT 或 Apache-2.0 是常见选择)——目前只缺这个文件。
+[MIT](LICENSE) © 2026 Yueby。

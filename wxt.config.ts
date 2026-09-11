@@ -19,7 +19,9 @@ export default defineConfig({
   // developmentIndicator: false —— 模块默认在 dev 构建把图标灰度化当“开发版”标记,关掉以显示真实颜色
   autoIcons: { developmentIndicator: false },
   // 扩展图标:assets/icon.png(512²)自动生成全套尺寸并写入 manifest.icons
-  // locales 目录(默认 <srcDir>/locales)自动发现语言;默认语言 = manifest.default_locale(zh_CN)
+  // locales 目录(默认 <srcDir>/locales)自动发现语言;默认语言 = manifest.default_locale(en)
+  // 设为 en 作为**回退**语言(浏览器语言匹配不上时才用):国际商店场景更合适;
+  // 中文用户由浏览器语言自动命中 zh_CN,不受影响。改语言前先确认 en 与 zh_CN 键集一致。
   // dev 文件监听在部分 Windows 会话下静默失效(chokidar 事件丢失):强制 1s 轮询保证 rebuild 可靠
   watchOptions: { usePolling: true, interval: 1000 },
   // 持久化 dev 浏览器 profile:web-ext 默认用临时 profile,重启 `pnpm dev` = 全新环境
@@ -33,7 +35,7 @@ export default defineConfig({
     name: 'AI Sidebar',
     description: 'BYOK AI sidebar — chat with any page using your own API key.',
     // chrome.i18n 必需,@wxt-dev/i18n 也以它为开关(未设置时模块自我禁用)
-    default_locale: 'zh_CN',
+    default_locale: 'en',
     // scripting: 程序化注入 content script(兜底扩展加载前已存在的标签页)+ execute_js 降级路线(MAIN world)
     // activeTab: 用户点击工具栏图标时临时授权,便于对未持 host 权限的页面执行注入
     // userScripts: execute_js 主路线 chrome.userScripts.execute(Chrome 135+;138+ 需在扩展详情页开 Allow User Scripts)

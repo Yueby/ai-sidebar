@@ -60,3 +60,5 @@
 **关键约束(改法由此决定)**:`lib/types.ts`、`lib/pageTextWindow.ts` **被 content script 引用,绝不能引 `#i18n`** → 思考档位文案保留兜底表 + 新增 sidepanel 侧解析器 `lib/reasoningLabels.ts`(范式同 `toolLabels.ts`,含未知档位原样返回);**消费处必须全量切换**(复审抓到设置页模型分工卡仍在直接读兜底表,已修)。
 **有意保留**:DEV 诊断日志(`[perf]`/`[p0:run]`/`[flush]`)、`lib/language.ts` 的原生语言名、全部中文注释、全部模型可见英文文案。剩余中文**字面量 32 处**,逐类有据(兜底表 14 / DEV 日志 10 / 语言名 3 / 历史标题兼容 1 / 扫描器误报 4)。
 **顺带修掉两个耦合 bug**:①首条消息判定用字面量比持久化标题 + 忽略历史默认标题(换语言后自动命名失效)→ 改为 i18n 来源 ∪ `'新会话'` 兼容集;②`createSession('新会话')` ×3 绕过 i18n 默认值 → 改 `createSession()`。
+46. **开源许可 = MIT;扩展回退语言改 en**(2026-09,用户拍板):①补 `LICENSE`(MIT,© 2026 Yueby)+ `package.json` 的 `license` 字段——此前公开仓库无 LICENSE 文件,法律上默认保留所有权利,与「开源」表述冲突;②`wxt.config.ts` 的 `manifest.default_locale` 由 `zh_CN` 改为 **`en`**:它只决定**匹配不上浏览器语言时的回退**,中文用户仍由浏览器语言命中 `zh_CN`;国际商店场景下英文回退更合适。改动前已核对 en 与 zh_CN 键集完全一致(产物 `_locales/*/messages.json` 488=488),避免回退语言缺键。
+
