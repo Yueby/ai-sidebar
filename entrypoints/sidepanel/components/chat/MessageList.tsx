@@ -244,13 +244,11 @@ export function MessageList({
         hits: shikiStats.hits,
         ms: shikiStats.ms,
       };
-      console.info('[perf] 流式 2s 压力', {
-        items: itemsToRender.length,
-        rendersIn2s: now.renders - prev.renders,
-        shikiCalls: now.calls - prev.calls,
-        shikiHits: now.hits - prev.hits,
-        shikiMs: Math.round(now.ms - prev.ms),
-      });
+      // 单行字符串:对象在 DevTools 里会折叠成 Object,粘贴出来一个数字都没有
+      console.info(
+        `[perf] 2s items=${itemsToRender.length} renders=${now.renders - prev.renders} ` +
+          `shikiCalls=${now.calls - prev.calls} shikiHits=${now.hits - prev.hits} shikiMs=${Math.round(now.ms - prev.ms)}`,
+      );
       prev = now;
     }, 2000);
     return () => clearInterval(timer);

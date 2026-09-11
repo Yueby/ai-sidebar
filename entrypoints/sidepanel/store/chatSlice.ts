@@ -54,8 +54,10 @@ export interface ChatSlice {
   removeQueuedMessagesForSession: (sessionId: string) => void;
 }
 
+// 诊断需要读跨切片字段(如 sessions):ChatSlice 自身不含 sessions,故显式声明所需视图
+type SliceState = ChatSlice & { sessions: { id: string; messages: unknown[] }[] };
 type SliceSet = (
-  partial: Partial<ChatSlice> | ((state: ChatSlice) => Partial<ChatSlice>),
+  partial: Partial<ChatSlice> | ((state: SliceState) => Partial<ChatSlice>),
 ) => void;
 
 export function createChatSlice(set: SliceSet): ChatSlice {
@@ -70,10 +72,11 @@ export function createChatSlice(set: SliceSet): ChatSlice {
         if (!active) {
           if (!(sessionId in s.runs)) return s;
           if (import.meta.env?.DEV) {
-            // P0 诊断:删除 run 条目会让 live 气泡与 in-flight 同时从屏幕消失(只剩 store 里的消息)
-            console.info(
-              `[p0:run] 删除 runs[${sessionId}] —— 若此刻 store 尚未含本轮消息,屏幕上就是“整轮消失”`,
-            );
+            // P0 诊断:run 结束会删除 run 条目(live 与 in-flight 同时消失)。正常顺序是
+            // finalize 先落盘、再清空、最后删条目——所以此刻 store 应当已有本轮消息;
+            // 这里把条数打出来,若为 0 才是“整轮消失”的真凭证(旧版无条件打警告,真出事时被淹掉)。
+            const stored = s.sessions.find((x) => x.id === sessionId)?.messages.length ?? 0;
+            console.info(`[p0:run] runs[${sessionId}] removed after run end (store msgs=${stored})`);
           }
           const next = { ...s.runs };
           delete next[sessionId];

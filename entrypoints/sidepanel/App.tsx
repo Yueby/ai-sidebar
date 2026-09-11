@@ -387,8 +387,14 @@ export default function App() {
   // 不会因流式文本增长而刷屏;多次复现可拼出完整事件序列。
   const visibleCount = displayedMessages.length + (streamingContent ? 1 : 0);
   const p0PrevRef = useRef<{ visible: number; live: number; inFlight: number; msgs: number; tools: string } | null>(null);
+  const p0SessionRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
+    // 会话切换必须重置基线:跨会话比较 msgs 会误报“会话转录减少”(A 有 14 条、切到空的 B 就是 14→0)
+    if (p0SessionRef.current !== currentSession?.id) {
+      p0SessionRef.current = currentSession?.id;
+      p0PrevRef.current = null;
+    }
     const now = {
       visible: visibleCount,
       live: streamingContent.length,
