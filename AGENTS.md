@@ -117,8 +117,10 @@ components/ui/        # shadcn 组件(保持官方原样)
 
 ## Cloned Dependency Source
 
-Read-only dependency source repositories are available under
-`.slim/clonedeps/repos/` for inspection. Do not edit these clones.
+Read-only dependency source repos are **not vendored in the working tree** — the clones that used to sit under
+`.slim/clonedeps/repos/` were cleaned up (2026-09) to reclaim ~282MB. Pull them on demand with
+oh-my-opencode-slim before aligning against upstream; the two that mattered were:
 
-- `.slim/clonedeps/repos/earendil-works__pi/` - `earendil-works/pi` at `main`; pi 上游 monorepo(pi-ai / pi-agent-core / pi-coding-agent),对齐 BYOK 模型 compat(如 `supportsDeveloperRole`)、agent 循环与 compaction 的上游做法时查这里。
-- `.slim/clonedeps/repos/AhYi8__browser-ai-assistant/` - `AhYi8/browser-ai-assistant`(CDP 驱动的浏览器自动化助手);三期页面动作工具的参考仓(AX 行格式/受控 fill 法/遮挡检测/有界轮询——搬模式,特权层仅滚动可信滚轮白名单:lib/cdp.ts,三期规格见 HANDOFF.md §8.4)。
+- `earendil-works/pi` — pi upstream monorepo (pi-ai / pi-agent-core / pi-coding-agent):对齐 BYOK 模型 compat(如 `supportsDeveloperRole`)、agent 循环与 compaction 的上游做法。
+  **注意**:运行时依赖已装在 `node_modules/@earendil-works/pi-agent-core/dist/`(读 dist 即可核事件与循环语义),克隆只用于看源码。
+- `AhYi8/browser-ai-assistant` — CDP 驱动的浏览器自动化助手;三期页面动作工具的参考仓(AX 行格式/受控 fill 法/遮挡检测/有界轮询——搬模式,特权层仅滚动可信滚轮白名单:lib/cdp.ts,三期规格见 HANDOFF.md §8.4)。
