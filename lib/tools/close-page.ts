@@ -31,7 +31,7 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
     label: toolLabel('close_page'),
     risk: 'confirm',
     description:
-      'Close a browser tab — use it for cleanup when a working tab is no longer needed. Any tab can be requested, including ones the user opened; every call shows a confirmation card naming the tab, and nothing is closed unless the user approves it. If a tab should stay open, do not call this tool.',
+      'Close a browser tab — use it for cleanup when a working tab is no longer needed. Any tab can be requested, including ones the user opened; every call shows a confirmation card naming the tab, and nothing is closed unless the user approves it. The user may grant this tool for the session, after which further closes run without a card; if a tab should stay open, do not call this tool.',
     parameters: CLOSE_PAGE_PARAMS,
     execute: async (toolCallId, args) => {
       const tabId = args?.tabId;
@@ -51,6 +51,10 @@ export function createClosePageToolDefinition(sessionId?: string): AgentTool<
         summary: i18n.t('gateCard.closePage.summary'),
         detail: `Close tab #${tabId}${meta?.title ? ` — ${meta.title}` : ''}${meta?.url ? `\n${meta.url}` : ''}`,
         toolCallId,
+        // 会话级 grant:与 open_page 同为标签页生命周期工具,粒度取 `@*`
+        // (按 tab 授权对“关页”无意义——同一个 tab 很少被关两次);面板关闭即失效
+        grantable: true,
+        grantScope: 'close_page@*',
       });
       if (!(approved.kind === 'confirm' && approved.approved)) {
         return {
