@@ -76,88 +76,23 @@ function formatTokens(count: number): string {
 }
 
 /**
- * 流式平滑揭示: 目标文本(store 80ms 节流批次) → rAF 逐帧追赶, 文字连续平滑流出而非整块蹦出。
- * 本地 state 驱动重渲染仅局限于当前组件自身, 不触发全局与全列表重绘。
- * 遵循系统 prefers-reduced-motion 约定, 减少动画时直接全量呈现。
- */
-function useSmoothText(target: string, enabled: boolean): string {
-  const prefersReducedMotion = typeof window !== 'undefined'
-    ? window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false
-    : false;
-
-  const isSmooth = enabled && !prefersReducedMotion;
-  const shownLenRef = useRef(isSmooth ? 0 : target.length);
-  const [shownLen, setShownLen] = useState(shownLenRef.current);
-  const targetRef = useRef(target);
-  targetRef.current = target;
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!isSmooth) {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-      shownLenRef.current = target.length;
-      setShownLen(target.length);
-      return;
-    }
-
-    const tick = () => {
-      const full = targetRef.current;
-      if (shownLenRef.current > full.length) {
-        shownLenRef.current = full.length;
-      }
-      const remaining = full.length - shownLenRef.current;
-      if (remaining <= 0) {
-        rafRef.current = null;
-        return; // 已追平, 待目标下一次变长时由 effect 触发重新调度
-      }
-      // 动态步长: 剩余字数多时自适应加速, 接近终点时平缓递增(每帧最少 1 字符)
-      const step = Math.max(1, Math.ceil(remaining / 8));
-      shownLenRef.current = Math.min(full.length, shownLenRef.current + step);
-      setShownLen(shownLenRef.current);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    if (targetRef.current.length > shownLenRef.current) {
-      if (rafRef.current === null) {
-        rafRef.current = requestAnimationFrame(tick);
-      }
-    }
-
-    return () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-    };
-  }, [target, isSmooth]);
-
-  return isSmooth ? target.slice(0, shownLen) : target;
-}
-
-/**
- * 文本段渲染器(**组件身份恒定**):流式末段逐字揭示,其余全量直渲。
+ * 文本段渲染器(**组件身份恒定**):收到多少渲染多少。
  *
- * 关键:不能按条件在 SmoothMarkdown / MarkdownView 之间切换组件类型——流式结束的
- * 那一瞬同 key 换类型 = React 卸载重挂整棵 markdown 子树(重新解析 + 高亮重跑),
- * 表现为“输出完闪一下”。改成始终渲染本组件,仅用 animate 开关控制揭示。
+ * 组件类型在流式与定型之间必须保持一致——同 key 换类型会让 React 卸载重挂整棵
+ * markdown 子树(重新解析 + 高亮重跑),表现为“输出完闪一下”。因此始终渲染本组件,
+ * 只把 live 透传给 MarkdownView 控制代码块的高亮节流。
  */
 function SmoothMarkdown({
   text,
   className,
-  animate,
+  live,
 }: {
   text: string;
   className?: string;
-  /** true = rAF 逐字揭示(流式末段);false = 直接全量(内容不变 → MarkdownView memo 命中) */
-  animate: boolean;
+  /** true = 该段仍在流式中(代码块节流高亮,见 MarkdownView 的 CodeBlock) */
+  live: boolean;
 }) {
-  const shown = useSmoothText(text, animate);
-  // 逐字揭示期间**实时上色**(节流约 5Hz,见 MarkdownView 的 CodeBlock):
-  // 每帧重新分词是 O(n²)(会让整页卡),完全不高亮则会“说完了才变色” → 节流是两者之间的折中。
-  return <MarkdownView content={shown} className={className} live={animate} />;
+  return <MarkdownView content={text} className={className} live={live} />;
 }
 
 function renderUserMessageText(text: string, elementById?: Map<number, RefElementMeta> | null) {
@@ -262,9 +197,6 @@ function ThinkingBlock({
   isGenerating?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  // 流式思考过程中逐帧平滑揭示文字; 物化完成后直接全量显示
-  const shownThinking = useSmoothText(thinking, isGenerating);
-
   // Extract latest 3 non-empty lines for collapsed preview(useMemo 必须在条件 return 之前)
   const previewText = useMemo(() => {
     const trimmed = thinking.trim();
@@ -318,7 +250,7 @@ function ThinkingBlock({
 
       <CollapsibleContent>
         <div className="mt-1 whitespace-pre-wrap break-all border-l-2 border-border pl-2.5 text-[11px] leading-relaxed text-muted-foreground animate-in fade-in-0 slide-in-from-top-1 duration-150 motion-reduce:animate-none">
-          {shownThinking}
+          {thinking}
         </div>
       </CollapsibleContent>
     </Collapsible>
@@ -930,7 +862,7 @@ export const MessageItem = memo(function MessageItem({
   const hasStatus = showDots || Boolean(errorMessage) || Boolean(isCancelled) || emptyReply;
   // 状态节点/流式光标锚定最后一个「气泡段」(末段可能是工具卡,状态必须仍可见)
   const lastBubbleIndex = segments.reduce((acc, s, i) => (s.kind === 'bubble' ? i : acc), -1);
-  /** 流式末段判定(animate 与光标的唯一信息源;组件身份始终为 SmoothMarkdown) */
+  /** 流式末段判定(live 高亮节流与流式光标的唯一信息源) */
   const isLiveTail = (segIndex: number, itemIndex: number, itemCount: number) =>
     segIndex === lastBubbleIndex &&
     itemIndex === itemCount - 1 &&
@@ -1056,7 +988,7 @@ export const MessageItem = memo(function MessageItem({
                       <SmoothMarkdown
                         key={`text-${j}`}
                         text={item.text}
-                        animate={isLiveTail(i, j, seg.items.length)}
+                        live={isLiveTail(i, j, seg.items.length)}
                         /* 流式光标:内联 ::after 贴在本段最后一个文本块末行(条件与旧光标一致:流式中有文本) */
                         className={isLiveTail(i, j, seg.items.length) ? 'md-caret' : undefined}
                       />
