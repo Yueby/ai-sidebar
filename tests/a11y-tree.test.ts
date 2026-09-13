@@ -8,7 +8,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderA11yTree, assignOrdinals, type A11yNode } from '../lib/a11yTree';
+import { renderA11yTree, type A11yNode } from '../lib/a11yTree';
 
 const node = (over: Partial<A11yNode> & { role: string }): A11yNode => ({ depth: 0, ...over });
 
@@ -19,7 +19,7 @@ test('渲染:结构缩进 + 名字引号 + 状态旗标 + 链接内联 url', () 
     node({ role: 'link', depth: 2, name: "No Man's Sky", href: '/app/275850', interactive: true }),
     node({ role: 'text', depth: 2, text: '¥26.00（-60%）' }),
   ];
-  const out = renderA11yTree(assignOrdinals(nodes));
+  const out = renderA11yTree(nodes);
   assert.equal(
     out,
     [
@@ -41,20 +41,6 @@ test('包装角色无载荷时不占行,有载荷时保留(避免输出膨胀)',
   assert.equal(out, ['  - button "保存"', '- group "组织"'].join('\n'));
 });
 
-test('交互节点编号:第 2 个及以后才带 [n](与 click_element 的 ordinal 同口径)', () => {
-  const nodes: A11yNode[] = [
-    node({ role: 'button', name: '删除', interactive: true }),
-    node({ role: 'button', name: '删除', interactive: true }),
-    node({ role: 'button', name: '删除', interactive: true }),
-    node({ role: 'button', name: '复制', interactive: true }),
-  ];
-  const out = renderA11yTree(assignOrdinals(nodes)).split('\n');
-  assert.equal(out[0]!.trim(), '- button "删除"', '首个不带标记(ordinal 默认 1)');
-  assert.equal(out[1]!.trim(), '- button "删除" [2]');
-  assert.equal(out[2]!.trim(), '- button "删除" [3]');
-  assert.equal(out[3]!.trim(), '- button "复制"', '同名组独立编号,首个不带标记');
-});
-
 test('截断:maxLines 与 maxDepth 都必须给出可行动提示', () => {
   const many: A11yNode[] = Array.from({ length: 10 }, (_, i) => node({ role: 'link', name: `l${i}`, interactive: true }));
   const limited = renderA11yTree(many, { maxLines: 3 });
@@ -73,6 +59,30 @@ test('长文本截断到 160 字符并保留省略号(不吞掉整行)', () => {
   const out = renderA11yTree([node({ role: 'text', text: long })]);
   assert.match(out, /…"/);
   assert.ok(out.length < 200, `输出应被截断,实际 ${out.length}`);
+});
+
+// 可操作节点的名字会被模型原样交给 click_element/fill_element(动作侧精确匹配)→ 渲染不得改写
+test('可操作节点的名字不做截断改写,非可操作名才截断留痕', () => {
+  const long = 'x'.repeat(220);
+  const interactive = renderA11yTree([{ depth: 0, role: 'button', name: long, interactive: true }]);
+  assert.ok(interactive.includes(long), '可操作名必须原样呈现');
+  assert.ok(!interactive.includes('…'), '不得给可操作名加省略号(模型会照抄这个字符串)');
+  const plain = renderA11yTree([{ depth: 0, role: 'region', name: long }]);
+  assert.ok(plain.includes('…'), '非可操作名可以截断,但必须留痕');
+  assert.ok(plain.length < interactive.length, '截断确实缩短了输出');
+});
+
+// 序号来自动作侧同一枚举:渲染只如实呈现,绝不按本棵树重编号
+test('序号如实呈现:第 1 个不带标记,采集侧给的 [n] 原样输出', () => {
+  const out = renderA11yTree([
+    { depth: 0, role: 'button', name: 'Delete', interactive: true, ordinal: 1 },
+    { depth: 0, role: 'button', name: 'Delete', interactive: true, ordinal: 2 },
+    { depth: 0, role: 'button', name: 'Delete', interactive: true, ordinal: 5 },
+  ]);
+  const lines = out.split('\n');
+  assert.ok(!lines[0]!.includes('[1]'), '第 1 个不标记');
+  assert.ok(lines[1]!.includes('[2]'), '第 2 个按采集侧的序号');
+  assert.ok(lines[2]!.includes('[5]'), '跨子树/裁剪后仍保留采集侧真实序号(不重编号为 3)');
 });
 
 test('renderA11yTree:输出 id 句柄(无名元素唯一的稳定 CSS 句柄)', () => {

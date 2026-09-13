@@ -9,7 +9,7 @@ import {
   buildUnreadableTabError,
   type RefTab,
 } from '../pageContext';
-import { assignOrdinals, renderA11yTree } from '../a11yTree';
+import { renderA11yTree } from '../a11yTree';
 import { continuationHint, isThinText, thinResultNote } from '../pageTextWindow';
 
 /** 首次抽取过薄(SPA 未渲染完)时的自动重试节奏:有界、总时长封顶,避免模型自己摸索“再等等再读” */
@@ -110,7 +110,8 @@ export function createReadPageToolDefinition(
         if ('error' in tree) {
           return { content: [{ type: 'text', text: tree.error }], details: null };
         }
-        const nodes = assignOrdinals(tree.nodes);
+        // 序号与名字由 content 侧取自动作工具的同一枚举(见 collectA11yTree):此处不得重编号
+        const nodes = tree.nodes;
         const maxLines =
           typeof args?.maxLines === 'number' && args.maxLines > 0 ? Math.min(Math.round(args.maxLines), 2000) : 300;
         const maxDepth =
@@ -130,7 +131,7 @@ export function createReadPageToolDefinition(
                 '<tree>\n' +
                 treeText +
                 '\n</tree>' +
-                '\n\n(Use click_element / fill_element with the same role, accessible name and [n] ordinal to act on any node listed here.)' +
+                '\n\n(Use click_element / fill_element with the same role, accessible name and [n] ordinal to act on any node listed here — those names and ordinals come from the same enumeration the action tools use, so they can be copied as-is.)' +
                 truncatedNote,
             },
           ],

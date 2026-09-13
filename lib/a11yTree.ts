@@ -5,6 +5,10 @@
  * ①过滤噪音角色 ②给交互节点编序号(与 click_element 的 ordinal 同口径)
  * ③渲染成缩进文本(Playwright ARIA snapshot 兼容语法)④按行数/深度截断。
  *
+ * **交互节点的 ordinal 不由本模块计算**:它必须与 click_element/fill_element 的动作侧枚举完全同口径,
+ * 而本模块只看到(可能被 root 裁剪、预算截断、帧穿透改变的)子集 —— 在此重编号会让模型照抄到错元素。
+ * 序号由 content 侧采集时从动作枚举回填(见 entrypoints/content.ts collectA11yTree)。
+ *
  * 为什么用这套语法:它是浏览器 agent 的事实标准(Playwright MCP / Playwright test /
  * Chrome DevTools MCP 同族),LLM 训练数据里最常见,解析最稳。
  */
@@ -26,7 +30,7 @@ export interface A11yNode {
   id?: string;
   /** 是否可被 click_element/fill_element 寻址(决定是否编序号) */
   interactive?: boolean;
-  /** (role,name) 组内的序号;由 assignOrdinals 填,仅第 2 个及以后渲染标记 */
+  /** (role,name) 组内的序号;由采集侧从动作枚举回填,仅第 2 个及以后渲染标记 */
   ordinal?: number;
   /** 说明性节点:跨源 iframe 等无法展开处的提示 */
   note?: string;
@@ -87,7 +91,8 @@ export function renderA11yTree(nodes: readonly A11yNode[], options: RenderOption
 function renderLine(node: A11yNode): string {
   const indent = '  '.repeat(node.depth);
   const parts = [`${indent}- ${node.role}`];
-  if (node.name) parts.push(` ${quote(node.name)}`);
+  // 可操作节点的名字**不得改写**:模型会把它原样交给 click_element/fill_element,而动作侧是精确匹配
+  if (node.name) parts.push(` ${quote(node.name, node.interactive ? 0 : 160)}`);
   if (node.id) parts.push(` #${node.id}`);
   if (node.states && node.states.length > 0) {
     parts.push(` ${node.states.map((s) => `[${s}]`).join('')}`);
@@ -101,18 +106,7 @@ function renderLine(node: A11yNode): string {
   return parts.join('');
 }
 
-function quote(value: string): string {
-  return JSON.stringify(value.length > 160 ? `${value.slice(0, 157)}…` : value);
-}
-
-/** 交互节点序号计数(与 search_element 同一口径:全量枚举后按 (role,name) 顺序编号) */
-export function assignOrdinals(nodes: readonly A11yNode[]): A11yNode[] {
-  const counters = new Map<string, number>();
-  return nodes.map((node) => {
-    if (!node.interactive) return node;
-    const key = `${node.role}\u0000${node.name ?? ''}`;
-    const next = (counters.get(key) ?? 0) + 1;
-    counters.set(key, next);
-    return { ...node, ordinal: next };
-  });
+/** max=0 表示不改写(可操作名);其余超过 max 时截断并留痕 */
+function quote(value: string, max = 160): string {
+  return JSON.stringify(max > 0 && value.length > max ? `${value.slice(0, max - 1)}…` : value);
 }

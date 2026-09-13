@@ -124,13 +124,13 @@ export function createSearchElementToolDefinition(): AgentTool<
         );
       }
       if (result.elements.length === 0) {
+        // 空结果最需要帧说明:页面交互项全在 iframe 里时,"没找到"本身毫无行动线索
+        const emptyLines = [`No interactive elements found in tab #${tabId} (${result.url}).`];
+        if (result.frames && result.frames.length > 0) {
+          emptyLines.push('', ...result.frames.map((note) => `(Note: ${note})`));
+        }
         return {
-          content: [
-            {
-              type: 'text',
-              text: `No interactive elements found in tab #${tabId} (${result.url}).`,
-            },
-          ],
+          content: [{ type: 'text', text: emptyLines.join('\n') }],
           details: { tabId, url: result.url },
         };
       }

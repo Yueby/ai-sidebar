@@ -881,8 +881,8 @@ export default defineContentScript({
         }
         name = name.replace(/\s+/g, ' ').trim();
         // placeholder 兑底名称:真实网站大量字段只有 placeholder 没有 label,无名会导致无法寻址
-        if (!name && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
-          const placeholder = el.placeholder;
+        if (!name && (isInputEl(el) || isTextareaEl(el))) {
+          const placeholder = (el as HTMLInputElement | HTMLTextAreaElement).placeholder;
           if (placeholder) name = placeholder.replace(/\s+/g, ' ').trim();
         }
         // 降噪:非交互 role 且无名且非 DOM 交互标签(tabIndex≥0 带进来的纯容器)对 role+name 寻址无意义
@@ -896,7 +896,7 @@ export default defineContentScript({
           'image', 'file', 'search', 'range', 'number',
         ];
         const inputType =
-          el instanceof HTMLInputElement && !genericTypes.includes(el.type) ? el.type : undefined;
+          isInputEl(el) && !genericTypes.includes(inputTypeOf(el)) ? inputTypeOf(el) : undefined;
         out.push({
           el,
           role,
@@ -905,34 +905,83 @@ export default defineContentScript({
           disabled: isDisabled(el),
           visible: isElementVisible(el),
           inputType,
-          href: el instanceof HTMLAnchorElement ? el.getAttribute('href') ?? undefined : undefined,
+          href: isAnchorEl(el) ? el.getAttribute('href') ?? undefined : undefined,
           value: a11yValue(el),
           checked:
-            el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')
-              ? el.checked
+            inputTypeOf(el) === 'checkbox' || inputTypeOf(el) === 'radio'
+              ? (el as HTMLInputElement).checked
               : undefined,
         });
       }
       return out;
     }
 
-    /** 跨源 iframe 说明(同源已由遍历覆盖):让模型知道内容在哪、怎么拿到 */
+    /**
+     * 元素类型判定**必须跨 realm 安全**:同源 iframe 里的元素不是本窗口构造器的实例,
+     * `el instanceof HTMLInputElement` 会漏判 —— 后果不只是丢字段,而是密码保护被整个跳过
+     * (例如 iframe 内 `type=password` 的框会落到 aria-valuetext 分支把值回传)。
+     */
+    const isInputEl = (el: Element): boolean => el.localName === 'input';
+    const isTextareaEl = (el: Element): boolean => el.localName === 'textarea';
+    const isSelectEl = (el: Element): boolean => el.localName === 'select';
+    const isAnchorEl = (el: Element): boolean => el.localName === 'a';
+    const inputTypeOf = (el: Element): string =>
+      isInputEl(el) ? (((el as HTMLInputElement).type || 'text') as string).toLowerCase() : '';
+    const isPasswordEl = (el: Element): boolean => inputTypeOf(el) === 'password';
+
+    /** 截断留痕:模型必须能区分"原文到底"与"被截断"(静默 slice 会让它以为内容完整) */
+    function clipMarked(value: string, max: number): string {
+      return value.length > max ? `${value.slice(0, Math.max(0, max - 1))}…` : value;
+    }
+
+    interface FrameInfo {
+      src: string;
+      label?: string;
+      sameOrigin: boolean;
+      doc: Document | null;
+    }
+
+    /** iframe 的三态判定(同源可读 / 同源未加载 / 跨源);树与其说明节点共用这一份 */
+    function frameInfo(el: Element): FrameInfo {
+      const rawSrc = el.getAttribute('src') ?? '';
+      // 相对 URL 按**该元素所在文档**的 base 解析(嵌套 frame 与 <base> 才正确)
+      const base = el.ownerDocument?.baseURI ?? location.href;
+      let src = rawSrc;
+      try {
+        src = rawSrc ? new URL(rawSrc, base).href : '';
+      } catch {
+        src = rawSrc;
+      }
+      let sameOrigin = false;
+      try {
+        sameOrigin = Boolean(src) && new URL(src, base).origin === location.origin;
+      } catch {
+        sameOrigin = false;
+      }
+      let doc: Document | null = null;
+      try {
+        doc = (el as HTMLIFrameElement).contentDocument;
+      } catch {
+        doc = null;
+      }
+      const label = el.getAttribute('title') || undefined;
+      return { src, label, sameOrigin, doc };
+    }
+
+    function frameNote(info: FrameInfo): string {
+      const who = `iframe${info.label ? ` ${JSON.stringify(info.label)}` : ''} (${info.src || '(no src)'})`;
+      return info.sameOrigin
+        ? `same-origin ${who} — not loaded yet, read again after it finishes loading`
+        : `cross-origin ${who} — its content is not accessible from this page; open_page that URL to read it.`;
+    }
+
+    /** 不可读 iframe 说明(同源可读的由树/枚举遍历覆盖):让模型知道内容在哪、怎么拿到 */
     function collectFrameNotes(): string[] {
       const notes: string[] = [];
       for (const frame of Array.from(document.querySelectorAll('iframe'))) {
-        let accessible = false;
-        try {
-          accessible = Boolean((frame as HTMLIFrameElement).contentDocument?.body);
-        } catch {
-          accessible = false;
-        }
-        if (!accessible) {
-          const src = frame.getAttribute('src') ?? '(no src)';
-          const label = frame.getAttribute('title');
-          notes.push(
-            `cross-origin iframe${label ? ` ${JSON.stringify(label)}` : ''} (${src}) — its content is not accessible from this page; open_page that URL to read it.`,
-          );
-        }
+        const info = frameInfo(frame);
+        if (info.doc?.body) continue;
+        notes.push(frameNote(info));
       }
       return notes;
     }
@@ -996,12 +1045,14 @@ export default defineContentScript({
     function a11yStates(el: Element, disabled: boolean): string[] {
       const states: string[] = [];
       if (disabled) states.push('disabled');
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-        if (el.required) states.push('required');
-        if (el.readOnly) states.push('readonly');
-        if (el instanceof HTMLInputElement && el.type === 'password') states.push('password');
-        if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
-          states.push(el.checked ? 'checked' : 'unchecked');
+      if (isInputEl(el) || isTextareaEl(el)) {
+        const field = el as HTMLInputElement | HTMLTextAreaElement;
+        if (field.required) states.push('required');
+        if (field.readOnly) states.push('readonly');
+        if (isPasswordEl(el)) states.push('password');
+        const type = inputTypeOf(el);
+        if (type === 'checkbox' || type === 'radio') {
+          states.push((el as HTMLInputElement).checked ? 'checked' : 'unchecked');
         }
       }
       for (const attr of ['aria-checked', 'aria-expanded', 'aria-selected', 'aria-pressed'] as const) {
@@ -1015,17 +1066,24 @@ export default defineContentScript({
 
     /** 表单值/aria-valuetext;密码字段**绝不回传值**(只留 password 旗标) */
     function a11yValue(el: Element): string | undefined {
-      if (el instanceof HTMLInputElement) {
-        if (el.type === 'password') return undefined;
-        return el.value ? el.value.slice(0, 60) : undefined;
+      if (isInputEl(el)) {
+        // 密码绝不回传(跨 realm 判定,iframe 内同样生效)
+        if (isPasswordEl(el)) return undefined;
+        const value = (el as HTMLInputElement).value;
+        return value ? clipMarked(value, 60) : undefined;
       }
-      if (el instanceof HTMLTextAreaElement) return el.value ? el.value.slice(0, 60) : undefined;
-      if (el instanceof HTMLSelectElement) {
-        const text = el.selectedOptions[0]?.textContent?.replace(/\s+/g, ' ').trim();
-        return text ? text.slice(0, 60) : undefined;
+      if (isTextareaEl(el)) {
+        const value = (el as HTMLTextAreaElement).value;
+        return value ? clipMarked(value, 60) : undefined;
+      }
+      if (isSelectEl(el)) {
+        const text = (el as HTMLSelectElement).selectedOptions[0]?.textContent
+          ?.replace(/\s+/g, ' ')
+          .trim();
+        return text ? clipMarked(text, 60) : undefined;
       }
       const valueText = el.getAttribute('aria-valuetext');
-      return valueText ? valueText.slice(0, 60) : undefined;
+      return valueText ? clipMarked(valueText, 60) : undefined;
     }
 
     interface CollectedTree {
@@ -1054,6 +1112,13 @@ export default defineContentScript({
       let total = 0;
       let truncated = false;
       const STATUS_LIMIT = 32;
+      // 交互节点的**名字与序号必须与动作工具完全同口径**:模型会把树里的名字/[n] 直接抄进
+      // click_element/fill_element。故不按本棵树重编号(root 裁剪、预算截断、帧穿透都会改变计数),
+      // 而是取动作侧同一份枚举的真实值 —— 抄下来即可命中。
+      const actionByEl = new Map<Element, EnumeratedElement>();
+      // 用**内部形状**的枚举器(带元素引用):collectInteractiveElements 的返回会剥掉 el(传输形状),
+      // 无法据此给树节点回填真实序号
+      for (const entry of enumerateInteractiveElements(libs)) actionByEl.set(entry.el, entry);
 
       const push = (node: A11yNode): void => {
         total += 1;
@@ -1065,46 +1130,24 @@ export default defineContentScript({
       };
 
       const visitIframe = (el: Element, depth: number): void => {
-        const rawSrc = (el as HTMLIFrameElement).getAttribute('src') ?? '';
-        // 说明里给**绝对** URL:相对 src 直接交给模型当 open_page 参数是无效输入
-        let absSrc = rawSrc;
-        try {
-          absSrc = rawSrc ? new URL(rawSrc, location.href).href : '';
-        } catch {
-          absSrc = rawSrc;
-        }
-        let sameOrigin = false;
-        try {
-          sameOrigin = Boolean(absSrc) && new URL(absSrc, location.href).origin === location.origin;
-        } catch {
-          sameOrigin = false;
-        }
-        const label = el.getAttribute('title') || rawSrc || undefined;
-        let doc: Document | null = null;
-        try {
-          doc = (el as HTMLIFrameElement).contentDocument;
-        } catch {
-          doc = null;
-        }
-        if (doc && doc.body) {
+        // 三态判定与说明文案与 search_element 共用同一份(frameInfo/frameNote)
+        const info = frameInfo(el);
+        const label = info.label || info.src || undefined;
+        if (info.doc?.body) {
           push({ depth, role: 'iframe', name: label, note: 'same-origin frame', interactive: false });
-          for (const child of Array.from(doc.body.children)) visit(child, depth + 1);
+          for (const child of Array.from(info.doc.body.children)) visit(child, depth + 1);
           return;
         }
-        // contentDocument 拿不到要分两种:同源但还没加载完(不是跨源!说成跨源是错误claim),
-        // 与真正的跨源(内容确实读不到,给出可行动的绝对 URL)
-        push({
-          depth,
-          role: 'iframe',
-          name: label,
-          note: sameOrigin
-            ? 'same-origin frame — not loaded yet, read it again after it finishes loading'
-            : `cross-origin frame — its content is not readable from this page${absSrc ? `; open_page ${absSrc} to read it` : ''}`,
-          interactive: false,
-        });
+        push({ depth, role: 'iframe', name: label, note: frameNote(info), interactive: false });
       };
 
       const visit = (el: Element, depth: number): void => {
+        // iframe 分派在入口:原先只在遍历孩子时特判,body 直属 iframe(常见写法)会当成普通元素走过,
+        // 内容既不展开也不出说明 —— 树少一整块,而动作枚举却进入帧,序号从此错位
+        if (el.tagName === 'IFRAME') {
+          visitIframe(el, depth);
+          return;
+        }
         if (total > maxNodes + STATUS_LIMIT) {
           truncated = true;
           return;
@@ -1135,17 +1178,21 @@ export default defineContentScript({
           leafText &&
           !isContentless
         ) {
-          push({ depth, role: 'text', text: leafText.slice(0, 160) });
+          push({ depth, role: 'text', text: clipMarked(leafText, 160) });
           return;
         }
-        const text = TREE_TEXT_ROLES.has(role) && !name && leafText
-          ? leafText.slice(0, 160)
-          : undefined;
-        const href = el instanceof HTMLAnchorElement ? el.getAttribute('href') ?? undefined : undefined;
+        // 语义叶子同样要过可见性/非内容标签:否则 `<p hidden>…` 会把隐藏文本当正常段落输出
+        const text =
+          TREE_TEXT_ROLES.has(role) && !name && leafText && !isContentless
+            ? clipMarked(leafText, 160)
+            : undefined;
+        const href = isAnchorEl(el) ? el.getAttribute('href') ?? undefined : undefined;
+        // 可操作节点:名字与序号取动作枚举(与 click_element 精确匹配的那个字符串,零改写)
+        const actionHit = interactive ? actionByEl.get(el) : undefined;
         push({
           depth,
           role,
-          name: name || undefined,
+          name: (actionHit?.name || name) || undefined,
           text,
           // id 是无名元素唯一的稳定 CSS 句柄(read_element 可照抄),过长则省略
           id: el.id && el.id.length <= 48 ? el.id : undefined,
@@ -1153,6 +1200,7 @@ export default defineContentScript({
           states: a11yStates(el, disabled),
           href,
           interactive,
+          ordinal: actionHit?.ordinal,
         });
 
         if (el.shadowRoot) {
@@ -1160,11 +1208,7 @@ export default defineContentScript({
         }
         for (const child of Array.from(el.children)) {
           if (child.closest(SEARCH_SKIP_SUBTREE_SELECTOR)) continue;
-          if (child.tagName === 'IFRAME') {
-            visitIframe(child, depth + 1);
-            continue;
-          }
-          visit(child, depth + 1);
+          visit(child, depth + 1); // iframe 由 visit 入口统一分派
         }
       };
 

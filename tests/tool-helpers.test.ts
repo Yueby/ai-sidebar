@@ -141,7 +141,31 @@ test('continuationHint:只在确有剩余时给出下一次 offset', () => {
     truncated: true,
     totalLength: 0,
   });
-  assert.doesNotMatch(unknownTotal, /call read_page with the same tabId and offset/, '拿不到全文长度 → 不虚报后续内容');
+  assert.doesNotMatch(unknownTotal, /call read_page with the same tabId and offset/, '空页 → 不虚报后续内容');
+
+  const inconsistent = continuationHint(7, {
+    text: 'x'.repeat(500),
+    start: 0,
+    truncated: true,
+    totalLength: 400,
+  });
+  assert.doesNotMatch(
+    inconsistent,
+    /call read_page with the same tabId and offset/,
+    '长度不自洽(窗口比全文还长)→ 不虚报',
+  );
+
+  const missingTotal = continuationHint(7, {
+    text: 'x'.repeat(12000),
+    start: 0,
+    truncated: true,
+    totalLength: undefined as unknown as number,
+  });
+  assert.doesNotMatch(
+    missingTotal,
+    /call read_page with the same tabId and offset/,
+    '拿不到全文长度 → 不虚报',
+  );
 });
 
 // close_page 曾谎报成功:closeTab 返回 false(浏览器拒绝关闭)时仍回 “Closed tab #N.”,
