@@ -76,7 +76,7 @@ export function createReadPageToolDefinition(
       let page = await extractFromTab(tabId, section, waitStableMs, waitText, requestedOffset);
       let autoRetried = false;
       // 首次读到空白/骨架且调用方没要求等待:自动有界重试(前端渲染页的常见情形)。
-      // 不回退到空结果让模型自己猜“等 8 秒再读”——真机记录里就是这么浪费掉一轮的。
+      // 不回退到空结果:那会让模型自己猜要不要再等一次,白烧一轮。
       if (page && waitStableMs === 0 && isThinExtraction(page.text)) {
         for (const waitMs of THIN_RETRY_WAITS_MS) {
           const retry = await extractFromTab(tabId, section, waitMs, waitText, requestedOffset);
@@ -125,7 +125,7 @@ export function createReadPageToolDefinition(
         ? 'Note: the first extraction came back nearly empty, so the page was read again after a short wait (it appears to be client-rendered).'
         : '';
       // 自动重试是**有界**的(约 3.7s):若仍然过薄,必须明确告知“这不是正文,可以继续等”,
-      // 否则模型会把“加载中…”当内容,或自己猜要不要再读一次(真机实测正是如此)。
+      // 否则模型会把“加载中…”当内容,或自己猜要不要再读一次。
       const stillThinNote = isThinExtraction(page.text) ? thinResultNote(page.text.trim().length) : '';
       return {
         content: [

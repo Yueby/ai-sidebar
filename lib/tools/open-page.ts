@@ -48,8 +48,7 @@ export function createOpenPageToolDefinition(sessionId?: string): AgentTool<type
       }
       const background = args?.background === true;
 
-      // 同 URL 复用:已存在同页 tab 时激活并注册为可读,不再开重复页(反馈:click 开新页后
-      // open_page 同 URL 曾叠加出第二个重复 tab)
+      // 同 URL 复用:已存在同页 tab 时激活并注册为可读,不新开重复页
       const existing = await findTabByUrl(url);
 
       const approved = await gateForRun({

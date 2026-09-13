@@ -187,8 +187,8 @@ export function usePageContextRefs(params: {
     };
   }, [activeDraftRefTabs, activeDraftPicked, patchActiveDraft]);
   // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆)。
-  // 引用栏被用户删空 → 重置组记忆(陈旧快照不复活,回归纯跟随;
-  // 发送不再清空 refTabs——决策 13 修订——故不会误伤跨消息的组存活)
+  // 引用栏被用户删空 → 重置组记忆,避免陈旧快照复活。
+  // 发送不清空 refTabs,跨消息的组存活不受影响。
   useEffect(() => {
     if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) {
       groupMapRef.current.clear();

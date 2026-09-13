@@ -1,9 +1,8 @@
 /**
  * 长文续读的纯逻辑(可单测):窗口切分 + 续读提示文案。
  *
- * 背景:content 侧把正文截到 12000 字符(块边界),超出部分此前无法取回——
- * 真机上表现为"Cognition 那篇在公式推导处被截断,附录没读到"。
- * 这里给出 offset 窗口的唯一算法与模型可见的续读指引(模型可见文本一律英文)。
+ * content 侧把正文按块边界截到 12000 字符;本模块给出 offset 窗口的唯一算法与模型可见的
+ * 续读指引(模型可见文本一律英文),使长文能跨多次调用读完。
  */
 
 export interface TextWindow {
@@ -49,8 +48,8 @@ export function textWindow(full: string, offset: number, limit: number): TextWin
 
 /**
  * 下一次续读的 offset(纯函数)。
- * 只有知道**截断前全文长度**时才能判断“还有没有后半段”——初版 H3 因为 totalLength
- * 报的是截断后长度,导致续读提示永远不出现(工具在真机上不会主动续读)。
+ * 只有知道**截断前全文长度**时才能判断“还有没有后半段”;传入截断后的长度会得出错误结论,
+ * 续读提示就不会出现。
  */
 export function nextOffsetFor(
   offset: number,
@@ -64,8 +63,8 @@ export function nextOffsetFor(
 
 /**
  * 模型可见的续读指引(英文)。
- * 只在确实被截断时给出,并带上可直接照用的一次调用——否则模型会像真机记录里
- * 那样自己摸索"再读一次能不能拿到后半段"。
+ * 只在确实被截断时给出,并带上可直接照用的一次调用,避免模型自己摸索
+ * "再读一次能不能拿到后半段"。
  */
 export function continuationHint(tabId: number, window: TextWindow): string {
   const head =
@@ -94,8 +93,8 @@ export function isThinText(text: string, threshold = THIN_TEXT_CHARS): boolean {
 
 /**
  * 过薄结果的模型可见提示(英文)。
- * 真机实测:前端渲染页首次读取常只剩"加载中"空壳,而旧实现把它当正文返回、不给任何信号,
- * 模型只能自己猜"再等等"或误以为页面就这么点内容。这里明确给出两个可用的旋钮。
+ * 过薄结果(典型是前端渲染页的"加载中"空壳)必须显式告知模型这不是正文,
+ * 并给出两个可用的旋钮,否则模型只能自己猜或误以为页面就这么点内容。
  */
 export function thinResultNote(charCount: number): string {
   return (

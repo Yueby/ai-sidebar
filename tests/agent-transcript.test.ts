@@ -143,11 +143,10 @@ test('dispose 后旧 Agent 事件不再透出(epoch 失效)', async () => {
   assert.equal(hasSessionAgent('t4'), true);
 });
 
-// 回归 P0 防御(附上实测边界):pi 的 emit 逐调用订阅者且不吞异常(agent.js:417-419)。
-// 实测区分两种抛法(探针,2026-09):①在 message_update 抛 → 被 pi 的 runWithLifecycle 吞成
-// stopReason:'error' 的助手消息,走正常 finalize(不会丢转录);②在 agent_start/turn_start 这类
-// 生命周期事件上抛 → 确实逃出 agent loop,旧代码会因此丢弃整轮。本测试锁的是②这类逃逸。
-// 现在 sink 调用点兜异常:投影 bug 至多损失一次视图更新,轮次与内容必须完好。
+// pi 的 emit 逐调用订阅者且不吞异常(agent.js:417-419),两类抛法结局不同:
+// ① message_update 上抛 → 被 runWithLifecycle 吞成 stopReason:'error' 的助手消息,走正常 finalize;
+// ② agent_start / turn_start 这类生命周期事件上抛 → 逃出 agent loop,会丢掉整轮。
+// 本测试锁②;sink 调用点兜异常后,投影 bug 至多损失一次视图更新,轮次与内容必须完好。
 test('sink 在生命周期事件上抛异常不得炸掉轮次,Agent 转录须完整保留(逃逸类防御)', async () => {
   installFaux();
   setAgentEventSink(() => {

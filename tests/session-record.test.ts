@@ -99,7 +99,7 @@ test('非法输入 fail-fast', () => {
   assert.throws(() => jsonlToSession('not-json'), /invalid JSON line/);
 });
 
-// 回归:finalize 无条件覆盖曾导致“本轮乃至之前的回复凭空消失”——转录单调性守卫必须不丢已存历史
+// finalize 无条件覆盖会丢掉已存历史 → 转录单调性守卫必须不丢已存历史
 test('转录守卫:变长直用、变短不丢已存且只补缺失(按对象身份不重复)', () => {
   const a = { tag: 'a' };
   const b = { tag: 'b' };
@@ -125,8 +125,8 @@ test('转录守卫:变长直用、变短不丢已存且只补缺失(按对象身
   assert.deepEqual(noop.messages, [a, b]);
 });
 
-// 复审复现的缺陷:变短分支原先只按对象引用去重 → “内容相同、引用不同”的克隆来源
-// 会被整段重复追加(用户可见 = 重复气泡)。改用内容签名后必须去重。
+// 变短分支若只按对象引用去重,“内容相同、引用不同”的克隆来源会被整段重复追加
+// (用户可见 = 重复气泡);改用内容签名后必须去重。
 test('转录守卫:变短分支按内容签名去重(克隆体不得整段重复)', () => {
   type M = { role: string; timestamp: number; content: unknown };
   const m = (role: string, timestamp: number, content: unknown): M => ({ role, timestamp, content });

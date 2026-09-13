@@ -1,8 +1,7 @@
 /**
  * 续读窗口 / 截图路径 / 抽取厚薄判定的纯逻辑回归。
- * 这三处都是"工具在真机上表现不好"的直接产物(见 docs/regression-jsonl.md 的 H 组回归记录):
- * ①长文被 12000 截断后无法取回后半段;②后台标签截图被浏览器 API 限制;
- * ③SPA 首次抽取过薄时模型只能自己摸索"再等等"。
+ * 各自的契约:①长文被 12000 截断后必须能取回后半段;
+ * ②后台标签截图不受浏览器 API 限制(走 CDP);③SPA 首次抽取过薄时必须给出可行动提示。
  */
 import './helpers/browser-stub';
 import test from 'node:test';
@@ -86,7 +85,6 @@ test('capturePathFor:活动标签走扩展 API,后台优先 CDP,CDP 不可用才
   assert.equal(capturePathFor(false, false), 'needs-activation');
 });
 
-// 真机记录:模型点搜索结果链接开了新 tab,事后既读不了也关不掉(只能请用户 Ctrl+W)。
 // 约定:点击造成的新开页按 agent-opened 登记 → 立即可读(read_page 白名单三源之一)
 // 且可由 close_page 清理(仍走确认卡,安全边界不变)。
 test('click 开出的新 tab 被登记为 agent-opened(可读可关)', async () => {
@@ -109,7 +107,7 @@ test('click 开出的新 tab 被登记为 agent-opened(可读可关)', async () 
   }
 });
 
-// 初版 H3 的失效点:续读提示依赖“截断前全文长度”,报错长度 → 提示永不出现(真机上模型不会续读)。
+// 续读提示依赖“截断前全文长度”;传入截断后的长度会得出“没有后半段”的错误结论 → 提示永不出现。
 test('nextOffsetFor:只有知道全文长度时才给下一次 offset', () => {
   assert.equal(nextOffsetFor(0, 12000, 30000), 12000, '有后半段 → 给出下一个 offset');
   assert.equal(nextOffsetFor(12000, 12000, 30000), 24000, '续读到底前一直前进');
@@ -177,9 +175,8 @@ test('getAgentOpenedTabs 返回活引用(登记后当轮即可见)', async () =>
   assert.ok(!view.has(777001), '注销同样即时可见');
 });
 
-// 真机踩到的回归(用户实测 2026-09-11):对 19500 字长页请求 section:'tail',
-// 返回的却是**头部**内容且在 12000 处静默截断(truncated 被覆盖成 false)→ 文末标记丢失且无续读提示,
-// 模型只好改走 execute_js 兜底。根因:先按头部截断、再对截断结果做尾切片。
+// 对长页请求 section:'tail' 时,若先按头部截断再做尾切片,返回的是**头部**内容且在 12000 处静默截断
+// (truncated 被误报为 false)→ 文末标记丢失且无续读提示。尾窗必须在全文上取。
 test('尾窗必须落在文末且标记可见(先截断再切片会丢文末)', () => {
   const LIMIT = 12000;
   const full = 'A'.repeat(13000) + '\n文末标记：ZEBRA-7391';
@@ -188,14 +185,14 @@ test('尾窗必须落在文末且标记可见(先截断再切片会丢文末)', 
   // 正确做法:在**全文**上取尾窗
   const tail = textWindow(full, Math.max(0, full.length - LIMIT), LIMIT);
   assert.ok(tail.text.includes('ZEBRA-7391'), '尾窗必须包含文末标记');
-  assert.equal(tail.truncated, true, '被省略了开头 → 必须标记为截断(旧 bug 在此报 false)');
+  assert.equal(tail.truncated, true, '被省略了开头 → 必须标记为截断');
   assert.ok(tail.start > 0, '尾窗起点不为 0');
   assert.equal(tail.nextOffset, null, '尾窗已到文末,无“向后读”指引');
 
-  // 错误做法(旧实现)会让标记丢失:截断到 12000 后再尾切同一长度 → 仍是那 12000
+  // 反例:截断到 12000 后再尾切同一长度 → 仍是那 12000,标记必丢(说明本断言能抓到该缺陷)
   const headTruncated = full.slice(0, LIMIT);
   const stale = textWindow(headTruncated, 0, LIMIT);
-  assert.ok(!stale.text.includes('ZEBRA-7391'), '这正是旧实现丢标记的原因');
+  assert.ok(!stale.text.includes('ZEBRA-7391'), '先截断再尾切必然丢标记');
 });
 
 test('续读提示:尾窗要说明“前面被省略”以及怎么往回读', () => {

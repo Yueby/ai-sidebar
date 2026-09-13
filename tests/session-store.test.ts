@@ -1,9 +1,8 @@
 /**
  * sessionStore(IndexedDB + JSONL 记录)自动化覆盖。
  *
- * 为什么需要它:此前 sessionStore 的 IndexedDB 路径**零自动化覆盖**——A 组
- * "重启后会话还在吗"只能靠真机回归,代价高且不可重复。这里用 fake-indexeddb
- * 在 node 里跑真实 IDB 语义(openDB/事务/put/getAll),把落盘往返与容错钉住。
+ * 用 fake-indexeddb 在 node 里跑真实 IDB 语义(openDB/事务/put/getAll),把落盘往返与容错
+ * 钉住——落盘往返与容错因此可在 node 里重复验证。
  *
  * 覆盖契约:往返无损 / 幂等 / 排序 / 坏行容错(不炸全表) / 单事务原子替换 / 单条删除。
  */

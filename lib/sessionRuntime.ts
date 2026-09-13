@@ -361,7 +361,7 @@ export function bridgeAgentEvent(sessionId: string, event: AgentEvent): void {
   if (event.type === 'message_update' && event.message.role === 'assistant') {
     if (!rt.isOwner(seq)) return;
     // content 形状防御:某些 provider/阶段的 message_update 可能不带数组 content,
-    // 直接 .filter 会抛 TypeError 并沿事件链炸掉整轮(历史事故)。
+    // 直接 .filter 会抛 TypeError 并沿事件链炸掉整轮。
     const content = Array.isArray(event.message.content) ? event.message.content : [];
     const text = content
       .filter((b) => b.type === 'text')

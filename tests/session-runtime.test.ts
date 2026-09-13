@@ -137,7 +137,7 @@ test('user message_end 经 bridgeAgentEvent 进入 in-flight 保持可见,同一
 
 // 回归:投影桥抛异常会沿事件链炸掉整轮 Agent 运行(上层 catch 曾经直接丢弃整轮转录)。
 // 桥必须对畸形负载自防御:宁少更新一次视图,不得把异常抛回 Agent。
-test('bridgeAgentEvent 对畸形 content 不抛异常(历史事故:整轮回复消失)', () => {
+test('bridgeAgentEvent 对畸形 content 不抛异常(否则整轮会被上层丢弃)', () => {
   const sid = 'bridge-malformed';
   const rt = runtimeFor(sid);
   rt.beginRun();

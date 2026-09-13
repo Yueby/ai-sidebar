@@ -17,7 +17,7 @@ const SEARCH_PAGE_PARAMS = Type.Object({
  * search_page 工具定义(safe):枚举当前窗口所有 http(s) 标签页(tabId/标题/URL/活动标记),
  * 是 open_page / fill_element(tabId) 等多标签编排的寻址入口。
  * 行内标注可读性:[readable] = read_page 可直接读(<page-refs> 引用或 open_page 注册);
- * [external] = 可发现但不可读,需先 open_page 拿可读句柄(反馈:两套寻址体系曾让模型白烧多轮)。
+ * [external] = 可发现但不可读,需先 open_page 拿可读句柄。
  */
 export function createSearchPageToolDefinition(
   refTabs: RefTab[] = [],

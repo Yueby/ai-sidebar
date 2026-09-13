@@ -156,7 +156,7 @@ function SmoothMarkdown({
 }) {
   const shown = useSmoothText(text, animate);
   // 逐字揭示期间**实时上色**(节流约 5Hz,见 MarkdownView 的 CodeBlock):
-  // 旧做法完全不高亮 → “说完了才变色”;每帧高亮 → O(n²) 卡顿。两者之间的折中。
+  // 每帧重新分词是 O(n²)(会让整页卡),完全不高亮则会“说完了才变色” → 节流是两者之间的折中。
   return <MarkdownView content={shown} className={className} live={animate} />;
 }
 
@@ -578,9 +578,9 @@ function ToolCallCard({
 }
 
 /**
- * memo 化:流式期间 store 每 50ms 更新一次,若列表每一项都重渲染,
- * 每条消息都会重跑 messageText 解析与整棵 markdown 子树评估(真机反馈:AI 回复时整体卡)。
- * 数据 props 均为稳定引用(消息对象/数组由 store 持有),浅比较即可命中。
+ * memo 化:流式期间 store 每 50ms 更新一次;若列表每一项都重渲染,每条消息都会重跑
+ * messageText 解析与整棵 markdown 子树评估。数据 props 均为稳定引用(消息对象/数组由
+ * store 持有),浅比较即可命中——任何字面量数组/对象 prop 都会击穿它。
  */
 /** DEV 性能诊断:MessageItem 渲染次数(流式期间应≈每次 flush 仅 live 一项,而非全部消息) */
 export const messageItemStats = { renders: 0 };
@@ -684,7 +684,7 @@ export const MessageItem = memo(function MessageItem({
   );
 
   // 块序还原:按 content 原始顺序分组 —— 连续 thinking/text 合并为一个气泡段,toolCall
-  // 独立成卡插在其原始位置(此前工具卡被统一前置到气泡之前,导致「工具卡跑到最前」错乱)
+  // 独立成卡插在其原始位置:统一前置会让工具卡与实际执行顺序错位。
   const segments = useMemo(() => {
     const segs: Array<
       | { kind: 'bubble'; items: typeof blocks }

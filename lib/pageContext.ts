@@ -186,8 +186,8 @@ export async function describeTabChanges(before: TabSnapshot): Promise<TabChange
   const openedTabIds: number[] = [];
   for (const t of opened) {
     if (t.id === undefined) continue;
-    // 点击导致的“新开页”是 agent 造成的,按 agent-opened 登记:否则模型事后连自己开的页
-    // 都读不了也关不掉(真机记录:只能请用户 Ctrl+W)。close_page 仍需用户确认,安全边界不变。
+    // 点击导致的“新开页”由 agent 造成,登记为 agent-opened:该页随即成为可读句柄,也可被
+    // close_page 关闭(关闭仍需用户确认)。未登记的页面读不到,只能交给用户手动处理。
     registerAgentOpenedTab(t.id);
     openedTabIds.push(t.id);
     notes.push(

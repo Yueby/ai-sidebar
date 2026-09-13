@@ -406,11 +406,9 @@ export default defineContentScript({
       windowStart?: number;
     }> {
       await waitForComplete(READY_TIMEOUT);
-      // 续读请求(offset>0)必须拿**未截断**全文才能取到 12000 之后的窗口——
-      // 先截断再取窗口正是初版 H3 失效的原因(offset>12000 永远空,totalLength 也是假值)。
-      // tail 与 offset 都必须在**全文**上取窗口:先截断再取窗口会让 tail 拿到中段、
-      // 让 offset 拿不到 12000 之后的内容。真机实测:tail 读 19500 字长页返回的是头部内容、
-      // 且 truncated 被覆盖成 false → 静默丢末尾且不给续读提示(模型只能改走 execute_js)。
+      // tail 与 offset 都必须在**未截断全文**上取窗口:先截断再取窗口会让 tail 拿到中段、
+      // 让 offset 取不到 12000 之后的内容,且 truncated 会被误报为 false
+      // (静默丢末尾、不给续读提示)。
       const wantFull = offset > 0 || section === 'tail';
       // 语义路径优先;门控不过/库不可用则手写兜底(含 isHidden 可见性过滤)
       let result = (await extractSemanticMarkdown(wantFull)) ?? extractMarkdown(section, wantFull);
@@ -841,7 +839,7 @@ export default defineContentScript({
       if (terms.length > 0) {
         all = all.filter((e) => terms.some((t) => e.role.includes(t) || e.name.toLowerCase().includes(t)));
       }
-      // hidden 默认排除(用户反馈:弹层隐藏按钮噪音大);includeHidden 时保留并带 [hidden] 旗标
+      // hidden 默认排除(隐藏按钮噪音大);includeHidden 时保留并带 [hidden] 旗标
       if (!includeHidden) all = all.filter((e) => e.visible);
       const total = all.length;
       // 预算优先给可见元素(隐藏项多为折叠菜单/重复入口,行动价值低),组内保持文档序

@@ -90,7 +90,7 @@ async function generateTitleWithAi(
 /**
  * 会话域 hook(编排层):会话增删切/AI 命名/重命名 + 原子 init effect
  * (storage 读取+迁移+watch 注册时序原样保留,watch 回调接 store action)。
- * 注:新会话不再预填当前页——每次发送时聚焦 tab 由 useChatTurn 注入 refs 块(决策 13 修订),
+ * 注:会话不预填页面;每次发送时聚焦 tab 由 useChatTurn 注入 refs 块,
  * 引用栏仅承载用户主动策展的持久引用。
  * sessions/activeSessionId/loaded 状态与草稿防抖队列在 store/sessionSlice。
  *
@@ -129,7 +129,7 @@ export function useSessionManager() {
       let initialActiveId = rawActiveId;
 
       if (initialSessions.length === 0) {
-        // 首个会话 = 新会话(当前页由发送时聚焦注入承载,决策 13 修订)
+        // 首个会话 = 新会话(当前页由发送时聚焦注入承载)
         const newSess = createSession();
         initialSessions = [newSess];
         initialActiveId = newSess.id;
@@ -140,7 +140,7 @@ export function useSessionManager() {
         await activeSessionIdItem.setValue(initialActiveId);
       }
 
-      // 启动时活动会话仍为空:不再预填当前页(当前页由发送时聚焦注入承载,决策 13 修订)
+      // 启动时活动会话仍为空:会话不预填页面(当前页由发送时聚焦注入承载)
       const initialActive = initialSessions.find((s) => s.id === initialActiveId);
 
       setSessions(initialSessions);

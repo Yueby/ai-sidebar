@@ -1,8 +1,7 @@
 /**
  * 工具面接线回归:防止「工具实现了、文档宣称存在,却忘了接进 registry」这类静默缺失。
- * 真实案例:`activate_page` / `close_page` 于 a8b2bda 实现(含 pageContext 支持),
- * 但从未出现在任何注册点 → agent 实际上没有关标签页/切前台的能力,
- * 直到用户在真机对话里问「我们没有关闭标签页的工具吗？」才暴露。
+ * 接线缺失的表现是 agent 缺少对应能力(如关标签页 / 切前台),且不会有任何报错——
+ * 因此必须由断言把"文档宣称的工具面"钉住。
  */
 import './helpers/browser-stub';
 import test from 'node:test';
