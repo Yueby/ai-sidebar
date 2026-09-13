@@ -3,7 +3,7 @@ import { i18n } from '#i18n';
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { RefTab } from '@/lib/pageContext';
 import { cn } from '@/lib/utils';
-import { FaviconIcon } from './FaviconIcon';
+import { FaviconIcon, RefTooltipContent } from './FaviconIcon';
 import {
   Tooltip,
   TooltipContent,
@@ -52,7 +52,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                   }
                 />
                 <TooltipContent side="top">
-                  {tab.url}
+                  <RefTooltipContent url={tab.url} />
                 </TooltipContent>
               </Tooltip>
               <span className="text-[11px] text-muted-foreground shrink-0 font-normal">
@@ -168,7 +168,7 @@ export function TabRefBar({ refTabs, onRemoveRefTab }: TabRefBarProps) {
                         }
                       />
                       <TooltipContent side="top">
-                        {t.url}
+                        <RefTooltipContent url={t.url} />
                       </TooltipContent>
                     </Tooltip>
                     {idx === 0 && (

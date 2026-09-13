@@ -42,14 +42,19 @@ export function FaviconIcon({
 
 /**
  * 引用项 tooltip:网址优先(元素引用必须能看出"来自哪一页",尤其是同一条消息引了多页时),
- * 定位细节次行。无网址(旧消息、无 refs 块、元素来自已关闭的 tab)时退化为单行细节。
+ * 定位细节次行。外层必须用 flex-col 容器包裹,避免 Base UI tooltip (.cn-tooltip-content
+ * 默认 inline-flex 水平排布)将两个 span 挤成单行横排。
+ * 无网址(旧消息、无 refs 块、元素来自已关闭的 tab)时退化为单行细节。
  */
-export function RefTooltipContent({ url, detail }: { url?: string; detail: string }) {
+export function RefTooltipContent({ url, detail }: { url?: string; detail?: string }) {
   if (!url) return <>{detail}</>;
+  if (!detail) {
+    return <span className="font-mono text-[10px] leading-tight break-all text-left">{url}</span>;
+  }
   return (
-    <>
-      <span className="block font-mono text-[10px] leading-tight break-all">{url}</span>
-      <span className="block mt-0.5 text-[10px] leading-tight opacity-70">{detail}</span>
-    </>
+    <div className="flex flex-col text-left min-w-0 max-w-xs">
+      <span className="font-mono text-[10px] leading-tight break-all">{url}</span>
+      <span className="mt-0.5 text-[10px] leading-tight opacity-75 break-all select-all">{detail}</span>
+    </div>
   );
 }

@@ -252,6 +252,7 @@
 .element-chip-unknown {
   background: var(--muted);
   color: var(--muted-foreground);
+  border-style: dashed;
 }
 /* assistant 回复内标记 → 斜体内容预览引用 */
 .element-quote {

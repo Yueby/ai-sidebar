@@ -132,7 +132,7 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
                 />
               }
             >
-              <FaviconIcon url={tab.url} tabId={tab.tabId} className="size-2.5" />
+              <FaviconIcon url={tab.url} tabId={tab.tabId} className="size-3" />
               <span className="truncate max-w-full">{tab.title || tab.url}</span>
               {tab.focused && (
                 <Badge
@@ -144,7 +144,7 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
               )}
             </TooltipTrigger>
             <TooltipContent side="top">
-              {`${tab.url} · #${tab.tabId}`}
+              <RefTooltipContent url={tab.url} detail={`#${tab.tabId}`} />
             </TooltipContent>
           </Tooltip>
         ))}
@@ -160,9 +160,9 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
             >
               <span className="font-mono text-muted-foreground shrink-0">{elem.id}.</span>
               {urlByTabId.get(elem.tabId) ? (
-                <FaviconIcon url={urlByTabId.get(elem.tabId)!} tabId={elem.tabId} className="size-2.5" />
+                <FaviconIcon url={urlByTabId.get(elem.tabId)!} tabId={elem.tabId} className="size-3" />
               ) : (
-                <SquareMousePointer className="size-2.5 shrink-0 text-muted-foreground" />
+                <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
               )}
               <span className="truncate max-w-full">{elementListLabel(elem)}</span>
             </TooltipTrigger>
@@ -754,7 +754,7 @@ export const MessageItem = memo(function MessageItem({
                                 )}
                               </TooltipTrigger>
                               <TooltipContent side="top">
-                                {`${tab.url} · #${tab.tabId}`}
+                                <RefTooltipContent url={tab.url} detail={`#${tab.tabId}`} />
                               </TooltipContent>
                             </Tooltip>
                           ))}
