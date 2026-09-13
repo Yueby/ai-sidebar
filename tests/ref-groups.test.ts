@@ -65,9 +65,9 @@ test('shouldSeedCurrentPage:只给全新会话入住当前页', () => {
 test('decideFocusSwitch:不可引用页清空当前页引用(幂等)', () => {
   const withRefs = draft({ refTabs: [tab(1)], pickedElements: [element(1, 1)] });
   const cleared = decideFocusSwitch({ draft: withRefs, groups: new Map(), tabId: 9, meta: null });
+  // 先查开关(deepEqual 是断言函数,会把变量窄化成字面量类型,之后access 别的字段会报错)
+  assert.equal(cleared?.pageContextEnabled, undefined, '开关不因"焦点落到不可引用页"而改变:它不是用户动作');
   assert.deepEqual(cleared, { input: '', refTabs: [], pickedElements: [] });
-  // 开关不因"焦点落到不可引用页"而改变:它不是用户动作
-  assert.equal(cleared?.pageContextEnabled, undefined);
   // 已空 → 不动草稿(避免无意义渲染与落盘)
   assert.equal(
     decideFocusSwitch({ draft: draft(), groups: new Map(), tabId: 9, meta: null }),
