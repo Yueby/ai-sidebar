@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { i18n } from '#i18n';
-import { Globe, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import type { RefTab } from '@/lib/pageContext';
-import { faviconUrl } from '@/lib/favicon';
-import { useTabMeta } from '@/lib/tabMetaStore';
 import { cn } from '@/lib/utils';
+import { FaviconIcon } from './FaviconIcon';
 import {
   Tooltip,
   TooltipContent,
@@ -15,42 +14,6 @@ import {
 interface TabRefBarProps {
   refTabs: RefTab[];
   onRemoveRefTab: (id: number) => void;
-}
-
-/**
- * 单个网站图标(回退链:tabMetaStore 实时 favicon(单源,事件驱动自愈) → _favicon 服务(浏览器历史库) → Globe):
- * favIconUrl 已从数据层退出(审计窄版收敛),渲染层经 useTabMeta 直接订阅单一读源;
- * 新开 tab 的 favicon 异步生成、任何时序漏网都由 store 的 hydrate/事件刷新补齐
- */
-export function FaviconIcon({
-  url,
-  tabId,
-  className = 'size-3.5',
-}: {
-  url: string;
-  tabId?: number;
-  className?: string;
-}) {
-  const meta = useTabMeta(tabId);
-  const liveFav = meta?.favIconUrl;
-  const [failedStage, setFailedStage] = useState<'live' | 'service' | null>(null);
-  // 实时值/页面变化后重置失败标记(新 favicon/新页面两级都值得一试)
-  useEffect(() => {
-    setFailedStage(null);
-  }, [liveFav, url]);
-  const useLive = Boolean(liveFav) && failedStage !== 'live';
-  const src = useLive ? liveFav : faviconUrl(url, 32);
-  if (failedStage === 'service' || !src) {
-    return <Globe className={`${className} text-muted-foreground shrink-0`} />;
-  }
-  return (
-    <img
-      src={src}
-      alt=""
-      onError={() => setFailedStage(useLive ? 'live' : 'service')}
-      className={`${className} rounded-[2px] shrink-0 object-contain`}
-    />
-  );
 }
 
 /**

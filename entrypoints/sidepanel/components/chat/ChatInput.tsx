@@ -41,7 +41,7 @@ import { SlashMenu } from './SlashMenu';
 import { TabRefBar } from './TabRefBar';
 import { InlineBadge } from './extensions/InlineBadge';
 import { buildBadgeAttrs, buildUrlBadgeAttrs, extractEditorState, isSingleUrlText } from './extensions/editorSerialize';
-import { FaviconIcon } from './TabRefBar';
+import { FaviconIcon } from './FaviconIcon';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {

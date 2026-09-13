@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { RefElementMeta } from '@/lib/types';
 import { elementChipLabel } from '@/lib/elementLabel';
 import { SquareMousePointer } from 'lucide-react';
+import { FaviconIcon, RefTooltipContent } from './FaviconIcon';
 import {
   Tooltip,
   TooltipContent,
@@ -12,6 +13,9 @@ import {
 /**
  * 用户消息内元素引用的 chip 渲染:
  * - <picked-element …/> 自闭合块(单一表示),label 取块属性;
+ * - 图标位置 = 来源页 favicon(同一条消息可引多页,图标是唯一的页来源标识);
+ *   页网址未知(无 refs 块/旧数据)时退化为指针图标;
+ * - tooltip 首行给页网址,次行给 #id · <tag> · selector;
  * - 查无数据(伪造/悬空)→ 灰样式兜底,不猜内容。
  */
 
@@ -32,46 +36,45 @@ function parsePickedElementBlock(block: string): { elementId: number; label: str
   return { elementId, label };
 }
 
-function renderChip(
-  key: string,
-  label: string,
-  el: RefElementMeta | undefined,
-  fallbackId: number,
-): ReactNode {
-  if (el) {
-    const tooltipText = `#${el.id} · ${el.selector}`;
-    return (
-      <TooltipProvider key={key} delay={200}>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span className="element-chip select-all cursor-default" />
-            }
-          >
-            <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
-            <span className="element-chip-label">{elementChipLabel(el)}</span>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {tooltipText}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
-  const fallbackText = `#${fallbackId}`;
+/** 单条元素引用 chip(url = 来源页网址,由调用方按 tabId 解析) */
+function ElementChip({
+  label,
+  el,
+  fallbackId,
+  url,
+}: {
+  label: string;
+  el: RefElementMeta | undefined;
+  fallbackId: number;
+  url?: string;
+}) {
+  const fallback = !el;
   return (
-    <TooltipProvider key={key} delay={200}>
+    <TooltipProvider delay={200}>
       <Tooltip>
         <TooltipTrigger
           render={
-            <span className="element-chip element-chip-unknown cursor-default" />
+            <span
+              className={`element-chip cursor-default ${fallback ? 'element-chip-unknown' : 'select-all'}`}
+            />
           }
         >
-          <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
-          <span className="element-chip-label">{label}</span>
+          {el && url ? (
+            <FaviconIcon url={url} tabId={el.tabId} className="size-3" />
+          ) : (
+            <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
+          )}
+          <span className="element-chip-label">{el ? elementChipLabel(el) : label}</span>
         </TooltipTrigger>
         <TooltipContent side="top">
-          {fallbackText}
+          {el ? (
+            <RefTooltipContent
+              url={url}
+              detail={`#${el.id}${el.tagName ? ` · <${el.tagName.toLowerCase()}>` : ''} · ${el.selector}`}
+            />
+          ) : (
+            `#${fallbackId}`
+          )}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -81,6 +84,7 @@ function renderChip(
 export function renderMarkersInText(
   text: string,
   elementById: Map<number, RefElementMeta> | null | undefined,
+  tabUrlById?: Map<number, string>,
 ): ReactNode[] {
   const parts: ReactNode[] = [];
   const regex = /<picked-element\s+[^>]*>/g;
@@ -97,7 +101,13 @@ export function renderMarkersInText(
     }
     const el = elementById?.get(parsed.elementId);
     parts.push(
-      renderChip(`elem-${parsed.elementId}-${match.index}`, parsed.label, el, parsed.elementId),
+      <ElementChip
+        key={`elem-${parsed.elementId}-${match.index}`}
+        label={parsed.label}
+        el={el}
+        fallbackId={parsed.elementId}
+        url={el ? tabUrlById?.get(el.tabId) : undefined}
+      />,
     );
     lastIndex = regex.lastIndex;
   }

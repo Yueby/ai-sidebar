@@ -8,7 +8,6 @@ import {
   Brain,
   ChevronDown,
   ChevronRight,
-  Globe,
   Wrench,
   SquareMousePointer,
   ShieldAlert,
@@ -22,6 +21,7 @@ import { messageText } from '@/lib/storage';
 import { parsePageRefs } from '@/lib/pageRefs';
 import { elementChipLabel, elementListLabel } from '@/lib/elementLabel';
 import { renderMarkersInText } from './elementMarkerText';
+import { FaviconIcon, RefTooltipContent } from './FaviconIcon';
 import { MarkdownView } from './MarkdownView';
 import { CompactionRow } from './CompactionRow';
 import { Button } from '@/components/ui/button';
@@ -95,14 +95,24 @@ function SmoothMarkdown({
   return <MarkdownView content={text} className={className} live={live} />;
 }
 
-function renderUserMessageText(text: string, elementById?: Map<number, RefElementMeta> | null) {
-  return renderMarkersInText(text, elementById);
+function renderUserMessageText(
+  text: string,
+  elementById?: Map<number, RefElementMeta> | null,
+  tabUrlById?: Map<number, string>,
+) {
+  return renderMarkersInText(text, elementById, tabUrlById);
+}
+
+/** 引用项来源页网址(tabId → url):元素 chip 的图标与 tooltip 靠它标出“来自哪一页” */
+function tabUrlMap(tabs: PageRefs['tabs'] | undefined): Map<number, string> {
+  return new Map((tabs ?? []).map((t) => [t.tabId, t.url]));
 }
 
 function UserRefSnapshot({ refs }: { refs: PageRefs }) {
   const [open, setOpen] = useState(false);
   const tabs = refs.tabs ?? [];
   const elements = refs.elements ?? [];
+  const urlByTabId = tabUrlMap(tabs);
   const total = tabs.length + elements.length;
 
   if (total === 0) return null;
@@ -122,7 +132,7 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
                 />
               }
             >
-              <Globe className="size-2.5 shrink-0 text-muted-foreground" />
+              <FaviconIcon url={tab.url} tabId={tab.tabId} className="size-2.5" />
               <span className="truncate max-w-full">{tab.title || tab.url}</span>
               {tab.focused && (
                 <Badge
@@ -149,11 +159,18 @@ function UserRefSnapshot({ refs }: { refs: PageRefs }) {
               }
             >
               <span className="font-mono text-muted-foreground shrink-0">{elem.id}.</span>
-              <SquareMousePointer className="size-2.5 shrink-0 text-muted-foreground" />
+              {urlByTabId.get(elem.tabId) ? (
+                <FaviconIcon url={urlByTabId.get(elem.tabId)!} tabId={elem.tabId} className="size-2.5" />
+              ) : (
+                <SquareMousePointer className="size-2.5 shrink-0 text-muted-foreground" />
+              )}
               <span className="truncate max-w-full">{elementListLabel(elem)}</span>
             </TooltipTrigger>
             <TooltipContent side="top">
-              {`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
+              <RefTooltipContent
+                url={urlByTabId.get(elem.tabId)}
+                detail={`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
+              />
             </TooltipContent>
           </Tooltip>
         ))}
@@ -598,6 +615,8 @@ export const MessageItem = memo(function MessageItem({
     () => new Map((pageRefs?.elements ?? []).map((e) => [e.id, e])),
     [pageRefs],
   );
+  // 来源页网址(tabId → url):气泡内联元素 chip 的图标与 tooltip 数据源
+  const tabUrlById = useMemo(() => tabUrlMap(pageRefs?.tabs), [pageRefs]);
 
   // ── Assistant 内容块(仅 assistant 消息;其余角色为空,保证无条件 hooks 全部先于条件 return)──
   const blocks =
@@ -721,7 +740,7 @@ export const MessageItem = memo(function MessageItem({
                                   <div className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[11px] hover:bg-muted transition-colors cursor-default select-none min-w-0" />
                                 }
                               >
-                                <Globe className="size-3 shrink-0 text-muted-foreground" />
+                                <FaviconIcon url={tab.url} tabId={tab.tabId} className="size-3" />
                                 <span className="truncate flex-1 text-foreground">
                                   {tab.title || tab.url}
                                 </span>
@@ -749,13 +768,24 @@ export const MessageItem = memo(function MessageItem({
                                 <span className="font-mono text-muted-foreground shrink-0">
                                   {elem.id}.
                                 </span>
-                                <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
+                                {tabUrlById.get(elem.tabId) ? (
+                                  <FaviconIcon
+                                    url={tabUrlById.get(elem.tabId)!}
+                                    tabId={elem.tabId}
+                                    className="size-3"
+                                  />
+                                ) : (
+                                  <SquareMousePointer className="size-3 shrink-0 text-muted-foreground" />
+                                )}
                                 <span className="truncate flex-1 text-foreground">
                                   {elementListLabel(elem)}
                                 </span>
                               </TooltipTrigger>
                               <TooltipContent side="top">
-                                {`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
+                                <RefTooltipContent
+                                  url={tabUrlById.get(elem.tabId)}
+                                  detail={`#${elem.id}${elem.tagName ? ` · <${elem.tagName.toLowerCase()}>` : ''} · ${elem.selector}`}
+                                />
                               </TooltipContent>
                             </Tooltip>
                           ))}
@@ -800,7 +830,7 @@ export const MessageItem = memo(function MessageItem({
             <BubbleContent className="rounded-lg px-3 py-1.5 text-sm shadow-xs">
               {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON;标记渲染为内容预览 chip(新旧标记兼容) */}
               <p className="whitespace-pre-wrap break-all leading-relaxed">
-                {renderUserMessageText(rawText, elementById)}
+                {renderUserMessageText(rawText, elementById, tabUrlById)}
               </p>
               {pageRefs && <UserRefSnapshot refs={pageRefs} />}
             </BubbleContent>
