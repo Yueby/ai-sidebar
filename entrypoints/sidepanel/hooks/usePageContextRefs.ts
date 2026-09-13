@@ -240,12 +240,17 @@ export function usePageContextRefs() {
 
   const switchRefGroup = useCallback(
     async (tabId: number) => {
-      if (!includePageContext) return; // 总开关关闭:冻结切换,什么都不发
+      if (!includePageContext) return; // 本会话引用开关关闭:冻结切换,什么都不发
+      // 会话钉住:焦点事件与 InitSync 都可能跨 await,期间用户可能已切到别的会话。
+      // 不校验就会把「当前 tab」写进**另一个会话**的草稿(实测:切到旧对话时它引用了新对话的 tab)。
+      const sessionIdAtCall = useAppStore.getState().activeSessionId;
+      if (!sessionIdAtCall) return;
       focusedTabIdRef.current = tabId;
       const meta = await getTabMeta(tabId).catch(() => null);
       if (focusedTabIdRef.current !== tabId) return; // 快速连切竞态:焦点已再变,本次作废
       const st = useAppStore.getState();
       const current = selectCurrentSession(st);
+      if (current?.id !== sessionIdAtCall) return; // 会话已切换:本次作废(由新会话自己的路径接管)
       if (!current) return;
       if (!meta) {
         // 不可引用页(chrome://新标签页、扩展页、PDF 查看器等):「当前页」引用必须随之消失——
@@ -335,7 +340,11 @@ export function usePageContextRefs() {
     let cancelled = false;
     void (async () => {
       const current = selectCurrentSession(useAppStore.getState());
-      if ((current?.draft?.refTabs.length ?? 0) > 0) return;
+      if (!current) return;
+      // 只给**全新会话**入住当前页:有历史的对话保持它自己的引用集,
+      // 否则切到一个草稿为空的旧对话会凭空引用上"当前页"(实测被当成"引用了新对话的 tab")。
+      if (current.messages.length > 0) return;
+      if (current.draft?.refTabs.length ?? 0) return;
       const seqAtStart = focusEventSeqRef.current;
       const meta = await getActiveTabMeta().catch(() => null);
       if (cancelled || !meta) return;
