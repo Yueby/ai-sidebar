@@ -504,6 +504,10 @@ export default defineContentScript({
     function queryWithin(root: ParentNode, selector: string): Element[] {
       const out: Element[] = [];
       const collect = (node: ParentNode): void => {
+        // 入参自身可能就是 shadow 宿主:它的 querySelectorAll 只看光 DOM 子节点,
+        // 宿主光 DOM 为空时(常见)不显式下潜就永远查不到 shadow 内部(曾致 #host p 全败)
+        const ownRoot = (node as Element).shadowRoot;
+        if (ownRoot) collect(ownRoot);
         for (const el of Array.from(node.querySelectorAll('*'))) {
           if (el.matches(selector)) out.push(el);
           if (el.shadowRoot) collect(el.shadowRoot);
@@ -979,6 +983,11 @@ export default defineContentScript({
     // ===== 可访问性树(read_page mode='tree' 的内容侧采集)=====
 
     /** 承载语义的叶子角色:这些角色的短文本对"读懂页面"有直接价值(价格/说明等) */
+    /** 不可作为结构文本输出的标签:script/style 源码既非页面内容又会误导模型 */
+    const TREE_SKIP_TEXT_TAGS = new Set([
+      'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'META', 'LINK', 'TITLE', 'BASE',
+    ]);
+
     const TREE_TEXT_ROLES = new Set([
       'paragraph', 'text', 'statictext', 'listitem', 'cell', 'heading', 'term', 'definition', 'blockquote', 'caption',
     ]);
@@ -1098,7 +1107,15 @@ export default defineContentScript({
         // 无角色的**叶子**必须保留文本:价格、标签这类内容常写在 <span class=price> 里,
         // 它们没有 role/name,若只按 TREE_TEXT_ROLES 输出,"名称与价格相邻"这条信息会整段消失。
         const isWrapperRole = role === 'generic' || role === 'none' || role === 'presentation';
-        if (isWrapperRole && !name && !el.shadowRoot && el.children.length === 0 && leafText) {
+        const isContentless = TREE_SKIP_TEXT_TAGS.has(el.tagName) || !isElementVisible(el);
+        if (
+          isWrapperRole &&
+          !name &&
+          !el.shadowRoot &&
+          el.children.length === 0 &&
+          leafText &&
+          !isContentless
+        ) {
           push({ depth, role: 'text', text: leafText.slice(0, 160) });
           return;
         }
