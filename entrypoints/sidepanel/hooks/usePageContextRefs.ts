@@ -152,9 +152,21 @@ export function usePageContextRefs(params: {
   // ===== 引用组(决策 26):每个 tab 记住它所属的引用工作集,焦点切换即切换工作集。
   // 非破坏:切走的工作集存档于旧焦点页,切回即恢复;组快照为面板生命周期(tab 关闭即清理)。
   const groupMapRef = useRef<Map<number, { refTabs: RefTab[]; pickedElements: PickedElement[] }>>(new Map());
+  /** 最新焦点请求(竞态判据):switchRefGroup 一进入就更新,含尚未落地的那次切换 */
   const focusedTabIdRef = useRef<number | null>(null);
-  /** 挂载后是否已收到焦点事件:初同步拿的是挂载瞬间的快照,事件路径给的才是更新的事实 */
-  const focusEventRef = useRef(false);
+  /**
+   * 草稿当前**已反映**的 tab(组记忆归属判据)。必须与 focusedTabIdRef 分开:
+   * switchRefGroup 先置焦点 ref 再 await,窗口期内"焦点已是 B、草稿还是 A";
+   * 若组记忆按焦点 ref 归属,就会把 A 的工作集记到 B 头上(group[B]=[A]),
+   * 之后切到 B 会命中"已是该组"的幂等判定直接返回 —— 表现为**切 tab 引用不跟随**。
+   */
+  const appliedTabIdRef = useRef<number | null>(null);
+  /**
+   * 焦点事件世代:每次焦点事件 +1。初同步在读取期间若世代变了,说明它拿的快照已过期,作废本次。
+   * 用世代号而非布尔标志——布尔会永久置位,而初同步在每次会话切换时都要重跑,
+   * 那样一旦切过一次 tab,之后新建会话就再也不会有「当前页」芯片(实测回归)。
+   */
+  const focusEventSeqRef = useRef(0);
 
   const activeDraftRefTabs = useAppStore((s) => selectCurrentSession(s)?.draft?.refTabs ?? null);
   // 会话切换也需要重跑初同步(新建会话 = 空草稿 → 用当前焦点页入住)
@@ -197,7 +209,9 @@ export function usePageContextRefs(params: {
   useEffect(() => {
     if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) return;
     const ids = new Set(activeDraftRefTabs.map((t) => t.id));
-    if (focusedTabIdRef.current !== null) ids.add(focusedTabIdRef.current);
+    // 归属判据必须是「草稿已反映的 tab」:用焦点请求 ref 会把上一个页面的工作集
+    // 记到刚切过去的 tab 头上(切换尚未落地时二者不一致),导致后续切换不跟随
+    if (appliedTabIdRef.current !== null) ids.add(appliedTabIdRef.current);
     for (const id of ids) {
       groupMapRef.current.set(id, {
         refTabs: activeDraftRefTabs,
@@ -223,15 +237,21 @@ export function usePageContextRefs(params: {
           (current.draft?.refTabs.length ?? 0) === 0 &&
           (current.draft?.pickedElements.length ?? 0) === 0
         ) {
+          appliedTabIdRef.current = tabId;
           return;
         }
+        appliedTabIdRef.current = tabId;
         patchActiveDraft((d) => ({ ...d, refTabs: [], pickedElements: [] }));
         return;
       }
       const snapshot = groupMapRef.current.get(tabId);
       if (snapshot) {
         // 恢复该 tab 所属引用组(引用 + 框选元素整组还原);已是该组则幂等跳过(重复触发不产生草稿抖动)
-        if (current.draft?.refTabs === snapshot.refTabs) return;
+        if (current.draft?.refTabs === snapshot.refTabs) {
+          appliedTabIdRef.current = tabId;
+          return;
+        }
+        appliedTabIdRef.current = tabId;
         patchActiveDraft((d) => ({
           ...d,
           refTabs: snapshot.refTabs,
@@ -245,10 +265,12 @@ export function usePageContextRefs(params: {
         current.draft?.refTabs.length === 1 &&
         current.draft.refTabs[0]?.id === tabId
       ) {
+        appliedTabIdRef.current = tabId;
         return;
       }
       // 隐式芯片全量快照(meta 来自 getTabMeta;favicon 已由 tabMetaStore 单源提供)
       const self: RefTab = { ...meta };
+      appliedTabIdRef.current = tabId;
       groupMapRef.current.set(tabId, { refTabs: [self], pickedElements: [] });
       patchActiveDraft((d) => ({ ...d, refTabs: [self], pickedElements: [] }));
     },
@@ -265,7 +287,7 @@ export function usePageContextRefs(params: {
   useEffect(() => {
     if (typeof browser === 'undefined' || !browser.tabs?.onActivated) return;
     const onActivated = (info: { tabId: number }) => {
-      focusEventRef.current = true;
+      focusEventSeqRef.current += 1;
       void switchRefGroup(info.tabId);
     };
     const onUpdated = (tabId: number, ci: { url?: string }) => {
@@ -275,7 +297,7 @@ export function usePageContextRefs(params: {
     };
     const onFocused = async (windowId: number) => {
       if (windowId === browser.windows.WINDOW_ID_NONE) return;
-      focusEventRef.current = true;
+      focusEventSeqRef.current += 1;
       const [tab] = await browser.tabs.query({ active: true, windowId }).catch(() => []);
       if (tab?.id != null) void switchRefGroup(tab.id);
     };
@@ -301,11 +323,12 @@ export function usePageContextRefs(params: {
     void (async () => {
       const current = selectCurrentSession(useAppStore.getState());
       if ((current?.draft?.refTabs.length ?? 0) > 0) return;
+      const seqAtStart = focusEventSeqRef.current;
       const meta = await getActiveTabMeta().catch(() => null);
       if (cancelled || !meta) return;
-      // 读取期间已发生焦点事件 → 挂载快照作废:事件路径给的是更新的事实,
+      // 只在「本次读取期间」发生过焦点事件时才作废:事件路径给的是更新的事实,
       // 晚到的旧 tab 绝不能覆盖(否则刚切过去的新焦点页引用会被这页盖回去)
-      if (focusEventRef.current) return;
+      if (focusEventSeqRef.current !== seqAtStart) return;
       await switchRefGroup(meta.id);
     })();
     return () => {
