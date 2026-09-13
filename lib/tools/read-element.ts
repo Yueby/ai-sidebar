@@ -8,13 +8,34 @@ import { fetchImageForModel, captureCropForModel } from '../imageFetch';
 
 const READ_ELEMENT_PARAMS = Type.Object({
   tabId: Type.Number({ description: 'Id of the tab containing the element (referenced tabs are annotated with tabId in the <page-refs> block of user messages)' }),
-  selector: Type.String({ description: 'Any CSS selector locating the element to read within the referenced page' }),
+  selector: Type.Optional(
+    Type.String({
+      description:
+        'CSS selector locating the element to read. Open shadow roots are searched as well, so selectors matching shadow content work here even though document.querySelector would not find them. Pass either selector, or role + name.',
+    }),
+  ),
+  role: Type.Optional(
+    Type.String({
+      description:
+        'ARIA role of the element, exactly as listed by search_element or read_page mode=tree (e.g. button, textbox, link). Use this instead of selector when the element has no stable CSS path — it resolves through the same role + name + ordinal index the action tools use.',
+    }),
+  ),
+  name: Type.Optional(
+    Type.String({
+      description: 'Accessible name exactly as listed. Required together with role; use an empty string for unnamed elements.',
+    }),
+  ),
+  ordinal: Type.Optional(
+    Type.Number({
+      description: 'Ordinal among elements sharing the same role and accessible name (the [2]/[3] markers), default 1.',
+    }),
+  ),
 });
 
 /**
  * read_element 工具定义(safe):AI 按需读取用户引用的某个标签页内任意元素的当前内容。
- * 安全边界是 tab 级白名单(tabId ∈ 引用标签页 ∪ 框选元素所在页);selector 不限制——
- * 框选元素只是提示,AI 可在引用页内自行探索其他元素(content.ts 的 resolve 直接 querySelector)。
+ * 安全边界是 tab 级白名单(tabId ∈ 引用标签页 ∪ 框选元素所在页)。
+ * 双轨寻址:CSS selector(穿开放 shadow root)或 role+name+ordinal(与动作侧同一套解析)。
  * vision 门控:仅当 `canUseImage`(当前模型 input 含 image)时,元素内的图片
  * 才会被取回并以 ImageContent 块并列返回;非 vision 模型只返回图片的文字描述。
  */
@@ -38,7 +59,9 @@ export function createReadElementToolDefinition(
     parameters: READ_ELEMENT_PARAMS,
     execute: async (_toolCallId, args) => {
       const tabId = args?.tabId;
-      const selector = args?.selector;
+      const selector =
+        typeof args?.selector === 'string' && args.selector.trim() ? args.selector.trim() : undefined;
+      const useLocator = typeof args?.role === 'string' && args.role.trim().length > 0;
       if (
         typeof tabId !== 'number' ||
         (!validTabIds.has(tabId) && !(dynamicTabs?.has(tabId) ?? false))
@@ -53,21 +76,35 @@ export function createReadElementToolDefinition(
           details: null,
         };
       }
-      if (typeof selector !== 'string' || selector.length === 0) {
+      if (!useLocator && !selector) {
         return {
           content: [
-            { type: 'text', text: 'Invalid selector: a non-empty CSS selector string is required.' },
+            { type: 'text', text: 'Invalid arguments: pass either a non-empty CSS selector, or role + name.' },
           ],
           details: null,
         };
       }
-      const element = await resolveElement(tabId, selector);
+      const targetLabel = useLocator
+        ? `${args?.role} ${JSON.stringify(typeof args?.name === 'string' ? args.name : '')}${
+            typeof args?.ordinal === 'number' && args.ordinal > 1 ? ` [${args.ordinal}]` : ''
+          }`
+        : `selector: ${selector}`;
+      const element = await resolveElement(tabId, {
+        selector,
+        locator: useLocator
+          ? {
+              role: args?.role as string,
+              name: typeof args?.name === 'string' ? args.name : '',
+              ordinal: typeof args?.ordinal === 'number' ? args.ordinal : undefined,
+            }
+          : undefined,
+      });
       if (!element) {
         return {
           content: [
             {
               type: 'text',
-              text: `Failed to read element \`${selector}\` in tab #${tabId}: the page may have navigated, the element may no longer exist after a refresh, or the tab may have been closed. Respond accordingly.`,
+              text: `Failed to read element (${targetLabel}) in tab #${tabId}: the page may have navigated, the element may no longer exist after a refresh, the role+name may not match anymore (call search_element to refresh), or the tab may have been closed. Respond accordingly.`,
             },
           ],
           details: null,
@@ -77,7 +114,7 @@ export function createReadElementToolDefinition(
         {
           type: 'text',
           text: [
-            `Element <${element.tagName}> in tab #${tabId} (selector: \`${selector}\`), current content:`,
+            `Element <${element.tagName}> in tab #${tabId} (${targetLabel}), current content:`,
             '',
             '<element>',
             element.html,

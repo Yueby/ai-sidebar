@@ -35,15 +35,22 @@ const SEARCH_ELEMENT_PARAMS = Type.Object({
   ),
 });
 
-/** 单条清单行:role + "可访问名称" + 稀疏旗标(序号>1 / type / disabled / hidden 仅在非默认时标注) */
-function renderElementLine(el: InteractiveElementInfo): string {
+/**
+ * 单条清单行:role + "可访问名称" + 稀疏旗标(序号>1 / type / disabled / checked / hidden),
+ * 并附上决定动作的两个事实:输入框当前值与链接去向(否则模型得先点开才知道)。
+ */
+export function renderElementLine(el: InteractiveElementInfo): string {
   const flags: string[] = [];
   if (el.ordinal > 1) flags.push(String(el.ordinal));
   if (el.inputType) flags.push(`type=${el.inputType}`);
   if (el.disabled) flags.push('disabled');
+  if (el.checked === true) flags.push('checked');
+  else if (el.checked === false) flags.push('unchecked');
   if (!el.visible) flags.push('hidden');
   const name = el.name ? ` ${JSON.stringify(el.name)}` : '';
-  return `- ${el.role}${name}${flags.length > 0 ? ` [${flags.join(', ')}]` : ''}`;
+  const value = el.value ? ` = ${JSON.stringify(el.value)}` : '';
+  const href = el.href ? ` → ${el.href}` : '';
+  return `- ${el.role}${name}${flags.length > 0 ? ` [${flags.join(', ')}]` : ''}${value}${href}`;
 }
 
 /**
@@ -60,7 +67,7 @@ export function createSearchElementToolDefinition(): AgentTool<
     label: toolLabel('search_element'),
     risk: 'safe',
     description:
-      'List the interactive elements of a web page tab — buttons, links, text fields, selects, checkboxes, tabs, sliders and similar — one per line with their ARIA role and accessible name, e.g. `- button "Sign in"`. Non-default state is flagged (`[disabled]`, `[hidden]`) and duplicate role+name pairs get an ordinal (`[2]`), so each element is uniquely addressable by role + accessible name + ordinal — click_element and fill_element accept exactly these rows as their locator. Text-like inputs may carry a `[type=x]` hint (e.g. `[type=password]` for password fields), placeholder-only fields use their placeholder as the accessible name, and icon buttons surface their title/shortcut as a hint. Hidden elements (collapsed menus/popovers) are EXCLUDED by default — pass includeHidden: true to include them. The unfiltered list is capped at 80 entries (visible elements first); pass `query` to filter by a case-insensitive substring of role or accessible name when your target is not shown. Defaults to the currently focused tab; pass tabId to inspect another tab. Prefer this tool over execute_js whenever you need to locate or verify page elements.',
+      'List the interactive elements of a web page tab — buttons, links, text fields, selects, checkboxes, tabs, sliders and similar — one per line with their ARIA role and accessible name, e.g. `- button "Sign in"`. Non-default state is flagged (`[disabled]`, `[hidden]`) and duplicate role+name pairs get an ordinal (`[2]`), so each element is uniquely addressable by role + accessible name + ordinal — click_element and fill_element accept exactly these rows as their locator. Text-like inputs may carry a `[type=x]` hint (e.g. `[type=password]` for password fields) and their current value (`= "…"`), checkboxes/radios their `[checked]`/`[unchecked]` state, links their destination (`→ /path`) — so you can decide what to click or fill without opening it first. placeholder-only fields use their placeholder as the accessible name, and icon buttons surface their title/shortcut as a hint. Same-origin iframe content is included; a cross-origin iframe is reported as a note with its URL instead, since its content is not reachable from this page. Hidden elements (collapsed menus/popovers) are EXCLUDED by default — pass includeHidden: true to include them. The unfiltered list is capped at 80 entries (visible elements first); pass `query` to filter by a case-insensitive substring of role or accessible name when your target is not shown. Defaults to the currently focused tab; pass tabId to inspect another tab. Prefer this tool over execute_js whenever you need to locate or verify page elements.',
     parameters: SEARCH_ELEMENT_PARAMS,
     execute: async (_toolCallId, args) => {
       const rawTabId = args?.tabId;
@@ -132,6 +139,9 @@ export function createSearchElementToolDefinition(): AgentTool<
         '',
         ...result.elements.map(renderElementLine),
       ];
+      if (result.frames && result.frames.length > 0) {
+        lines.push('', ...result.frames.map((note) => `(Note: ${note})`));
+      }
       if (result.truncated) {
         lines.push(
           '',

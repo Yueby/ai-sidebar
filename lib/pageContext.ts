@@ -461,7 +461,7 @@ export interface ResolvedElement {
 /** 按 selector 实时读取指定标签页中的元素;元素不存在或失败返回 null */
 export async function resolveElement(
   tabId: number,
-  selector: string,
+  target: { selector?: string; locator?: { role: string; name: string; ordinal?: number } },
 ): Promise<ResolvedElement | null> {
   // 首次直连;无 content script(如刚授权网页访问后已打开的旧标签页)则补注入后重试一次
   const request = async (): Promise<{
@@ -477,7 +477,8 @@ export async function resolveElement(
     const res = (await browser.tabs.sendMessage(tabId, {
       type: PICK_ELEMENT_MESSAGE,
       action: 'resolve',
-      selector,
+      selector: target.selector,
+      locator: target.locator,
     })) as
       | {
           found?: boolean;
@@ -546,6 +547,12 @@ export interface InteractiveElementInfo {
   visible: boolean;
   /** 文本型 input 的真实 type(password/email/tel/url/日期族等,输出 [type=x] 旗标) */
   inputType?: string;
+  /** 链接目标(动作前可先看清去向) */
+  href?: string;
+  /** 当前值(input/textarea/select 已选文本;密码字段不回传) */
+  value?: string;
+  /** 复选框/单选框选中态(true/false 都有信息量) */
+  checked?: boolean;
 }
 
 /** content.ts 交互元素清单应答载荷 */
@@ -558,6 +565,8 @@ export interface SearchElementsResult {
   /** content 侧收集耗时(ms;性能打点,工具日志用) */
   durationMs: number;
   elements: InteractiveElementInfo[];
+  /** 跨源 iframe 说明(内容在本页不可达,需 open_page) */
+  frames?: string[];
 }
 
 /**

@@ -248,3 +248,20 @@ test('close_page:任意标签页都可被请求关闭,但必须经确认卡(批�
     setGateHandler(null);
   }
 });
+
+// search_element 行是模型唯一的"清单真相":序号决定 click_element 的 ordinal,
+// 值/去向决定要不要点。这里把格式钉住,避免无意改坏寻址契约。
+test('search_element 行渲染:序号/状态/值/链接去向', async () => {
+  const { renderElementLine } = await import('../lib/tools/search-element');
+  const line = (over: Record<string, unknown>) =>
+    renderElementLine({ role: 'button', name: '提交', ordinal: 1, disabled: false, visible: true, ...over } as never);
+
+  assert.equal(line({}), '- button "提交"');
+  assert.equal(line({ ordinal: 2 }), '- button "提交" [2]', '同名第 2 个带序号(click_element 的 ordinal)');
+  assert.equal(line({ disabled: true }), '- button "提交" [disabled]');
+  assert.equal(line({ checked: true, role: 'checkbox' }), '- checkbox "提交" [checked]');
+  assert.equal(line({ checked: false, role: 'checkbox' }), '- checkbox "提交" [unchecked]');
+  assert.equal(line({ value: 'abc', role: 'textbox' }), '- textbox "提交" = "abc"');
+  assert.equal(line({ href: '/cart', role: 'link' }), '- link "提交" → /cart');
+  assert.equal(line({ visible: false }), '- button "提交" [hidden]');
+});

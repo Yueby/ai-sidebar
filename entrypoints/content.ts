@@ -500,8 +500,35 @@ export default defineContentScript({
       };
     }
 
-    /** 按 selector 定位元素并返回 outerHTML(原始 HTML,字符上限 12000);不存在返回 null */
-    function resolveElementPayload(selector: string): {
+    /** 穿开放 shadow root 的 selector 查询:document.querySelector 够不到 shadow 内部 */
+    function querySelectorDeep(selector: string): Element | null {
+      try {
+        const direct = document.querySelector(selector);
+        if (direct) return direct;
+      } catch {
+        return null; // 非法 selector:按 not-found 处理
+      }
+      for (const el of collectWalkableElements()) {
+        try {
+          if (el.matches(selector)) return el;
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    }
+
+    /**
+     * 定位元素并返回 outerHTML(原始 HTML,字符上限 12000);不存在返回 null。
+     * 双轨寻址:locator(role+name+ordinal,与动作侧同一套解析与序号口径)优先;
+     * 否则 CSS selector(**穿开放 shadow root**)。
+     */
+    async function resolveElementPayload(target: {
+      selector?: string;
+      role?: string;
+      name?: string;
+      ordinal?: number;
+    }): Promise<{
       found: boolean;
       tagName: string;
       html: string;
@@ -513,8 +540,23 @@ export default defineContentScript({
       dpr: number;
       /** 页面状态指纹(步④) */
       fingerprint?: string;
-    } | null {
-      const el = document.querySelector(selector);
+    } | null> {
+      let el: Element | null = null;
+      if (typeof target.role === 'string' && target.role.trim()) {
+        const libs = await loadAccessibilityLibs();
+        if (!libs) return null;
+        const locator = parseLocator({
+          role: target.role,
+          name: typeof target.name === 'string' ? target.name : '',
+          ordinal: target.ordinal,
+        });
+        if (!locator) return null;
+        const resolved = resolveLocator(enumerateInteractiveElements(libs), locator);
+        if (resolved.status !== 'ok') return null;
+        el = resolved.hit.el;
+      } else if (typeof target.selector === 'string' && target.selector.trim()) {
+        el = querySelectorDeep(target.selector);
+      }
       if (!el) return null;
       const rawHtml = el.outerHTML;
       const truncated = rawHtml.length > ELEMENT_HTML_LIMIT;
@@ -745,6 +787,15 @@ export default defineContentScript({
           if (el.closest(SEARCH_SKIP_SUBTREE_SELECTOR)) continue;
           out.push(el);
           if (el.shadowRoot) visit(el.shadowRoot);
+          // 同源 iframe 内容(跨源取 contentDocument 会抛,故 try)
+          if (el.tagName === 'IFRAME') {
+            try {
+              const doc = (el as HTMLIFrameElement).contentDocument;
+              if (doc?.body) visit(doc.body);
+            } catch {
+              /* 跨源 frame:不可达,由 collectFrameNotes 报告 */
+            }
+          }
         }
       };
       visit(document);
@@ -763,6 +814,12 @@ export default defineContentScript({
       inputType?: string;
       /** 无名元素的定位提示(title/data-testid/aria-keyshortcuts/placeholder,首一个非空) */
       hint?: string;
+      /** 链接目标 */
+      href?: string;
+      /** 当前值(密码字段不回传) */
+      value?: string;
+      /** 复选框/单选框选中态 */
+      checked?: boolean;
     }
 
     /** 对输入类元素,名称/预览优先用 placeholder/value(大量真实表单只有 placeholder 没有 label) */
@@ -814,9 +871,36 @@ export default defineContentScript({
           disabled: isDisabled(el),
           visible: isElementVisible(el),
           inputType,
+          href: el instanceof HTMLAnchorElement ? el.getAttribute('href') ?? undefined : undefined,
+          value: a11yValue(el),
+          checked:
+            el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')
+              ? el.checked
+              : undefined,
         });
       }
       return out;
+    }
+
+    /** 跨源 iframe 说明(同源已由遍历覆盖):让模型知道内容在哪、怎么拿到 */
+    function collectFrameNotes(): string[] {
+      const notes: string[] = [];
+      for (const frame of Array.from(document.querySelectorAll('iframe'))) {
+        let accessible = false;
+        try {
+          accessible = Boolean((frame as HTMLIFrameElement).contentDocument?.body);
+        } catch {
+          accessible = false;
+        }
+        if (!accessible) {
+          const src = frame.getAttribute('src') ?? '(no src)';
+          const label = frame.getAttribute('title');
+          notes.push(
+            `cross-origin iframe${label ? ` ${JSON.stringify(label)}` : ''} (${src}) — its content is not accessible from this page; open_page that URL to read it.`,
+          );
+        }
+      }
+      return notes;
     }
 
     /**
@@ -832,6 +916,8 @@ export default defineContentScript({
 
       const computeStartedAt = performance.now();
       let all = enumerateInteractiveElements(libs);
+      // 跨源 iframe:显式报告而不是让调用方困惑于"为什么读不到"
+      const frames = collectFrameNotes();
       // query 过滤:单串或多串数组(OR 语义,任一命中即保留),role/可访问名称的大小写不敏感子串匹配,
       // 先于预算截断(目标不在默认清单时的定位出路)
       const terms = (Array.isArray(rawQuery) ? rawQuery : [rawQuery])
@@ -856,6 +942,7 @@ export default defineContentScript({
         truncated: total > SEARCH_ELEMENT_LIMIT,
         durationMs: Math.round(performance.now() - computeStartedAt),
         elements: visibleFirst.slice(0, SEARCH_ELEMENT_LIMIT).map(({ el: _el, ...info }) => info),
+        ...(frames.length > 0 ? { frames } : {}),
       };
     }
 
@@ -1698,8 +1785,21 @@ export default defineContentScript({
       if (message?.type === PICK_ELEMENT_MESSAGE) {
         if (message.action === 'start') {
           void enterPickMode();
-        } else if (message.action === 'resolve' && typeof message.selector === 'string') {
-          sendResponse(resolveElementPayload(message.selector));
+        } else if (
+          message.action === 'resolve' &&
+          (typeof message.selector === 'string' ||
+            (message.locator && typeof message.locator === 'object'))
+        ) {
+          // 异步:locator 路径要动态导入可访问性库
+          resolveElementPayload({
+            selector: typeof message.selector === 'string' ? message.selector : undefined,
+            role: message.locator?.role,
+            name: message.locator?.name,
+            ordinal: message.locator?.ordinal,
+          })
+            .then(sendResponse)
+            .catch(() => sendResponse(null));
+          return true;
         }
         return;
       }
