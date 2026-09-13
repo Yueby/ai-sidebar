@@ -1045,7 +1045,9 @@ export default defineContentScript({
       const libs = await loadAccessibilityLibs();
       if (!libs) return { error: 'Failed to load the accessibility analysis library.' };
       const selector = typeof rawRoot === 'string' && rawRoot.trim() ? rawRoot.trim() : '';
-      const rootEl = selector ? document.querySelector(selector) : document.body;
+      // 与 read_element 同一寻址能力:直接 document.querySelector 穿不过开放 shadow root,
+      // 而树本身是穿透采集的 —— root 若只认光 DOM,等于"能读到影子里的内容却指定不了它"
+      const rootEl = selector ? querySelectorDeep(selector) : document.body;
       if (!rootEl) return { error: `No element matches root selector ${JSON.stringify(selector)}.` };
 
       const nodes: A11yNode[] = [];
@@ -1063,8 +1065,21 @@ export default defineContentScript({
       };
 
       const visitIframe = (el: Element, depth: number): void => {
-        const src = (el as HTMLIFrameElement).getAttribute('src') ?? '';
-        const label = el.getAttribute('title') || src || undefined;
+        const rawSrc = (el as HTMLIFrameElement).getAttribute('src') ?? '';
+        // 说明里给**绝对** URL:相对 src 直接交给模型当 open_page 参数是无效输入
+        let absSrc = rawSrc;
+        try {
+          absSrc = rawSrc ? new URL(rawSrc, location.href).href : '';
+        } catch {
+          absSrc = rawSrc;
+        }
+        let sameOrigin = false;
+        try {
+          sameOrigin = Boolean(absSrc) && new URL(absSrc, location.href).origin === location.origin;
+        } catch {
+          sameOrigin = false;
+        }
+        const label = el.getAttribute('title') || rawSrc || undefined;
         let doc: Document | null = null;
         try {
           doc = (el as HTMLIFrameElement).contentDocument;
@@ -1074,15 +1089,19 @@ export default defineContentScript({
         if (doc && doc.body) {
           push({ depth, role: 'iframe', name: label, note: 'same-origin frame', interactive: false });
           for (const child of Array.from(doc.body.children)) visit(child, depth + 1);
-        } else {
-          push({
-            depth,
-            role: 'iframe',
-            name: label,
-            note: `cross-origin frame — its content is not readable from this page${src ? `; open_page ${src} to read it` : ''}`,
-            interactive: false,
-          });
+          return;
         }
+        // contentDocument 拿不到要分两种:同源但还没加载完(不是跨源!说成跨源是错误claim),
+        // 与真正的跨源(内容确实读不到,给出可行动的绝对 URL)
+        push({
+          depth,
+          role: 'iframe',
+          name: label,
+          note: sameOrigin
+            ? 'same-origin frame — not loaded yet, read it again after it finishes loading'
+            : `cross-origin frame — its content is not readable from this page${absSrc ? `; open_page ${absSrc} to read it` : ''}`,
+          interactive: false,
+        });
       };
 
       const visit = (el: Element, depth: number): void => {

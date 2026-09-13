@@ -47,26 +47,14 @@ export function textWindow(full: string, offset: number, limit: number): TextWin
 }
 
 /**
- * 下一次续读的 offset(纯函数)。
- * 只有知道**截断前全文长度**时才能判断“还有没有后半段”;传入截断后的长度会得出错误结论,
- * 续读提示就不会出现。
- */
-export function nextOffsetFor(
-  offset: number,
-  returnedLength: number,
-  totalLength: number | null | undefined,
-): number | null {
-  if (!totalLength || totalLength <= 0) return null;
-  const consumed = offset + returnedLength;
-  return consumed < totalLength ? consumed : null;
-}
-
-/**
  * 模型可见的续读指引(英文)。
  * 只在确实被截断时给出,并带上可直接照用的一次调用,避免模型自己摸索
  * "再读一次能不能拿到后半段"。
  */
-export function continuationHint(tabId: number, window: TextWindow): string {
+export function continuationHint(tabId: number, window: Omit<TextWindow, 'nextOffset'>): string {
+  // 续读 offset 只在这里算一次(与 textWindow 同一规则):调用方无需自己推,避免两份实现漂移
+  const consumed = window.start + window.text.length;
+  const nextOffset = consumed < window.totalLength ? consumed : null;
   const head =
     `(Note: the page content above is truncated — showing characters ` +
     `${window.start}-${window.start + window.text.length} of ${window.totalLength}.)`;
@@ -74,11 +62,11 @@ export function continuationHint(tabId: number, window: TextWindow): string {
     window.omittedBefore || window.start > 0
       ? ` Characters before ${window.start} were omitted; pass a smaller offset (e.g. 0) to read them.`
       : '';
-  if (window.nextOffset === null) return head + earlier;
+  if (nextOffset === null) return head + earlier;
   return (
     `${head}${earlier}\n` +
     `To read the rest, call read_page with the same tabId and offset: ` +
-    `${JSON.stringify({ tabId, offset: window.nextOffset })} ` +
+    `${JSON.stringify({ tabId, offset: nextOffset })} ` +
     `(offset reads forward from that character position; section is ignored when offset is set).`
   );
 }
@@ -98,9 +86,9 @@ export function isThinText(text: string, threshold = THIN_TEXT_CHARS): boolean {
  */
 export function thinResultNote(charCount: number): string {
   return (
-    `(Note: only ${charCount} characters were extracted and the text looks like a loading shell. ` +
-    `This page appears to be client-rendered and may not have finished. ` +
-    `Call read_page again with waitStableMs (up to 15000) or waitText — waiting is skipped early ` +
-    `when the page still looks empty, so a longer wait is meaningful here.)`
+    `(Note: only ${charCount} characters were extracted. This page may be client-rendered and not ` +
+    `finished yet, or it may genuinely be this short — do not assume the text above is incomplete. ` +
+    `If you expected more content, call read_page again with waitStableMs (up to 15000) or waitText; ` +
+    `waiting is skipped early while the page still looks empty, so a longer wait is meaningful.)`
   );
 }

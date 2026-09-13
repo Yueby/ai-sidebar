@@ -9,7 +9,6 @@ import assert from 'node:assert/strict';
 import {
   textWindow,
   continuationHint,
-  nextOffsetFor,
   isThinText,
   thinResultNote,
   THIN_TEXT_CHARS,
@@ -107,14 +106,42 @@ test('click 开出的新 tab 被登记为 agent-opened(可读可关)', async () 
   }
 });
 
-// 续读提示依赖“截断前全文长度”;传入截断后的长度会得出“没有后半段”的错误结论 → 提示永不出现。
-test('nextOffsetFor:只有知道全文长度时才给下一次 offset', () => {
-  assert.equal(nextOffsetFor(0, 12000, 30000), 12000, '有后半段 → 给出下一个 offset');
-  assert.equal(nextOffsetFor(12000, 12000, 30000), 24000, '续读到底前一直前进');
-  assert.equal(nextOffsetFor(24000, 6000, 30000), null, '读到末尾 → 不再引导续读');
-  assert.equal(nextOffsetFor(0, 500, 400), null, '长度自洽异常时不虚报');
-  assert.equal(nextOffsetFor(0, 12000, undefined), null, '拿不到全文长度 → 不给调用指引');
-  assert.equal(nextOffsetFor(0, 12000, 0), null, '空页同理');
+// 续读提示依赖“截断前全文长度”:传入截断后的长度会得出“没有后半段”的错误结论 → 指引永不出现。
+// offset 只在 continuationHint 里算一次(与 textWindow 同规则),此测试钉住模型可见的那份文本。
+test('continuationHint:只在确有剩余时给出下一次 offset', () => {
+  const withMore = continuationHint(7, {
+    text: 'x'.repeat(12000),
+    start: 0,
+    truncated: true,
+    totalLength: 30000,
+  });
+  assert.match(withMore, /"offset":12000/, '有后半段 → 给出可直接照用的下一次调用');
+  assert.doesNotMatch(withMore, /Characters before/, '从头读不提示“前面被省略”');
+
+  const atEnd = continuationHint(7, {
+    text: 'x'.repeat(6000),
+    start: 24000,
+    truncated: true,
+    totalLength: 30000,
+  });
+  assert.doesNotMatch(atEnd, /call read_page with the same tabId and offset/, '读到末尾不再引导续读');
+  assert.match(atEnd, /Characters before 24000 were omitted/, '尾窗要说明前面还有内容');
+
+  const midWindow = continuationHint(7, {
+    text: 'x'.repeat(1000),
+    start: 5000,
+    truncated: true,
+    totalLength: 30000,
+  });
+  assert.match(midWindow, /"offset":6000/, '从窗口真实起点继续前进');
+
+  const unknownTotal = continuationHint(7, {
+    text: 'x'.repeat(12000),
+    start: 0,
+    truncated: true,
+    totalLength: 0,
+  });
+  assert.doesNotMatch(unknownTotal, /call read_page with the same tabId and offset/, '拿不到全文长度 → 不虚报后续内容');
 });
 
 // close_page 曾谎报成功:closeTab 返回 false(浏览器拒绝关闭)时仍回 “Closed tab #N.”,

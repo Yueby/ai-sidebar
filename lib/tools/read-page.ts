@@ -10,7 +10,7 @@ import {
   type RefTab,
 } from '../pageContext';
 import { assignOrdinals, renderA11yTree } from '../a11yTree';
-import { continuationHint, isThinText, nextOffsetFor, thinResultNote } from '../pageTextWindow';
+import { continuationHint, isThinText, thinResultNote } from '../pageTextWindow';
 
 /** 首次抽取过薄(SPA 未渲染完)时的自动重试节奏:有界、总时长封顶,避免模型自己摸索“再等等再读” */
 const THIN_RETRY_WAITS_MS = [1200, 2500];
@@ -140,7 +140,7 @@ export function createReadPageToolDefinition(
       const section = args?.section === 'tail' ? 'tail' : 'head';
       const waitStableMs =
         typeof args?.waitStableMs === 'number' && args.waitStableMs > 0
-          ? Math.min(Math.round(args.waitStableMs), 30000)
+          ? Math.min(Math.round(args.waitStableMs), 15000) // 与参数描述/thinResultNote 的"up to 15000"同源
           : 0;
       const waitText = typeof args?.waitText === 'string' && args.waitText.trim() ? args.waitText.trim() : undefined;
       const requestedOffset =
@@ -189,7 +189,6 @@ export function createReadPageToolDefinition(
             start: shownFrom,
             truncated: true,
             totalLength: page.totalLength ?? shownTo,
-            nextOffset: nextOffsetFor(shownFrom, page.text.length, page.totalLength),
             omittedBefore: shownFrom > 0,
           })
         : '';
