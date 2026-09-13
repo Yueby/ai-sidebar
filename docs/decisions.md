@@ -61,4 +61,6 @@
 **有意保留**:DEV 诊断日志(`[perf]`/`[p0:run]`/`[flush]`)、`lib/language.ts` 的原生语言名、全部中文注释、全部模型可见英文文案。剩余中文**字面量 32 处**,逐类有据(兜底表 14 / DEV 日志 10 / 语言名 3 / 历史标题兼容 1 / 扫描器误报 4)。
 **顺带修掉两个耦合 bug**:①首条消息判定用字面量比持久化标题 + 忽略历史默认标题(换语言后自动命名失效)→ 改为 i18n 来源 ∪ `'新会话'` 兼容集;②`createSession('新会话')` ×3 绕过 i18n 默认值 → 改 `createSession()`。
 46. **开源许可 = MIT;扩展回退语言改 en**(2026-09,用户拍板):①补 `LICENSE`(MIT,© 2026 Yueby)+ `package.json` 的 `license` 字段——此前公开仓库无 LICENSE 文件,法律上默认保留所有权利,与「开源」表述冲突;②`wxt.config.ts` 的 `manifest.default_locale` 由 `zh_CN` 改为 **`en`**:它只决定**匹配不上浏览器语言时的回退**,中文用户仍由浏览器语言命中 `zh_CN`;国际商店场景下英文回退更合适。改动前已核对 en 与 zh_CN 键集完全一致(产物 `_locales/*/messages.json` 488=488),避免回退语言缺键。
+47. **会话级 grant 覆盖全部页面动作工具;`execute_js` 明确排除**(2026-09,用户拍板):用户要求"这种工具都可以让用户选择记住允许,不必每次都点"。审计结果——`click_element`/`fill_element`/`screenshot_page` 早已按 `工具@tabId` 粒度可记住,`open_page` 为 `open_page@*`,**唯 `close_page` 漏了 `grantable`/`grantScope`**(已补,粒度取 `close_page@*`:按 tab 授权对"关页"无意义,同一 tab 很少关两次)。`execute_js` 走的是不支持 grant 的 `createGatedTool` 封装:**用户明确选择保持每次确认**(卡上预览待执行代码),不做会话级豁免。
+**grant 生命周期不变**(决策 22):模块级 Set,存活于侧边栏 JS 上下文,面板关闭即整体失效。
 
