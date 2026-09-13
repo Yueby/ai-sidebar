@@ -1,4 +1,5 @@
 import { i18n } from '#i18n';
+import type { A11yNode } from './a11yTree';
 import type { PageContext } from './types';
 import {
   PAGE_ACTION_MESSAGE,
@@ -287,6 +288,47 @@ export async function extractFromTab(
     };
   } catch {
     // 该页没有 content script(如刚加载的 chrome:// 页)或提取失败
+    return null;
+  }
+}
+
+export interface ExtractedTree {
+  url: string;
+  title: string;
+  nodes: A11yNode[];
+  total: number;
+  truncated: boolean;
+}
+
+/**
+ * 读取标签页的可访问性树(read_page mode='tree'):结构 + 名字 + 状态 + 值。
+ * 与 extractFromTab 同一条消息协议(mode 区分),同样带"无 content script 时补注入重试"。
+ */
+export async function extractTreeFromTab(
+  tabId: number,
+  root?: string,
+): Promise<ExtractedTree | { error: string } | null> {
+  try {
+    const tab = await browser.tabs.get(tabId);
+    if (!tab?.url?.startsWith('http')) return null;
+  } catch {
+    return null;
+  }
+  const request = async (): Promise<ExtractedTree | { error: string } | undefined> =>
+    (await browser.tabs.sendMessage(tabId, {
+      type: READ_PAGE_MESSAGE,
+      mode: 'tree',
+      root,
+    })) as ExtractedTree | { error: string } | undefined;
+  try {
+    let res = await request().catch(() => undefined);
+    if (!res) {
+      const injected = await ensureContentScript(tabId);
+      if (!injected) return null;
+      res = await request().catch(() => undefined);
+    }
+    return res ?? null;
+  } catch {
     return null;
   }
 }

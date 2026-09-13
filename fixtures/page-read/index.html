@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>页面读取测试台（可访问性树 / 元素读取）</title>
+  <style>
+    body { font-family: system-ui; max-width: 900px; margin: 2rem auto; line-height: 1.7; padding: 0 1rem; }
+    .tile { display: flex; gap: .75rem; align-items: center; border: 1px solid #ddd; border-radius: 8px; padding: .5rem; margin: .4rem 0; }
+    .tile img { width: 48px; height: 48px; background: #eee; border-radius: 4px; }
+    .price { color: #c00; font-weight: 600; }
+    .hidden-btn { display: none; }
+    form > div { margin: .4rem 0; }
+    #shadow-host, iframe { border: 1px dashed #bbb; padding: .5rem; margin: .5rem 0; display: block; width: 100%; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>页面读取测试台</h1>
+    <nav aria-label="主导航">
+      <a href="./child.html">子页（同源 iframe 目标）</a>
+      <a href="https://example.com/docs">外部文档</a>
+    </nav>
+  </header>
+
+  <main>
+    <section aria-labelledby="deals-title">
+      <h2 id="deals-title">今日特惠</h2>
+      <!-- 瓦片网格:链接名(游戏名)与价格是**相邻兄弟**,树视图应把它们呈现为同一组 -->
+      <div class="tile">
+        <img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" />
+        <a href="./child.html" aria-label="No Man's Sky 无人深空">No Man's Sky 无人深空</a>
+        <span class="price">¥26.00（-60%）</span>
+      </div>
+      <div class="tile">
+        <img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" />
+        <a href="./child.html" aria-label="The Crust">The Crust</a>
+        <span class="price">¥25.87（-35%）</span>
+      </div>
+      <div class="tile">
+        <img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" />
+        <a href="./child.html" aria-label="Forsworn">Forsworn</a>
+        <span class="price">¥16.40（-20%）</span>
+      </div>
+    </section>
+
+    <section aria-labelledby="dup-title">
+      <h2 id="dup-title">重名按钮（验证序号 [2]/[3]）</h2>
+      <button type="button">删除</button>
+      <button type="button">删除</button>
+      <button type="button">删除</button>
+      <button type="button">复制</button>
+      <button type="button" class="hidden-btn">隐藏的删除</button>
+    </section>
+
+    <section aria-labelledby="form-title">
+      <h2 id="form-title">表单（placeholder / 状态 / 值）</h2>
+      <form>
+        <div>
+          <label for="email">邮箱</label>
+          <input id="email" type="email" value="prefilled@example.com" />
+        </div>
+        <div>
+          <!-- 只有 placeholder,没有 label:名称应回退到 placeholder -->
+          <input type="search" placeholder="搜索游戏" />
+        </div>
+        <div>
+          <label><input type="checkbox" checked /> 已同意条款</label>
+          <label><input type="checkbox" disabled /> 不可用选项（禁用）</label>
+        </div>
+        <div>
+          <label for="plan">套餐</label>
+          <select id="plan"><option>基础</option><option selected>专业</option></select>
+        </div>
+        <div>
+          <button type="submit" disabled>提交（禁用）</button>
+          <button type="button">取消</button>
+        </div>
+      </form>
+    </section>
+
+    <section aria-labelledby="shadow-title">
+      <h2 id="shadow-title">开放 Shadow DOM</h2>
+      <!-- 内部元素只能穿 shadow root 才看得到/读得到 -->
+      <div id="shadow-host"></div>
+    </section>
+
+    <section aria-labelledby="frames-title">
+      <h2 id="frames-title">iframe</h2>
+      <p>同源 iframe（应可展开）:</p>
+      <iframe src="./child.html" title="同源子页" height="120"></iframe>
+      <p>跨源 iframe（内容读不到,但必须**报告出来**而不是静默读空）:</p>
+      <iframe src="http://127.0.0.1:8790/child.html" title="跨源子页" height="120"></iframe>
+    </section>
+
+    <section aria-labelledby="long-title">
+      <h2 id="long-title">长列表（验证 maxLines 截断）</h2>
+      <ul id="long-list"></ul>
+    </section>
+  </main>
+
+  <aside aria-label="侧栏"><p>侧栏说明文本。</p></aside>
+  <footer><p>页脚</p></footer>
+
+  <script>
+    // 开放 shadow root:内含按钮与输入框(也是 read_element 寻址的靶子)
+    const host = document.getElementById('shadow-host');
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = `
+      <div>
+        <h3>Shadow 内小面板</h3>
+        <button type="button">Shadow 内按钮</button>
+        <input type="text" placeholder="Shadow 内输入框" />
+        <p id="shadow-text">Shadow 内的文本:ZEBRA-SHADOW-1</p>
+      </div>`;
+    // 长列表:40 项,用于验证树的 maxLines 截断提示
+    const list = document.getElementById('long-list');
+    list.innerHTML = Array.from({ length: 40 }, (_, i) => `<li>列表项 ${i + 1}</li>`).join('');
+  </script>
+</body>
+</html>

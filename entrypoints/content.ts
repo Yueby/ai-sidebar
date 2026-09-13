@@ -7,6 +7,8 @@ import {
   SEARCH_ELEMENT_LIMIT,
 } from '@/lib/types';
 import { isThinText, textWindow } from '@/lib/pageTextWindow';
+// type-only:编译期擦除(树节点形状与 sidepanel 侧同源)
+import type { A11yNode } from '@/lib/a11yTree';
 // type-only:编译期擦除,不引入运行时代码(载荷形状与 sidepanel 侧同源)
 import type { PageActionResult, ResolvedActionElement, SearchElementsResult } from '@/lib/pageContext';
 
@@ -857,6 +859,162 @@ export default defineContentScript({
       };
     }
 
+    // ===== 可访问性树(read_page mode='tree' 的内容侧采集)=====
+
+    /** 承载语义的叶子角色:这些角色的短文本对"读懂页面"有直接价值(价格/说明等) */
+    const TREE_TEXT_ROLES = new Set([
+      'paragraph', 'text', 'statictext', 'listitem', 'cell', 'heading', 'term', 'definition', 'blockquote', 'caption',
+    ]);
+
+    /** 状态旗标:只取少量对理解/操作有意义的字段,避免输出膨胀 */
+    function a11yStates(el: Element, disabled: boolean): string[] {
+      const states: string[] = [];
+      if (disabled) states.push('disabled');
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        if (el.required) states.push('required');
+        if (el.readOnly) states.push('readonly');
+        if (el instanceof HTMLInputElement && el.type === 'password') states.push('password');
+        if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
+          states.push(el.checked ? 'checked' : 'unchecked');
+        }
+      }
+      for (const attr of ['aria-checked', 'aria-expanded', 'aria-selected', 'aria-pressed'] as const) {
+        const value = el.getAttribute(attr);
+        if (value) states.push(`${attr.replace('aria-', '')}=${value}`);
+      }
+      const level = el.getAttribute('aria-level') ?? (/^H[1-6]$/.test(el.tagName) ? el.tagName.slice(1) : null);
+      if (level) states.push(`level=${level}`);
+      return states;
+    }
+
+    /** 表单值/aria-valuetext;密码字段**绝不回传值**(只留 password 旗标) */
+    function a11yValue(el: Element): string | undefined {
+      if (el instanceof HTMLInputElement) {
+        if (el.type === 'password') return undefined;
+        return el.value ? el.value.slice(0, 60) : undefined;
+      }
+      if (el instanceof HTMLTextAreaElement) return el.value ? el.value.slice(0, 60) : undefined;
+      if (el instanceof HTMLSelectElement) {
+        const text = el.selectedOptions[0]?.textContent?.replace(/\s+/g, ' ').trim();
+        return text ? text.slice(0, 60) : undefined;
+      }
+      const valueText = el.getAttribute('aria-valuetext');
+      return valueText ? valueText.slice(0, 60) : undefined;
+    }
+
+    interface CollectedTree {
+      url: string;
+      title: string;
+      nodes: A11yNode[];
+      total: number;
+      truncated: boolean;
+    }
+
+    /**
+     * 采集可访问性树(扁平前序,带 depth)。
+     * 穿透:开放 shadow root + **同源 iframe**;跨源 iframe 至少产出说明节点并给出 src,
+     * 让模型知道"内容在那边的 frame 里",而不是静默读空。
+     */
+    async function collectA11yTree(rawRoot: unknown, maxNodes = 2000): Promise<CollectedTree | { error: string }> {
+      const libs = await loadAccessibilityLibs();
+      if (!libs) return { error: 'Failed to load the accessibility analysis library.' };
+      const selector = typeof rawRoot === 'string' && rawRoot.trim() ? rawRoot.trim() : '';
+      const rootEl = selector ? document.querySelector(selector) : document.body;
+      if (!rootEl) return { error: `No element matches root selector ${JSON.stringify(selector)}.` };
+
+      const nodes: A11yNode[] = [];
+      let total = 0;
+      let truncated = false;
+      const STATUS_LIMIT = 32;
+
+      const push = (node: A11yNode): void => {
+        total += 1;
+        if (nodes.length >= maxNodes) {
+          truncated = true;
+          return;
+        }
+        nodes.push(node);
+      };
+
+      const visitIframe = (el: Element, depth: number): void => {
+        const src = (el as HTMLIFrameElement).getAttribute('src') ?? '';
+        const label = el.getAttribute('title') || src || undefined;
+        let doc: Document | null = null;
+        try {
+          doc = (el as HTMLIFrameElement).contentDocument;
+        } catch {
+          doc = null;
+        }
+        if (doc && doc.body) {
+          push({ depth, role: 'iframe', name: label, note: 'same-origin frame', interactive: false });
+          for (const child of Array.from(doc.body.children)) visit(child, depth + 1);
+        } else {
+          push({
+            depth,
+            role: 'iframe',
+            name: label,
+            note: `cross-origin frame — its content is not readable from this page${src ? `; open_page ${src} to read it` : ''}`,
+            interactive: false,
+          });
+        }
+      };
+
+      const visit = (el: Element, depth: number): void => {
+        if (total > maxNodes + STATUS_LIMIT) {
+          truncated = true;
+          return;
+        }
+        const role = (effectiveRole(el, libs.getRole) || 'generic').toLowerCase();
+        let name = '';
+        try {
+          name = libs.computeAccessibleName(el) ?? '';
+        } catch {
+          name = '';
+        }
+        name = name.replace(/\s+/g, ' ').trim();
+        if (!name && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.placeholder) {
+          name = el.placeholder.replace(/\s+/g, ' ').trim();
+        }
+        const disabled = libs.isDisabled(el);
+        const interactive = isInteractiveCandidate(el, libs.getRole) && Boolean(role);
+        const text = TREE_TEXT_ROLES.has(role) && !name
+          ? (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 160) || undefined
+          : undefined;
+        const href = el instanceof HTMLAnchorElement ? el.getAttribute('href') ?? undefined : undefined;
+        push({
+          depth,
+          role,
+          name: name || undefined,
+          text,
+          value: a11yValue(el),
+          states: a11yStates(el, disabled),
+          href,
+          interactive,
+        });
+
+        if (el.shadowRoot) {
+          for (const child of Array.from(el.shadowRoot.children)) visit(child, depth + 1);
+        }
+        for (const child of Array.from(el.children)) {
+          if (child.closest(SEARCH_SKIP_SUBTREE_SELECTOR)) continue;
+          if (child.tagName === 'IFRAME') {
+            visitIframe(child, depth + 1);
+            continue;
+          }
+          visit(child, depth + 1);
+        }
+      };
+
+      // body 本身是无形载体:直接从其子节点起算 depth 0,避免整棵树多一层缩进
+      const startChildren = rootEl === document.body ? Array.from(rootEl.children) : [rootEl];
+      for (const child of startChildren) {
+        if (child.closest(SEARCH_SKIP_SUBTREE_SELECTOR)) continue;
+        visit(child, 0);
+      }
+
+      return { url: location.href, title: document.title, nodes, total, truncated };
+    }
+
     // ===== 页面动作(click/fill/scroll;三期步②,与 search_element 同源寻址)=====
 
     interface LocatorSpec {
@@ -1569,6 +1727,11 @@ export default defineContentScript({
         return;
       }
       // 异步提取:返回 true 保持消息通道开放,完成后 sendResponse
+      // 树模式:结构读取(与文本模式共用同一条 read-page 消息)
+      if (message.mode === 'tree') {
+        collectA11yTree(message.root).then(sendResponse);
+        return true;
+      }
       extractStable(
         message.section === 'tail' ? 'tail' : 'head',
         typeof message.waitStableMs === 'number' ? message.waitStableMs : 0,
