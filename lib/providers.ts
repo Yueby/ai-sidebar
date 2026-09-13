@@ -53,7 +53,6 @@ export const DEFAULT_SETTINGS: Settings = {
   rules: [],
   titleThinking: 'off',
   quickPromptThinking: 'off',
-  includePageContext: true,
   reasoningLevel: 'off',
   webSearch: { provider: 'none', searxngBaseUrl: '', apiKeys: {} },
   webdav: { url: '', username: '', password: '', remotePath: 'ai-sidebar/backup.dat', encrypt: false, encryptPassword: '' },

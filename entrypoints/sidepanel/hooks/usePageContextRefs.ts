@@ -1,6 +1,6 @@
 import { i18n } from '#i18n';
 import { useCallback, useEffect, useRef } from 'react';
-import type { PickedElement, Settings, Session, SessionDraft } from '@/lib/types';
+import type { PickedElement, Session, SessionDraft } from '@/lib/types';
 import { PICK_ELEMENT_RESULT_MESSAGE } from '@/lib/types';
 import {
   getActiveTabMeta,
@@ -10,6 +10,8 @@ import {
   type RefTab,
 } from '@/lib/pageContext';
 import { useAppStore, selectCurrentSession } from '../store';
+// 元素徽章的消息文本表示(与编辑器插入的是同一序列化函数,避免两种表示漂移)
+import { buildBadgeAttrs } from '../components/chat/extensions/editorSerialize';
 
 /**
  * 页面引用域 hook(编排层):refTabs/pickedElements 读写(经 store patchActiveDraft)、
@@ -31,11 +33,16 @@ interface RefGroupSnapshot {
 export function usePageContextRefs() {
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
   const patchActiveDraft = useAppStore((s) => s.patchActiveDraft);
+  const patchDraftOf = useAppStore((s) => s.patchDraftOf);
   const commitSessions = useAppStore((s) => s.commitSessions);
 
   // 进行中的框选:结果回传时归属 tab;并保留启动时的页面元信息作兜底
   // (回传时 tabs 实时查询可能失败/URL 不可见,此时仍需能加引用,不能静默丢弃)
-  const pendingPickRef = useRef<{ tabId: number; meta: RefTab } | null>(null);
+  // sessionId = 框选发起时的会话:结果回传是异步的,期间用户可能已切走,
+  // 元素与页面引用必须落回**发起时那个会话**(否则写进另一个会话,与焦点切换同形的串会话)
+  const pendingPickRef = useRef<{ tabId: number; meta: RefTab; sessionId: string | null } | null>(
+    null,
+  );
 
   // 引用标签页的实时同步:导航更新 title/url、重载清该 tab 元素框选、关闭移除。
   // 草稿按会话持久化后,非活动会话的草稿也可能引用同一 tab,
@@ -186,7 +193,7 @@ export function usePageContextRefs() {
   const activeSessionId = useAppStore((s) => s.activeSessionId);
   const activeDraftPicked = useAppStore((s) => selectCurrentSession(s)?.draft?.pickedElements ?? null);
   /** 网页引用开关 = **活跃会话草稿**的会话级标志(缺省开;决策 48) */
-  const includePageContext = useAppStore(
+  const pageContextOn = useAppStore(
     (s) => selectCurrentSession(s)?.draft?.pageContextEnabled !== false,
   );
 
@@ -240,7 +247,7 @@ export function usePageContextRefs() {
 
   const switchRefGroup = useCallback(
     async (tabId: number) => {
-      if (!includePageContext) return; // 本会话引用开关关闭:冻结切换,什么都不发
+      if (!pageContextOn) return; // 本会话引用开关关闭:冻结切换,什么都不发
       // 会话钉住:焦点事件与 InitSync 都可能跨 await,期间用户可能已切到别的会话。
       // 不校验就会把「当前 tab」写进**另一个会话**的草稿(实测:切到旧对话时它引用了新对话的 tab)。
       const sessionIdAtCall = useAppStore.getState().activeSessionId;
@@ -298,7 +305,7 @@ export function usePageContextRefs() {
       groups.set(tabId, { refTabs: [self], pickedElements: [] });
       patchActiveDraft((d) => ({ ...d, refTabs: [self], pickedElements: [] }));
     },
-    [includePageContext, patchActiveDraft, groupsOf]
+    [pageContextOn, patchActiveDraft, groupsOf]
   );
 
   // 焦点变化触发组切换(dock 侧边栏的主窗口内切换;多窗口经 windows.onFocusChanged 兜底)
@@ -336,7 +343,7 @@ export function usePageContextRefs() {
    * 已有引用(恢复的会话/用户手动策展/该 tab 的组记忆)则不动,交给焦点事件处理。
    */
   useEffect(() => {
-    if (!includePageContext) return;
+    if (!pageContextOn) return;
     let cancelled = false;
     void (async () => {
       const current = selectCurrentSession(useAppStore.getState());
@@ -356,7 +363,7 @@ export function usePageContextRefs() {
     return () => {
       cancelled = true;
     };
-  }, [includePageContext, switchRefGroup, activeSessionId]);
+  }, [pageContextOn, switchRefGroup, activeSessionId]);
 
   // 元素框选模式:不带 tabId 时作用于当前活动标签页;带 tabId 时先激活该标签页(框选必须可见)
   const handleStartPickElement = useCallback(
@@ -389,7 +396,11 @@ export function usePageContextRefs() {
       // 框选启动时不自动加引用;框选成功返回时才「引用页面 + 元素 chip」
       try {
         await startPickElement(meta.id);
-        pendingPickRef.current = { tabId: meta.id, meta };
+        pendingPickRef.current = {
+          tabId: meta.id,
+          meta,
+          sessionId: useAppStore.getState().activeSessionId,
+        };
       } catch (err) {
         // 兜底注入失败/页面不可达:给用户可见的错误反馈,不无声失败
         setErrorMessage(err instanceof Error ? err.message : i18n.t('pick.startFailed'));
@@ -433,7 +444,8 @@ export function usePageContextRefs() {
         setErrorMessage(i18n.t('pick.unknownTab'));
         return;
       }
-      const startMeta = pendingPickRef.current?.tabId === tabId ? pendingPickRef.current.meta : null;
+      const startPick = pendingPickRef.current?.tabId === tabId ? pendingPickRef.current : null;
+      const startMeta = startPick?.meta ?? null;
       pendingPickRef.current = null;
       // 选中成功 = 此刻才自动引用该页面(启动框选时不加),再追加元素记录
       void (async () => {
@@ -444,11 +456,17 @@ export function usePageContextRefs() {
           setErrorMessage(i18n.t('pick.refMetaFailed'));
           return;
         }
-        // 「引用页面 + 元素 chip + 本会话引用开关」一次性写入当前会话草稿(原子,避免多次 commit):
+        // 写回**发起框选的那个会话**(见 pendingPickRef.sessionId):期间用户可能已切走,
+        // 结果落到当前会话就是串会话;无归属(未记录)时才退回当前会话。
+        const targetSessionId = startPick?.sessionId ?? useAppStore.getState().activeSessionId;
+        if (!targetSessionId) return;
+        // 该会话此刻是否在显示:编辑器只对自己显示的会话插入徽章节点,否则得由我们补进草稿文本
+        const visibleNow = targetSessionId === useAppStore.getState().activeSessionId;
+        // 「引用页面 + 元素 chip + 本会话引用开关」一次性写入该会话草稿(原子,避免多次 commit):
         // 框选元素即视为本会话启用网页引用,旧实现那次单独的开关写盘与失败分支随之取消。
         // elementId 单调递增:取现有元素与草稿文本内块标记号的最大值 +1(防撞号);
         // 存 draft 即随草稿持久化,页面刷新后继续递增
-        patchActiveDraft((d) => {
+        patchDraftOf(targetSessionId, (d) => {
           const refTabs = d.refTabs.some((t) => t.id === tabId)
             ? d.refTabs
             : [...d.refTabs, meta];
@@ -465,33 +483,43 @@ export function usePageContextRefs() {
                 parseInt(m[1]!, 10),
               ),
             ) + 1;
-          const pickedElements = alreadyPicked
-            ? d.pickedElements
-            : [
-                ...d.pickedElements,
-                {
-                  id: `${tabId}:${selector}`,
-                  elementId: nextElementId,
-                  tabId,
-                  selector,
-                  tagName: message.tagName ?? '',
-                  preview: message.preview ?? '',
-                },
-              ];
+          const added: PickedElement = {
+            id: `${tabId}:${selector}`,
+            elementId: nextElementId,
+            tabId,
+            selector,
+            tagName: message.tagName ?? '',
+            preview: message.preview ?? '',
+          };
+          const pickedElements = alreadyPicked ? d.pickedElements : [...d.pickedElements, added];
+          // 正文块补写:元素只经正文里的 <picked-element/> 传递给模型(refs 块的 elements 不进 prompt),
+          // 而徽章节点只有"该会话正在显示"时才会被编辑器插入 —— 会话切走期间框选回来,
+          // 若不补这一块,元素会只存在于引用列表里、永远进不了消息正文。可见时交给编辑器插入(避免重复)。
+          const inputWithBlock =
+            visibleNow || alreadyPicked
+              ? d.input
+              : `${d.input}${d.input && !/\s$/.test(d.input) ? ' ' : ''}${buildBadgeAttrs(added).serialized} `;
           if (
             refTabs === d.refTabs &&
             pickedElements === d.pickedElements &&
-            d.pageContextEnabled !== false
+            d.pageContextEnabled !== false &&
+            inputWithBlock === d.input
           ) {
             return d;
           }
-          return { ...d, refTabs, pickedElements, pageContextEnabled: true };
+          return {
+            ...d,
+            refTabs,
+            pickedElements,
+            pageContextEnabled: true,
+            input: inputWithBlock,
+          };
         });
       })();
     };
     browser.runtime.onMessage.addListener(onMessage);
     return () => browser.runtime.onMessage.removeListener(onMessage);
-  }, [patchActiveDraft, setErrorMessage]);
+  }, [patchDraftOf, setErrorMessage]);
 
   return {
     addRefTab,

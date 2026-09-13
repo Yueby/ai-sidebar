@@ -122,7 +122,6 @@ export interface Settings {
   /** 快捷指令生成任务思考等级(默认 off) */
   quickPromptThinking: AuxThinkingLevel;
   /** 发送时启用页面上下文(引用当前标签页,AI 经 read_page 工具按需读取正文) */
-  includePageContext: boolean;
   /** 思考等级,仅当激活模型 reasoning=true 时生效 */
   reasoningLevel: ReasoningLevel;
   /** 网络搜索源配置(provider 非 none 且字段齐备时才注册 search_web 工具) */

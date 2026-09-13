@@ -16,7 +16,6 @@ const settings: Settings = {
   providerId: 'p1',
   providers: [],
   modelByRole: {},
-  includePageContext: true,
   language: null,
   rules: [],
   systemPrompt: '',
