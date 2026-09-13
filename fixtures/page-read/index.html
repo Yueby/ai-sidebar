@@ -6,7 +6,7 @@
   <style>
     body { font-family: system-ui; max-width: 900px; margin: 2rem auto; line-height: 1.7; padding: 0 1rem; }
     .tile { display: flex; gap: .75rem; align-items: center; border: 1px solid #ddd; border-radius: 8px; padding: .5rem; margin: .4rem 0; }
-    .tile img { width: 48px; height: 48px; background: #eee; border-radius: 4px; }
+    .tile img { width: 48px; height: 48px; background: #eee; border-radius: 4px; object-fit: cover; }
     .price { color: #c00; font-weight: 600; }
     .hidden-btn { display: none; }
     form > div { margin: .4rem 0; }
@@ -27,17 +27,17 @@
       <h2 id="deals-title">今日特惠</h2>
       <!-- 瓦片网格:链接名(游戏名)与价格是**相邻兄弟**,树视图应把它们呈现为同一组 -->
       <div class="tile">
-        <img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" />
+        <img src="./thumb-1.png" alt="无人深空 封面" width="48" height="48" />
         <a href="./child.html" aria-label="No Man's Sky 无人深空">No Man's Sky 无人深空</a>
         <span class="price">¥26.00（-60%）</span>
       </div>
       <div class="tile">
-        <img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" />
+        <img src="./thumb-2.png" alt="The Crust 封面" width="48" height="48" />
         <a href="./child.html" aria-label="The Crust">The Crust</a>
         <span class="price">¥25.87（-35%）</span>
       </div>
       <div class="tile">
-        <img alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" />
+        <img src="./thumb-3.png" alt="Forsworn 封面" width="48" height="48" />
         <a href="./child.html" aria-label="Forsworn">Forsworn</a>
         <span class="price">¥16.40（-20%）</span>
       </div>
