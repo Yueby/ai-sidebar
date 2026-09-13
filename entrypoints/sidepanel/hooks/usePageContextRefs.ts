@@ -9,6 +9,16 @@ import {
   startPickElement,
   type RefTab,
 } from '@/lib/pageContext';
+import {
+  addRefTabToDraft,
+  type RefGroupBuckets,
+  decideFocusSwitch,
+  getBucket,
+  groupSnapshotTargets,
+  nextElementId,
+  removeRefTabFromDraft,
+  shouldSeedCurrentPage,
+} from '@/lib/refGroups';
 import { useAppStore, selectCurrentSession } from '../store';
 // 元素徽章的消息文本表示(与编辑器插入的是同一序列化函数,避免两种表示漂移)
 import { buildBadgeAttrs } from '../components/chat/extensions/editorSerialize';
@@ -21,13 +31,9 @@ import { buildBadgeAttrs } from '../components/chat/extensions/editorSerialize';
  * 域服务边界:store=共享状态唯一家(草稿经 sessionSlice.patchActiveDraft 写入);
  * 编排 hook=异步流程(框选/同步时序)+ ephemeral ref(pendingPickRef);派生值=消费点就地 useMemo。
  */
-/**
- * 某个 tab 上的引用工作集快照。
- * 组记忆按**会话**分桶(见 groupMapRef):引用是会话级的,记忆必须同域。
- */
-interface RefGroupSnapshot {
-  refTabs: RefTab[];
-  pickedElements: PickedElement[];
+/** 决策用空草稿:会话草稿缺省时按"无引用、开关默认开"参与决策(不写回 store) */
+function cloneEmptyDraftForDecision(): SessionDraft {
+  return { input: '', refTabs: [], pickedElements: [] };
 }
 
 export function usePageContextRefs() {
@@ -123,11 +129,7 @@ export function usePageContextRefs() {
   const addRefTab = useCallback(
     async (tab: RefTab) => {
       // 添加引用 = 本会话启用网页引用(与引用写入同一次 patch,避免两次渲染)
-      patchActiveDraft((d) =>
-        d.refTabs.some((t) => t.id === tab.id)
-          ? (d.pageContextEnabled === false ? { ...d, pageContextEnabled: true } : d)
-          : { ...d, refTabs: [...d.refTabs, tab], pageContextEnabled: true }
-      );
+      patchActiveDraft((d) => addRefTabToDraft(d, tab));
     },
     [patchActiveDraft]
   );
@@ -141,17 +143,9 @@ export function usePageContextRefs() {
     (id: number) => {
       // 显式移除引用 = 该 tab 脱离当前会话的引用组(仅本会话,见下方 groupsOf 调用)
       const cur = selectCurrentSession(useAppStore.getState());
-      const left = (cur?.draft?.refTabs ?? []).filter((t) => t.id !== id);
       if (cur) groupsOf(cur.id).delete(id); // 显式移除:只作废**本会话**该 tab 的组记忆
-      patchActiveDraft((d) => ({
-        ...d,
-        refTabs: d.refTabs.filter((t) => t.id !== id),
-        // 同步清掉该标签页上的元素框选引用
-        pickedElements: d.pickedElements.filter((p) => p.tabId !== id),
-        // 删掉最后一个引用 = 关闭**本会话**的网页引用(决策 48:会话级,其它会话与新会话不受影响,
-        // 新会话照旧默认入住当前页)。重新添加引用或框选元素即重新打开。
-        ...(left.length === 0 ? { pageContextEnabled: false } : {}),
-      }));
+      // 删掉最后一个引用 = 关闭**本会话**的网页引用(决策 48;规则见 lib/refGroups.removeRefTabFromDraft)
+      patchActiveDraft((d) => removeRefTabFromDraft(d, id));
     },
     [patchActiveDraft]
   );
@@ -163,15 +157,9 @@ export function usePageContextRefs() {
   // 记到"当前 tab"名下,新会话入住同一 tab 时把它当成自己的组恢复 —— 实测表现为
   // 「新会话引用到旧会话的页面」「切回该 tab 又变回旧引用」。
   // 生命周期 = 面板存活期(被删会话留下的空桶随面板关闭消失)。
-  const groupMapRef = useRef<Map<string, Map<number, RefGroupSnapshot>>>(new Map());
+  const groupMapRef = useRef<RefGroupBuckets>(new Map());
   /** 取某会话的组记忆桶(按需创建);面板级 ref,不参与渲染 */
-  const groupsOf = useCallback((sessionId: string): Map<number, RefGroupSnapshot> => {
-    const existing = groupMapRef.current.get(sessionId);
-    if (existing) return existing;
-    const created = new Map<number, RefGroupSnapshot>();
-    groupMapRef.current.set(sessionId, created);
-    return created;
-  }, []);
+  const groupsOf = (sessionId: string) => getBucket(groupMapRef.current, sessionId);
   /** 最新焦点请求(竞态判据):switchRefGroup 一进入就更新,含尚未落地的那次切换 */
   const focusedTabIdRef = useRef<number | null>(null);
   /**
@@ -180,7 +168,7 @@ export function usePageContextRefs() {
    * 若组记忆按焦点 ref 归属,就会把 A 的工作集记到 B 头上(group[B]=[A]),
    * 之后切到 B 会命中"已是该组"的幂等判定直接返回 —— 表现为**切 tab 引用不跟随**。
    */
-  const appliedTabIdRef = useRef<number | null>(null);
+  const appliedRef = useRef<{ sessionId: string; tabId: number } | null>(null);
   /**
    * 焦点事件世代:每次焦点事件 +1。初同步在读取期间若世代变了,说明它拿的快照已过期,作废本次。
    * 用世代号而非布尔标志——布尔会永久置位,而初同步在每次会话切换时都要重跑,
@@ -232,10 +220,8 @@ export function usePageContextRefs() {
   useEffect(() => {
     if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) return;
     if (!activeSessionId) return;
-    const ids = new Set(activeDraftRefTabs.map((t) => t.id));
-    // 归属判据必须是「草稿已反映的 tab」:用焦点请求 ref 会把上一个页面的工作集
-    // 记到刚切过去的 tab 头上(切换尚未落地时二者不一致),导致后续切换不跟随
-    if (appliedTabIdRef.current !== null) ids.add(appliedTabIdRef.current);
+    // 归属判据 = 「草稿已反映的 tab」(见 lib/refGroups.groupSnapshotTargets 的说明)
+    const ids = groupSnapshotTargets(activeDraftRefTabs, appliedRef.current, activeSessionId);
     const groups = groupsOf(activeSessionId);
     for (const id of ids) {
       groups.set(id, {
@@ -258,54 +244,21 @@ export function usePageContextRefs() {
       const st = useAppStore.getState();
       const current = selectCurrentSession(st);
       if (current?.id !== sessionIdAtCall) return; // 会话已切换:本次作废(由新会话自己的路径接管)
+      // 开关以**目标会话草稿**为准(而非进入时的闭包值):期间用户可能已关掉本会话的网页引用
+      if (current.draft?.pageContextEnabled === false) return;
       if (!current) return;
-      if (!meta) {
-        // 不可引用页(chrome://新标签页、扩展页、PDF 查看器等):「当前页」引用必须随之消失——
-        // 留着上一页的芯片等于告诉模型它还在读那一页(事实相反)。旧工作集已按成员存档,
-        // 切回原页整组恢复;本 tab 导航到真实网站后由 onUpdated 重估并建组。
-        if (
-          (current.draft?.refTabs.length ?? 0) === 0 &&
-          (current.draft?.pickedElements.length ?? 0) === 0
-        ) {
-          appliedTabIdRef.current = tabId;
-          return;
-        }
-        appliedTabIdRef.current = tabId;
-        patchActiveDraft((d) => ({ ...d, refTabs: [], pickedElements: [] }));
-        return;
-      }
       const groups = groupsOf(current.id);
-      const snapshot = groups.get(tabId);
-      if (snapshot) {
-        // 恢复该 tab 所属引用组(引用 + 框选元素整组还原);已是该组则幂等跳过(重复触发不产生草稿抖动)
-        if (current.draft?.refTabs === snapshot.refTabs) {
-          appliedTabIdRef.current = tabId;
-          return;
-        }
-        appliedTabIdRef.current = tabId;
-        patchActiveDraft((d) => ({
-          ...d,
-          refTabs: snapshot.refTabs,
-          pickedElements: snapshot.pickedElements,
-        }));
-        return;
+      const currentDraft = current.draft ?? cloneEmptyDraftForDecision();
+      const next = decideFocusSwitch({ draft: currentDraft, groups, tabId, meta });
+      appliedRef.current = { sessionId: current.id, tabId };
+      if (!next) return;
+      // 无组记忆且 meta 可用 ⇒ 这是「隐式当前页芯片入住」:先把组记下来(切走后再切回可整组恢复)
+      if (meta && !groups.has(tabId)) {
+        groups.set(tabId, { refTabs: next.refTabs, pickedElements: next.pickedElements });
       }
-      // 新页无组:隐式「当前页」芯片入住并自动跟随焦点(旧工作集已由成员同步存档,非破坏);
-      // 之后用户手动添加引用才会固定为一组。已是该单例则幂等跳过
-      if (
-        current.draft?.refTabs.length === 1 &&
-        current.draft.refTabs[0]?.id === tabId
-      ) {
-        appliedTabIdRef.current = tabId;
-        return;
-      }
-      // 隐式芯片全量快照(meta 来自 getTabMeta;favicon 已由 tabMetaStore 单源提供)
-      const self: RefTab = { ...meta };
-      appliedTabIdRef.current = tabId;
-      groups.set(tabId, { refTabs: [self], pickedElements: [] });
-      patchActiveDraft((d) => ({ ...d, refTabs: [self], pickedElements: [] }));
+      patchActiveDraft(() => next);
     },
-    [pageContextOn, patchActiveDraft, groupsOf]
+    [pageContextOn, patchActiveDraft]
   );
 
   // 焦点变化触发组切换(dock 侧边栏的主窗口内切换;多窗口经 windows.onFocusChanged 兜底)
@@ -323,16 +276,24 @@ export function usePageContextRefs() {
     const onFocused = async (windowId: number) => {
       if (windowId === browser.windows.WINDOW_ID_NONE) return;
       focusEventSeqRef.current += 1;
+      const seq = focusEventSeqRef.current;
       const [tab] = await browser.tabs.query({ active: true, windowId }).catch(() => []);
+      // 查询期间已有更新的焦点事件(另一窗口/另一次切换)→ 结果作废,不让旧窗口后来居上
+      if (focusEventSeqRef.current !== seq) return;
       if (tab?.id != null) void switchRefGroup(tab.id);
     };
-    browser.tabs.onActivated.addListener((info) => onActivated(info));
+    // 注册与卸载必须是同一个函数引用:原先 add 用包装箭头、remove 用原函数,
+    // 两个监听器永远卸不掉 → 每次 effect 重跑都叠加一份持有旧开关闭包的订阅
+    // (旧闭包里 pageContextOn 仍为 true,于是"已关闭引用的会话"会被旧订阅写回引用)
+    const onActivatedListener = (info: { tabId: number }) => onActivated(info);
+    const onFocusedListener = (wid: number) => void onFocused(wid);
+    browser.tabs.onActivated.addListener(onActivatedListener);
     browser.tabs.onUpdated.addListener(onUpdated);
-    browser.windows.onFocusChanged.addListener((wid) => void onFocused(wid));
+    browser.windows.onFocusChanged.addListener(onFocusedListener);
     return () => {
-      browser.tabs.onActivated.removeListener(onActivated);
+      browser.tabs.onActivated.removeListener(onActivatedListener);
       browser.tabs.onUpdated.removeListener(onUpdated);
-      browser.windows.onFocusChanged.removeListener(onFocused);
+      browser.windows.onFocusChanged.removeListener(onFocusedListener);
     };
   }, [switchRefGroup]);
   /**
@@ -346,12 +307,8 @@ export function usePageContextRefs() {
     if (!pageContextOn) return;
     let cancelled = false;
     void (async () => {
-      const current = selectCurrentSession(useAppStore.getState());
-      if (!current) return;
-      // 只给**全新会话**入住当前页:有历史的对话保持它自己的引用集,
-      // 否则切到一个草稿为空的旧对话会凭空引用上"当前页"(实测被当成"引用了新对话的 tab")。
-      if (current.messages.length > 0) return;
-      if (current.draft?.refTabs.length ?? 0) return;
+      // 只给**全新会话**入住当前页(规则与理由见 lib/refGroups.shouldSeedCurrentPage)
+      if (!shouldSeedCurrentPage(selectCurrentSession(useAppStore.getState()))) return;
       const seqAtStart = focusEventSeqRef.current;
       const meta = await getActiveTabMeta().catch(() => null);
       if (cancelled || !meta) return;
@@ -368,6 +325,9 @@ export function usePageContextRefs() {
   // 元素框选模式:不带 tabId 时作用于当前活动标签页;带 tabId 时先激活该标签页(框选必须可见)
   const handleStartPickElement = useCallback(
     async (tabId?: number) => {
+      // 归属在**入口**捕获:下面每一步(tabs.update / startPickElement)都会 await,
+      // 期间切了会话就不能把这次框选算到新会话头上
+      const sessionIdAtStart = useAppStore.getState().activeSessionId;
       let meta: RefTab | null = null;
       if (typeof tabId === 'number') {
         const currentSession = selectCurrentSession(useAppStore.getState());
@@ -396,11 +356,7 @@ export function usePageContextRefs() {
       // 框选启动时不自动加引用;框选成功返回时才「引用页面 + 元素 chip」
       try {
         await startPickElement(meta.id);
-        pendingPickRef.current = {
-          tabId: meta.id,
-          meta,
-          sessionId: useAppStore.getState().activeSessionId,
-        };
+        pendingPickRef.current = { tabId: meta.id, meta, sessionId: sessionIdAtStart };
       } catch (err) {
         // 兜底注入失败/页面不可达:给用户可见的错误反馈,不无声失败
         setErrorMessage(err instanceof Error ? err.message : i18n.t('pick.startFailed'));
@@ -473,19 +429,10 @@ export function usePageContextRefs() {
           const alreadyPicked = d.pickedElements.some(
             (p) => p.tabId === tabId && p.selector === selector
           );
-          const nextElementId =
-            Math.max(
-              0,
-              ...d.pickedElements.map((p) =>
-                typeof p.elementId === 'number' && p.elementId > 0 ? p.elementId : 0,
-              ),
-              ...Array.from(d.input.matchAll(/elementId="(\d+)"/g), (m) =>
-                parseInt(m[1]!, 10),
-              ),
-            ) + 1;
+          const elementId = nextElementId(d);
           const added: PickedElement = {
             id: `${tabId}:${selector}`,
-            elementId: nextElementId,
+            elementId,
             tabId,
             selector,
             tagName: message.tagName ?? '',

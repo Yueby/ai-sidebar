@@ -77,6 +77,7 @@ lib/
   agent.ts            # pi-agent-core 桥接:会话 Agent 工厂(ensureSessionAgent 每会话一实例自持转录+convertToLlm/transformContext/prepareNextTurn)+ runAgentTurn/continueAgentTurn 发送内核 + setAgentEventSink 常驻订阅 + dispose 系;toLlmMessage(refs 剥 elements)/toPiModel/buildSystemPrompt
   shiki.ts            # 代码高亮单例(决策 40 ⑤):模块级懒初始化 29 语言+github-light/dark,highlightToHtml 同步双主题 CSS 变量输出(未就绪降级 null),onShikiReady 订阅重渲染,normalizeShikiLang 别名归一
   models.ts           # fetchProviderModels/fetchModelsDevMeta/applyModelMeta/syncModelsWithModelsDev/testConnection
+  refGroups.ts        # 网页引用的纯决策逻辑(会话级引用组记忆/焦点切换/初同步资格/草稿改写;零浏览器依赖,tests/ref-groups.test.ts 覆盖)
   pageRefs.ts         # renderPageRefsBlock/parsePageRefs/stripPageRefs/collectPageRefs(纯函数,<page-refs> 块)
   elementLabel.ts     # elementChipLabel/elementListLabel(元素预览 chip label,CJK 视觉宽度加权)
   pageContext.ts      # tab 级读取原语(getActiveTabMeta/getTabMeta/listCandidateTabs/findTabByUrl/extractFromTab/renderPageContext)+ startPickElement/resolveElement(框选/元素解析)+ searchElementsInTab(交互元素清单,search_element 底层)+ performPageAction(页面动作原语 resolve/click/fill/scroll;8s 看门狗+导航守卫)+ snapshotTabs/describeTabChanges(click tab 变化报告)+ buildUnreadableTabError(可行动错误)+ agent 开启注册表(openTab/registerAgentOpenedTab,决策 27)

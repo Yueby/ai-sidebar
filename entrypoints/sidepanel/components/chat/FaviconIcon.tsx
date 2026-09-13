@@ -19,7 +19,9 @@ export function FaviconIcon({
   className?: string;
 }) {
   const meta = useTabMeta(tabId);
-  const liveFav = meta?.favIconUrl;
+  // 只有实时 tab 仍是**这个网址**时才用它的实时图标:引用是历史快照,同一 tab 之后导航到
+  // 别的站点时,实时图标会变成另一个网站的图标(历史消息显示错误来源)
+  const liveFav = meta?.url === url ? meta?.favIconUrl : undefined;
   const [failedStage, setFailedStage] = useState<'live' | 'service' | null>(null);
   // 实时值/页面变化后重置失败标记(新 favicon/新页面两级都值得一试)
   useEffect(() => {

@@ -21,6 +21,7 @@ import { i18n } from '#i18n';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
 import { parsePageRefs } from '@/lib/pageRefs';
+import { draftAfterSend } from '@/lib/refGroups';
 import { activeRuntimeSessionIds, runtimeFor } from '@/lib/sessionRuntime';
 import type { SessionRuntime } from '@/lib/sessionRuntime';
 import { useAppStore, selectCurrentSession } from '../store';
@@ -669,9 +670,9 @@ export function useChatTurn(params: {
           title: nextTitle,
           messages: messagesWithUser,
           // 发送后保留 refTabs(决策 13 修订);frozen(队列出队)= 用户后来编辑的草稿原样保留
-          draft: frozen
-            ? (base.draft ?? EMPTY_DRAFT)
-            : { input: '', refTabs: base.draft?.refTabs ?? [], pickedElements: [] },
+          // 保留 base.draft 的其余字段(refTabs 跨消息存活;pageContextEnabled = 本会话开关,
+          // 不能因一次发送就复位成"开"——那会让"删掉最后一个引用 = 关闭本会话引用"失效)
+          draft: frozen ? (base.draft ?? EMPTY_DRAFT) : draftAfterSend(base.draft ?? EMPTY_DRAFT),
           updatedAt: Date.now(),
         };
         // 原子 upsert:新建会话不在列表时插入(只 map 会丢掉刚创建的首轮会话)
