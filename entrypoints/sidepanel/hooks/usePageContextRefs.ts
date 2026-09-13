@@ -155,6 +155,8 @@ export function usePageContextRefs(params: {
   const focusedTabIdRef = useRef<number | null>(null);
 
   const activeDraftRefTabs = useAppStore((s) => selectCurrentSession(s)?.draft?.refTabs ?? null);
+  // 会话切换也需要重跑初同步(新建会话 = 空草稿 → 用当前焦点页入住)
+  const activeSessionId = useAppStore((s) => s.activeSessionId);
   const activeDraftPicked = useAppStore((s) => selectCurrentSession(s)?.draft?.pickedElements ?? null);
   const includePageContext = useAppStore((s) => s.settings.includePageContext);
 
@@ -265,12 +267,27 @@ export function usePageContextRefs(params: {
       browser.windows.onFocusChanged.removeListener(onFocused);
     };
   }, [switchRefGroup]);
-  // 总开关开启时立即切回当前焦点页的组
+  /**
+   * 初同步:挂载 / 新建会话 / 重新打开总开关时,把当前焦点页纳入引用组。
+   *
+   * 不能依赖 focusedTabIdRef——它只在 switchRefGroup 内部被赋值,因此首次永远是 null,
+   * 初同步永远不会发生(用户可见症状:打开新会话后不点一下页面就不会引用当前页)。
+   * 已有引用(恢复的会话/用户手动策展/该 tab 的组记忆)则不动,交给焦点事件处理。
+   */
   useEffect(() => {
-    if (includePageContext && focusedTabIdRef.current !== null) {
-      void switchRefGroup(focusedTabIdRef.current);
-    }
-  }, [includePageContext, switchRefGroup]);
+    if (!includePageContext) return;
+    let cancelled = false;
+    void (async () => {
+      const current = selectCurrentSession(useAppStore.getState());
+      if ((current?.draft?.refTabs.length ?? 0) > 0) return;
+      const meta = await getActiveTabMeta().catch(() => null);
+      if (cancelled || !meta) return;
+      await switchRefGroup(meta.id);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [includePageContext, switchRefGroup, activeSessionId]);
 
   // 元素框选模式:不带 tabId 时作用于当前活动标签页;带 tabId 时先激活该标签页(框选必须可见)
   const handleStartPickElement = useCallback(

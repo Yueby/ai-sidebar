@@ -31,3 +31,10 @@
 - **dev 浏览器 profile 已持久化**(`wxt.config.ts` 的 `webExt.chromiumProfile = .wxt/chrome-data` + `keepProfileChanges`):重启 `pnpm dev` **不再清空 IndexedDB/登录**,所以“重启后数据还在吗”这类回归(A 组)可以真机验证。两个约束不得回退:①目录必须在配置加载时 `mkdirSync` 自建(chrome-launcher 要在里面写 `chrome-out.log`,不存在直接 ENOENT 启动失败);②不要改回默认临时 profile——那会让所有依赖重启的持久化测试不可测。副作用:dev 登录态/扩展设置会跳会话保留(属预期;profile 住在 `.wxt` 不入库)。
 - 浏览器 local storage 里可能残留旧结构 `local:settings`(须过 `sanitizeSettings`);会话存储已无兼容重构(决策 38):旧 `local:sessions`/对象 store/旧库 `ai-sidebar` 均不再读写,新数据全在库 `ai-sidebar-sessions`,旧数据要么丢弃要么手动导出。
 - 本文档与工具无关(原在 pi 中编写,已去除 pi 专属工具链说明);Windows 下注意确认 agent 实际使用的 shell,POSIX 语法按实际情况调整。
+
+## 初同步写成"依赖自己产出的状态"= 永不发生(2026-09,页面引用)
+
+`usePageContextRefs` 里"总开关开启时切回当前焦点页"的 effect 判据是 `focusedTabIdRef.current !== null`,而该 ref **只在 `switchRefGroup` 内部被赋值** → 首次挂载时恒为 null,初同步永远不执行。症状:打开新会话后不点一下页面就不会引用当前页(要靠 `tabs.onActivated` 事件来"启动"),新建会话与重开总开关同样失效。修法:初同步**自己查** `getActiveTabMeta()`(空草稿才入住,已有引用不动)。
+
+教训:任何"启动/首帧同步"逻辑,判据不能取自被启动的那个流程自身产出的状态;否则失败静默、且只在"用户恰好做了某个动作"时才看似正常。
+
