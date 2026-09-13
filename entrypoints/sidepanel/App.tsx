@@ -377,10 +377,15 @@ export default function App() {
 
   // 渲染源 = 会话转录 + 本次运行的 in-flight assistant 消息(仅当归属当前会话;
   // 流式中途切到别的会话时不串显)。live 气泡仍由 MessageList 追加在最后。
-  const displayedMessages =
-    appendedInFlight.length > 0
-      ? [...(currentSession?.messages ?? []), ...appendedInFlight]
-      : (currentSession?.messages ?? []);
+  // 必须 memo:直接展开会在**每次渲染**产生新数组 → 下游以它为依据的 useMemo(toolResults Map 等)
+  // 每次都重建 → 每条消息的 prop 都“变了” → memo 化的列表项被整片击穿
+  const displayedMessages = useMemo(
+    () =>
+      appendedInFlight.length > 0
+        ? [...(currentSession?.messages ?? []), ...appendedInFlight]
+        : (currentSession?.messages ?? []),
+    [currentSession?.messages, appendedInFlight],
+  );
   // 尾部 in-flight 消息刚从 live 流式气泡接管:跳过入场动画,交接不闪
   // (toolResult 不渲染独立气泡,不计入手数,避免过度抑制动画)
   const quietTailCount = appendedInFlight.filter((m) => m.role !== 'toolResult').length;

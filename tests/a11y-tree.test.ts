@@ -74,3 +74,13 @@ test('长文本截断到 160 字符并保留省略号(不吞掉整行)', () => {
   assert.match(out, /…"/);
   assert.ok(out.length < 200, `输出应被截断,实际 ${out.length}`);
 });
+
+test('renderA11yTree:输出 id 句柄(无名元素唯一的稳定 CSS 句柄)', () => {
+  const nodes: A11yNode[] = [
+    node({ role: 'region', name: '今日特惠', id: 'deals-title' }),
+    node({ role: 'text', depth: 1, text: '¥26.00（-60%）', id: 'price-1' }),
+  ];
+  const out = renderA11yTree(nodes).split('\n');
+  assert.equal(out[0], '- region "今日特惠" #deals-title');
+  assert.match(out[1]!, /#price-1/, '文本节点也能带 id');
+});

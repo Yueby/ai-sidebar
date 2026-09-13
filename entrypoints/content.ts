@@ -500,7 +500,24 @@ export default defineContentScript({
       };
     }
 
-    /** 穿开放 shadow root 的 selector 查询:document.querySelector 够不到 shadow 内部 */
+    /** 收集一个子树内所有元素,含其后代的开放 shadow root(选择器匹配要跨边界) */
+    function queryWithin(root: ParentNode, selector: string): Element[] {
+      const out: Element[] = [];
+      const collect = (node: ParentNode): void => {
+        for (const el of Array.from(node.querySelectorAll('*'))) {
+          if (el.matches(selector)) out.push(el);
+          if (el.shadowRoot) collect(el.shadowRoot);
+        }
+      };
+      collect(root);
+      return out;
+    }
+
+    /**
+     * 深度查询:支持 `#shadow-host p` 这类**跨 shadow 边界**的后代选择器。
+     * 朴素的 `el.matches('#host p')` 在 shadow 内部恒为 false——选择器引擎不会把
+     * light DOM 的祖先与 shadow 内的元素链成一条路径,因此必须按段逐层下潜。
+     */
     function querySelectorDeep(selector: string): Element | null {
       try {
         const direct = document.querySelector(selector);
@@ -508,14 +525,27 @@ export default defineContentScript({
       } catch {
         return null; // 非法 selector:按 not-found 处理
       }
-      for (const el of collectWalkableElements()) {
-        try {
-          if (el.matches(selector)) return el;
-        } catch {
-          return null;
-        }
+      const segments = selector.trim().split(/\s+/).filter(Boolean);
+      if (segments.length < 2) {
+        // 单段:可能是 shadow 内部的元素
+        const inShadow = queryWithin(document, selector);
+        return inShadow[0] ?? null;
       }
-      return null;
+      let scopes: ParentNode[] = [document];
+      let matched: Element[] = [];
+      for (const segment of segments) {
+        matched = [];
+        for (const scope of scopes) {
+          try {
+            matched.push(...queryWithin(scope, segment));
+          } catch {
+            return null;
+          }
+        }
+        if (matched.length === 0) return null;
+        scopes = matched;
+      }
+      return matched[0] ?? null;
     }
 
     /**
@@ -1064,8 +1094,16 @@ export default defineContentScript({
         }
         const disabled = libs.isDisabled(el);
         const interactive = isInteractiveCandidate(el, libs.getRole) && Boolean(role);
-        const text = TREE_TEXT_ROLES.has(role) && !name
-          ? (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 160) || undefined
+        const leafText = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+        // 无角色的**叶子**必须保留文本:价格、标签这类内容常写在 <span class=price> 里,
+        // 它们没有 role/name,若只按 TREE_TEXT_ROLES 输出,"名称与价格相邻"这条信息会整段消失。
+        const isWrapperRole = role === 'generic' || role === 'none' || role === 'presentation';
+        if (isWrapperRole && !name && !el.shadowRoot && el.children.length === 0 && leafText) {
+          push({ depth, role: 'text', text: leafText.slice(0, 160) });
+          return;
+        }
+        const text = TREE_TEXT_ROLES.has(role) && !name && leafText
+          ? leafText.slice(0, 160)
           : undefined;
         const href = el instanceof HTMLAnchorElement ? el.getAttribute('href') ?? undefined : undefined;
         push({
@@ -1073,6 +1111,8 @@ export default defineContentScript({
           role,
           name: name || undefined,
           text,
+          // id 是无名元素唯一的稳定 CSS 句柄(read_element 可照抄),过长则省略
+          id: el.id && el.id.length <= 48 ? el.id : undefined,
           value: a11yValue(el),
           states: a11yStates(el, disabled),
           href,

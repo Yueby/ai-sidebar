@@ -22,6 +22,8 @@ export interface A11yNode {
   states?: string[];
   /** 链接目标(原样相对路径,模型可直接 open_page) */
   href?: string;
+  /** 元素的 id:无名元素唯一的稳定 CSS 句柄(read_element 可照抄) */
+  id?: string;
   /** 是否可被 click_element/fill_element 寻址(决定是否编序号) */
   interactive?: boolean;
   /** (role,name) 组内的序号;由 assignOrdinals 填,仅第 2 个及以后渲染标记 */
@@ -86,6 +88,7 @@ function renderLine(node: A11yNode): string {
   const indent = '  '.repeat(node.depth);
   const parts = [`${indent}- ${node.role}`];
   if (node.name) parts.push(` ${quote(node.name)}`);
+  if (node.id) parts.push(` #${node.id}`);
   if (node.states && node.states.length > 0) {
     parts.push(` ${node.states.map((s) => `[${s}]`).join('')}`);
   }
