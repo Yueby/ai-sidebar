@@ -131,7 +131,7 @@ export function createReadPageToolDefinition(
                 '<tree>\n' +
                 treeText +
                 '\n</tree>' +
-                '\n\n(Use click_element / fill_element with the same role, accessible name and [n] ordinal to act on any node listed here — those names and ordinals come from the same enumeration the action tools use, so they can be copied as-is.)' +
+                '\n\n(Use click_element / fill_element with the same role, accessible name and [n] ordinal to act on any node listed here — those names and ordinals come from the same enumeration the action tools use, so they can be copied as-is. Nodes marked [hidden] are present but not visible, and cannot be acted on until they are revealed.)' +
                 truncatedNote,
             },
           ],

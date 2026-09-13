@@ -7,6 +7,7 @@ import {
   SEARCH_ELEMENT_LIMIT,
 } from '@/lib/types';
 import { isThinText, textWindow } from '@/lib/pageTextWindow';
+import { splitSelectorSegments } from '@/lib/domSelector';
 // type-only:编译期擦除(树节点形状与 sidepanel 侧同源)
 import type { A11yNode } from '@/lib/a11yTree';
 // type-only:编译期擦除,不引入运行时代码(载荷形状与 sidepanel 侧同源)
@@ -529,7 +530,9 @@ export default defineContentScript({
       } catch {
         return null; // 非法 selector:按 not-found 处理
       }
-      const segments = selector.trim().split(/\s+/).filter(Boolean);
+      // 分段必须引号/括号感知:属性值含空格时(`[aria-label="Save changes"]`)硬切会让
+      // 两段都匹配不到 —— 光 DOM 有 querySelector 回退,影子树内则彻底读不到
+      const segments = splitSelectorSegments(selector);
       if (segments.length < 2) {
         // 单段:可能是 shadow 内部的元素
         const inShadow = queryWithin(document, selector);
@@ -1189,6 +1192,10 @@ export default defineContentScript({
         const href = isAnchorEl(el) ? el.getAttribute('href') ?? undefined : undefined;
         // 可操作节点:名字与序号取动作枚举(与 click_element 精确匹配的那个字符串,零改写)
         const actionHit = interactive ? actionByEl.get(el) : undefined;
+        const states = a11yStates(el, disabled);
+        // 隐藏的交互节点仍列出(模型需要知道页面上有它),但必须标明:照抄点它会 not_found,
+        // 需先让它可见。可见性检查只对交互节点做(checkVisibility + getBoundingClientRect 不便宜)
+        if (interactive && !isElementVisible(el)) states.push('hidden');
         push({
           depth,
           role,
@@ -1197,7 +1204,7 @@ export default defineContentScript({
           // id 是无名元素唯一的稳定 CSS 句柄(read_element 可照抄),过长则省略
           id: el.id && el.id.length <= 48 ? el.id : undefined,
           value: a11yValue(el),
-          states: a11yStates(el, disabled),
+          states,
           href,
           interactive,
           ordinal: actionHit?.ordinal,
