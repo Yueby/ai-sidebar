@@ -153,6 +153,8 @@ export function usePageContextRefs(params: {
   // 非破坏:切走的工作集存档于旧焦点页,切回即恢复;组快照为面板生命周期(tab 关闭即清理)。
   const groupMapRef = useRef<Map<number, { refTabs: RefTab[]; pickedElements: PickedElement[] }>>(new Map());
   const focusedTabIdRef = useRef<number | null>(null);
+  /** 挂载后是否已收到焦点事件:初同步拿的是挂载瞬间的快照,事件路径给的才是更新的事实 */
+  const focusEventRef = useRef(false);
 
   const activeDraftRefTabs = useAppStore((s) => selectCurrentSession(s)?.draft?.refTabs ?? null);
   // 会话切换也需要重跑初同步(新建会话 = 空草稿 → 用当前焦点页入住)
@@ -189,13 +191,11 @@ export function usePageContextRefs(params: {
     };
   }, [activeDraftRefTabs, activeDraftPicked, patchActiveDraft]);
   // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆)。
-  // 引用栏被用户删空 → 重置组记忆,避免陈旧快照复活。
   // 发送不清空 refTabs,跨消息的组存活不受影响。
+  // 注意:空草稿**不是**重置信号——焦点落到不可引用页(chrome://新标签页)时草稿会变空,
+  // 此时各 tab 的组必须留着,切回原页才能整组恢复。真正的重置点 = 总开关关闭(见下方 effect)。
   useEffect(() => {
-    if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) {
-      groupMapRef.current.clear();
-      return;
-    }
+    if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) return;
     const ids = new Set(activeDraftRefTabs.map((t) => t.id));
     if (focusedTabIdRef.current !== null) ids.add(focusedTabIdRef.current);
     for (const id of ids) {
@@ -209,14 +209,25 @@ export function usePageContextRefs(params: {
   const switchRefGroup = useCallback(
     async (tabId: number) => {
       if (!includePageContext) return; // 总开关关闭:冻结切换,什么都不发
-      const prev = focusedTabIdRef.current;
       focusedTabIdRef.current = tabId;
       const meta = await getTabMeta(tabId).catch(() => null);
-      if (!meta) return; // 非 http(s) 页(如 chrome://新标签页):不建组,等导航后再触发重估
       if (focusedTabIdRef.current !== tabId) return; // 快速连切竞态:焦点已再变,本次作废
       const st = useAppStore.getState();
       const current = selectCurrentSession(st);
       if (!current) return;
+      if (!meta) {
+        // 不可引用页(chrome://新标签页、扩展页、PDF 查看器等):「当前页」引用必须随之消失——
+        // 留着上一页的芯片等于告诉模型它还在读那一页(事实相反)。旧工作集已按成员存档,
+        // 切回原页整组恢复;本 tab 导航到真实网站后由 onUpdated 重估并建组。
+        if (
+          (current.draft?.refTabs.length ?? 0) === 0 &&
+          (current.draft?.pickedElements.length ?? 0) === 0
+        ) {
+          return;
+        }
+        patchActiveDraft((d) => ({ ...d, refTabs: [], pickedElements: [] }));
+        return;
+      }
       const snapshot = groupMapRef.current.get(tabId);
       if (snapshot) {
         // 恢复该 tab 所属引用组(引用 + 框选元素整组还原);已是该组则幂等跳过(重复触发不产生草稿抖动)
@@ -244,10 +255,19 @@ export function usePageContextRefs(params: {
     [includePageContext, patchActiveDraft]
   );
 
+  // 总开关关闭 = 用户主动放弃网页引用(含删除最后一个引用的路径)→ 组记忆随之重置,
+  // 避免下次开启时陈旧快照复活。生命周期与决策 22 一致:面板关闭即整体失效。
+  useEffect(() => {
+    if (!includePageContext) groupMapRef.current.clear();
+  }, [includePageContext]);
+
   // 焦点变化触发组切换(dock 侧边栏的主窗口内切换;多窗口经 windows.onFocusChanged 兜底)
   useEffect(() => {
     if (typeof browser === 'undefined' || !browser.tabs?.onActivated) return;
-    const onActivated = (info: { tabId: number }) => void switchRefGroup(info.tabId);
+    const onActivated = (info: { tabId: number }) => {
+      focusEventRef.current = true;
+      void switchRefGroup(info.tabId);
+    };
     const onUpdated = (tabId: number, ci: { url?: string }) => {
       // 聚焦 tab 导航到可引用网址(如从新标签页进入真实网站)时立即建组/恢复组——
       // 否则非 http 阶段的早退没有重试机会,要切走再切回才识别
@@ -255,6 +275,7 @@ export function usePageContextRefs(params: {
     };
     const onFocused = async (windowId: number) => {
       if (windowId === browser.windows.WINDOW_ID_NONE) return;
+      focusEventRef.current = true;
       const [tab] = await browser.tabs.query({ active: true, windowId }).catch(() => []);
       if (tab?.id != null) void switchRefGroup(tab.id);
     };
@@ -282,6 +303,9 @@ export function usePageContextRefs(params: {
       if ((current?.draft?.refTabs.length ?? 0) > 0) return;
       const meta = await getActiveTabMeta().catch(() => null);
       if (cancelled || !meta) return;
+      // 读取期间已发生焦点事件 → 挂载快照作废:事件路径给的是更新的事实,
+      // 晚到的旧 tab 绝不能覆盖(否则刚切过去的新焦点页引用会被这页盖回去)
+      if (focusEventRef.current) return;
       await switchRefGroup(meta.id);
     })();
     return () => {
