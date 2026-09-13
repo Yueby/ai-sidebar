@@ -1,6 +1,6 @@
 # ai-sidebar — 项目代号
 
-> **交接注(2026-09,文档已同步)**:UI 已全部实现,agent 运行时 = pi-agent-core 会话 Agent(每会话一实例自持转录,决策 36);会话存储 = **JSONL 记录**(库 `ai-sidebar-sessions` 单 store,决策 38 零旧版兼容);引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ 工具面(read/read_element/search_element/search_page/click/fill/scroll/screenshot/open/activate/close/fetch_url/search_web/execute_js/compact_context/read_time/ask_user)。**设置页 = 全高 Drawer**(七视图:提供商/模型/提示词/搜索/外观/备份/关于,权限 tab 已删);userScripts 强引导;模型分工卡(per-role 思考档)+ 全局语言偏好 + 动态快捷指令 + 会话导出 Markdown;动作可靠性三件套(click tab 变化报告/open_page 同 URL 复用/settle 隐藏短路 + 8s 看门狗);聊天视觉改版(决策 40:AI 平铺无气泡/头像顶部/用户气泡 secondary/代码块 shiki 双主题/composer 四层堆叠);页面动作测试台 `fixtures/page-actions`。**实施细节一律以代码为准**;决策日志 `docs/decisions.md`、避坑与环境备注 `docs/pitfalls.md`、当前阶段与开放项 `docs/status-and-open-issues.md`、回归清单 `docs/regression-jsonl.md`。
+> **交接注(2026-09,文档已同步)**:UI 已全部实现,agent 运行时 = pi-agent-core 会话 Agent(每会话一实例自持转录,决策 36);会话存储 = **JSONL 记录**(库 `ai-sidebar-sessions` 单 store,决策 38 零旧版兼容);引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ 工具面(read/read_element/search_element/search_page/click/fill/scroll/screenshot/open/activate/close/fetch_url/search_web/execute_js/compact_context/read_time/ask_user)。**设置页 = 全高 Drawer**(七视图:提供商/模型/提示词/搜索/外观/备份/关于,权限 tab 已删);userScripts 强引导;模型分工卡(per-role 思考档)+ 全局语言偏好 + 动态快捷指令 + 会话导出 Markdown;动作可靠性三件套(click tab 变化报告/open_page 同 URL 复用/settle 隐藏短路 + 8s 看门狗);聊天视觉改版(决策 40:AI 平铺无气泡/头像顶部/用户气泡 secondary/代码块 shiki 双主题/composer 四层堆叠);页面动作测试台 `fixtures/page-actions`。**实施细节一律以代码为准**;决策日志 `docs/decisions.md`、避坑与环境备注 `docs/pitfalls.md`、当前阶段与开放项 `docs/status-and-open-issues.md`、回归清单 `docs/regression.md`。
 
 开源 **BYOK 浏览器 AI 侧边栏扩展**(Chromium 系:Chrome/Edge/Brave),对标 Chrome 内置 Gemini 侧边栏,但用你自己的 API Key、UI 现代化。
 
@@ -98,9 +98,9 @@ components/ui/        # shadcn 组件(保持官方原样)
 
 ## 待办(按序)
 
-> **当前阶段**:三期步①-⑤全部落地(含④返回模板 v2、⑤CDP 滚动兜底)+ 四期步①规则/提示词 + 决策 36-40(会话运行时对齐 pi Agent、JSONL 存储零兼容、压缩预算自适应、聊天视觉改版、shiki 双主题代码块)+ 多会话并发隔离,自动化全绿;接下来 = 浏览器回归(`docs/regression-jsonl.md` 新数据版,C 组用 `fixtures/page-actions`)→ i18n → 发布。
+> **当前阶段**:三期步①-⑤全部落地(含④返回模板 v2、⑤CDP 滚动兜底)+ 四期步①规则/提示词 + 决策 36-40(会话运行时对齐 pi Agent、JSONL 存储零兼容、压缩预算自适应、聊天视觉改版、shiki 双主题代码块)+ 多会话并发隔离,自动化全绿;接下来 = 浏览器回归(`docs/regression.md` 新数据版,C 组用 `fixtures/page-actions`)→ i18n → 发布。
 
-1. **用户手动回归** —— 本轮(决策 36-40)清单 `docs/regression-jsonl.md`:A 组迁移项已随决策 38 作废(新库无旧数据),重点 B 组并发/队列、E 组压缩(8k 窗口预算自适应)、C 组动作(测试台 `fixtures/page-actions`,`npx http-server fixtures/page-actions -p 8788`)、F 组通用、D 组 WebDAV;历史批次(普通对话/read/search/fetch/click 全链/导出/设置抽屉/模型分工/语言/思考档/引导弹窗/删除确认)已随批回归
+1. **用户手动回归** —— 本轮(决策 36-40)清单 `docs/regression.md`:A 组迁移项已随决策 38 作废(新库无旧数据),重点 B 组并发/队列、E 组压缩(8k 窗口预算自适应)、C 组动作(测试台 `fixtures/page-actions`,`npx http-server fixtures/page-actions -p 8788`)、F 组通用、D 组 WebDAV;历史批次(普通对话/read/search/fetch/click 全链/导出/设置抽屉/模型分工/语言/思考档/引导弹窗/删除确认)已随批回归
 2. ~~多语言:TOOL_LABELS 等文案收敛到 i18n(WXT 内建)~~ ✅ 已完成(2026-09,决策 45:新增 91 键 ×2 语言、剩余仅 DEV 日志/原生语言名/兜底表)
 3. 三期规格 v2(见 docs/status-and-open-issues.md):**ARIA 定位与页面动作原语**——引库唯一新依赖 `dom-accessibility-api`;五新工具 `search_element`(safe,AX 交互元素清单紧凑行式)/ `click_element` / `fill_element`(confirm+会话 grant)/ `scroll_page`(safe)/ `screenshot_page`(confirm);时序等待内置有界 settle 不设独立工具;反馈 Before/After + 结构化错误前缀;寻址双轨(用户框选 = picked-element 块 CSS selector 不变,模型动作 = ARIA role+name locator,默认 focused tab;search_element 已按默认 focused tab、无白名单实施——用户拍板);会话级 grant 扩展进 gate.ts(execute_js 永不可 grant);实施序列 ①search(✅ 已完成 2026-09)→ ②click/fill+scroll+grant+高亮(✅ 已完成 2026-09)→ ③screenshot(✅ 已完成 2026-09)→ ④返回模板 v2(✅ 已完成 2026-09:页面指纹 + click/fill after 注记,lib/sessionExport 无关)→ ⑤chrome.debugger(✅ 已启用 2026-09:scroll_page JS 链无位移时 CDP 可信滚轮兜底,lib/cdp.ts 白名单单方法 + 60s 闲置 detach,见 docs/decisions.md 决策 35);验收标尺 = search→click 链完成登录页填字点按钮零手写 JS(✅ 真实登录页已通过;execute_js 已完成:lib/pageScripting.ts + lib/tools/execute-js.ts,registry.ts 登记)
 4. 发布:图标 + `wxt zip`

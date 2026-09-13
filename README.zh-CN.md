@@ -174,8 +174,7 @@ npx tsx --test "tests/*.test.ts"    # 测试(node:test)
 | [docs/decisions.md](docs/decisions.md) | 决策日志——为什么是现在这样 |
 | [docs/pitfalls.md](docs/pitfalls.md) | UI/React/Tailwind 与上游库的坑、环境备注 |
 | [docs/status-and-open-issues.md](docs/status-and-open-issues.md) | 当前阶段、待办、开放问题及取证方法 |
-| [docs/regression-jsonl.md](docs/regression-jsonl.md) | 手动回归清单 |
-| [docs/test-prompts.md](docs/test-prompts.md) | 一轮跑完的复制粘贴提示词 |
+| [docs/regression.md](docs/regression.md) | 手动回归清单与提示词 |
 | [docs/session-jsonl-format.md](docs/session-jsonl-format.md) | 会话记录格式规格 |
 | [AGENTS.md](AGENTS.md) | 项目约定与硬约束 |
 

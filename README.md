@@ -174,8 +174,7 @@ npx tsx --test "tests/*.test.ts"    # test suites (node:test)
 | [docs/decisions.md](docs/decisions.md) | decision log — why things are the way they are |
 | [docs/pitfalls.md](docs/pitfalls.md) | UI/React/Tailwind and upstream-library pitfalls, environment notes |
 | [docs/status-and-open-issues.md](docs/status-and-open-issues.md) | current stage, backlog, open issues and how to gather evidence for them |
-| [docs/regression-jsonl.md](docs/regression-jsonl.md) | manual regression checklist |
-| [docs/test-prompts.md](docs/test-prompts.md) | copy-paste prompts for a full manual pass |
+| [docs/regression.md](docs/regression.md) | manual regression checklist and prompts |
 | [docs/session-jsonl-format.md](docs/session-jsonl-format.md) | session record format specification |
 | [AGENTS.md](AGENTS.md) | project conventions and constraints |
 

@@ -22,7 +22,7 @@
 6. pi-ai 内部已设 `dangerouslyAllowBrowser: true`,官方支持浏览器端;Anthropic 的 `anthropic-version` 头由 pi-ai 处理;图像编码约定对齐 pi 上游 `image-resize-core.ts`(≤2000²/q0.8 起/4.5MB)。
 7. **不要**给 pi-ai 传自定义 fetch、不要绕过它手写协议;模型列表拉取是全项目唯一手写 fetch 的地方(已在 lib/models.ts)。
 
-## 9. 环境备注
+## 环境备注
 
 - **本环境的 dev watcher 曾不可靠**(chokidar 在 agent 后台会话静默失效):已改 wxt.config `server.watch` 轮询(1s)后基本稳定;仍偶发失效——若改代码不生效,先查 `.output/chrome-mv3-dev` mtime 再重启 `pnpm dev`(交互会话约 25 分钟上限,后台 dispatch 用显式长 timeout,单位毫秒)。
 - **dev 产物配置 `emptyOutDir: false`**(wxt.config vite.build):重建不清空输出目录——旧 hash chunk 保留,长活侧边栏页面的动态 import 不会 404 断链(曾导致多标签测试中回合中断、未落盘消息全部丢失)。**发布打包前手动清一次 `.output/chrome-mv3`**,避免旧 chunk 混入 zip。

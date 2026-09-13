@@ -1,4 +1,4 @@
-# 会话 JSONL 记录格式（设计规格）
+# 会话 JSONL 记录格式（当前实现）
 
 > 目标 mttk9xo5 task-2。对齐 pi-coding-agent 的 session-format v3，**线性** id/parentId（决策 37：不做分支/fork/clone UI）。
 > 状态：**设计定稿（2026-09 用户拍板）**。实施前不得改动生产读写路径。
@@ -49,14 +49,6 @@ pi v3 entry 类型（`packages/coding-agent/src/core/session-manager.ts`）：
 - 草稿（`draft`）作为 `custom` entry 追加在尾部；`data` 与 `SessionDraft` 同形。
 - `updatedAt` 由最后一条 entry 的 `timestamp` 推导（避免额外字段）。
 
-## 4. 迁移策略（旧 IndexedDB → JSONL）
-
-1. 启动时检测新 store（`sessions_v2`）是否为空且旧 store（`sessions`）非空 → 执行一次性迁移。
-2. 每个旧 `Session` 生成：header → `session_info`（title/customTitle）→ 按序 `message` entries（线性 parentId）→ 若 `compaction` 存在追加 `compaction` entry（`firstKeptEntryId` = 摘要消息对应的 entry id）→ 若有草稿追加 `custom` entry。
-3. **旧 store 保留只读**（不删除）作为回滚点；迁移完成后写 `local:sessionFormat='jsonl'` 标记避免重复迁移。
-4. 迁移必须**幂等**：同一会话已在新 store 则跳过；比对证据 = 逐会话 `messages.length`、refs 块存在性、`compaction` 指针、草稿字段。
-5. 回滚：删除新 store 内容 + 清标记即可回到旧路径（旧 store 未被改动）。
-
 ## 5. WebDAV 同步影响（task-3 输入）
 
 - 快照内容从"`Session[]` JSON"改为**每会话一条 JSONL 文本的集合**（bundle 结构：`{ version: 1, sessions: { [id]: "<jsonl>" } }` 或保持单文件多行）。
@@ -69,11 +61,3 @@ pi v3 entry 类型（`packages/coding-agent/src/core/session-manager.ts`）：
 2. **草稿 entry：覆盖式**——同 `customType: ai-sidebar/draft` 只保留最后一条，解析时取最后一条。
 3. **cwd：写固定值 `"ai-sidebar"`**（保持与 pi header 结构兼容）。
 4. **message entry id：确定性顺序编号**（`e-1, e-2, …`，迁移可重放——同输入产出逐字节一致的 JSONL）。
-
-## 7. 实施顺序（下一批）
-
-1. `lib/sessionRecord.ts`：格式类型 + 序列化/解析 + 迁移函数（纯逻辑，可单测）。
-2. `lib/sessionStore.ts` 切换：新 store（`sessions_v2`）+ 启动迁移 + 旧 store 只读回滚点。
-3. 压缩语义对齐（第 6 节第 1 项）。
-4. WebDAV 适配（第 5 节）。
-5. 消费点适配（useChatTurn/useCompact/useSessionManager/sessionSlice 草稿防抖/App 恢复）+ 测试。
