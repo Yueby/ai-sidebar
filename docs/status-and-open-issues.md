@@ -69,3 +69,21 @@
 > 已完成批次(2026-09,引用组):参考 Gemini 标签页组模型适配 agent——每个 tab 记住所属引用工作集(refTabs+pickedElements 快照,面板生命周期),焦点切换即非破坏恢复(切未引用页=新单例、切组成员=恢复组、手动引用=入组);refs 块所见即所发(focused 标记活动 tab);多窗口 windows.onFocusChanged 兑底;switchRefGroup 快速连切竞态守卫。已完成批次(2026-09,三期步②):**页面动作原语**——click_element/fill_element(confirm+会话级 grant,工具+tab 粒度,面板生命周期)/scroll_page(safe)三工具 + registry action 组;content.ts 动作执行器(locator 解析同源 search_element、400ms 高亮、遮挡 fallback 直发、受控填充原生 setter、settle、navigation_started);gate.ts grantedScopes 短路 + grantable/grantScope 契约;search_element query 数组 OR 与 [type=x]/placeholder 名称兑底;流式 50ms 节流(STREAM_FLUSH_INTERVAL_MS)+ MessageItem rAF 平滑揭示(designer);卡片期跟底修复(强制钉底+抖动忽略);12 项提示词回归 + 真实登录页验收(零手写 JS)通过。
 >
 > 已完成批次(2026-09,交接收官,共 24 提交):**统一删除确认 AlertDialog**(会话/提供商);**设置页全高 Drawer**(vaul,聊天常驻挂载,四路关闭);**userScripts 强引导弹窗**(四重检测/Esc 拦截/开启自动闭环/跳过仅本会话);**模型分工卡**(三行各带模型+思考 Select,对话模型与输入框同字段互绑)+ **per-role 思考档**(titleThinking/quickPromptThinking,旧 auxThinking sanitize 迁移)+ 思考标签去英文注记;**全局语言偏好**(null=自动→浏览器语言,注入 system prompt/标题/快捷指令三处);**新会话动态快捷指令**(辅助模型按聚焦页生成,导航跟随/同 URL 缓存/非 http(s) 隐藏/失败回退静态四条);**会话导出 Markdown**(思考/工具调用折叠、引用页聚合、consumed 去重);**分组模型下拉**(输入框全提供商分组跨提供商直切 + 设置三行 SelectGroup);**导出反馈驱动修复**:unreadable-tab 可行动错误(helper 三分支)、search_page [readable]/[external] 标注、execute_js 同 helper、**click_element tab 变化报告**、**open_page 同 URL 复用**、**settle 隐藏短路(rAF 暂停根因)+ 8s 看门狗降级成功**;sonner toast 体系;语言选项文案简化。审查记录:分组/思考档/删除确认均过 designer+reviewer 双审。
+
+---
+
+## 页面读取能力(v2)验证记录(2026-09,fixtures/page-read)
+
+| 契约 | 结论 | 证据 |
+|---|---|---|
+| `read_page mode=tree` 名价成组 | ✅ 已验证 | 模型自述"可访问性树里的顺序是 `img(封面) → link(游戏名) → text(价格)` 三组依次排列,数量一一对应,没有错配" |
+| 树输出 `#id` 句柄 | ✅ 已验证 | 树里出现 `#deals-title`/`#shadow-text` 等 28 处,模型照抄 `#shadow-text` 一次命中 |
+| role+name 穿透开放 shadow root | ✅ 已验证 | 模型结论"role+name 能穿透 open shadow root,selector 之前全败,而 role+name 一次读到" |
+| `read_element` 双轨寻址(role+name / selector) | ✅ 已验证 | `region "今日特惠"` 命中;`selector: "#shadow-host p"` 返回 `<p id="shadow-text">…ZEBRA-SHADOW-1</p>` |
+| `search_element` 值/状态/链接去向 | ✅ 已验证 | 出现 `= "prefilled@example.com"`、`[checked]`、`[unchecked]`、`[disabled]`、`→ ./child.html` |
+| iframe:同源可读 + 跨源被明说 | ✅ 已验证 | 同源读到 `TIGER-CHILD-9`;跨源以说明节点报出并建议 `open_page` |
+| 树不泄漏 script/style 源码 | ⏳ 仅代码级 | 曾泄漏(`<script>` 被当无角色叶子),已排除非内容标签与不可见元素,待一次 tree 读取复核 |
+
+**未做(二期,需拍板)**:①跨源 iframe 的 CDP `Accessibility.getFullAXTree` 兜底(逐 frame 取;代价=期间出现"正在调试"横幅,建议仅在显式请求时启用)②Defuddle 作为第二抽取器与 Readability 择一(1 个新依赖)。
+
+**性能残留(已量化,未定位)**:流式 + 40 条消息时 `renders每秒=140`(全量重渲应为 ~580,即每次 flush 仍重渲 3-7 条);工具循环阶段(item 数少)为 10/s 与 2/s,已在理论下限。剩余嫌疑:新消息追加时 `quietFrom` 位移导致尾部若干项 props 变化(每次追加触发一次,非每 flush)。如需继续压,建议加 per-item 诊断打印"哪一项 / 因哪个 prop 变化"。
