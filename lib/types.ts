@@ -186,6 +186,12 @@ export interface SessionDraft {
   input: string;
   refTabs: RefTab[];
   pickedElements: PickedElement[];
+  /**
+   * 会话级网页引用开关(缺省 = 开;仅显式 false 表示**本会话**已关闭)。
+   * 引用本身就是会话级的(引用组、框选元素都存在这里),开关必须与它同域:
+   * 在某个会话里关掉网页引用,绝不能影响其它会话,更不能影响新会话。
+   */
+  pageContextEnabled?: boolean;
 }
 
 /**

@@ -19,14 +19,10 @@ import { useAppStore, selectCurrentSession } from '../store';
  * 域服务边界:store=共享状态唯一家(草稿经 sessionSlice.patchActiveDraft 写入);
  * 编排 hook=异步流程(框选/同步时序)+ ephemeral ref(pendingPickRef);派生值=消费点就地 useMemo。
  */
-export function usePageContextRefs(params: {
-  handleTogglePageContext: (enabled: boolean) => Promise<void>;
-}) {
-  const { handleTogglePageContext } = params;
+export function usePageContextRefs() {
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
   const patchActiveDraft = useAppStore((s) => s.patchActiveDraft);
   const commitSessions = useAppStore((s) => s.commitSessions);
-  const updateSettings = useAppStore((s) => s.updateSettings);
 
   // 进行中的框选:结果回传时归属 tab;并保留启动时的页面元信息作兜底
   // (回传时 tabs 实时查询可能失败/URL 不可见,此时仍需能加引用,不能静默丢弃)
@@ -110,43 +106,39 @@ export function usePageContextRefs(params: {
   // Ref tab management(写入当前会话草稿,addRefTab 语义不变:按 tab id 去重)
   const addRefTab = useCallback(
     async (tab: RefTab) => {
-      // 与 handleAddCurrentTab 对齐:总开关关闭时芯片栏不可见,先自动开启再添加(否则静默无效)
-      if (!useAppStore.getState().settings.includePageContext) {
-        await handleTogglePageContext(true);
-      }
+      // 添加引用 = 本会话启用网页引用(与引用写入同一次 patch,避免两次渲染)
       patchActiveDraft((d) =>
-        d.refTabs.some((t) => t.id === tab.id) ? d : { ...d, refTabs: [...d.refTabs, tab] }
+        d.refTabs.some((t) => t.id === tab.id)
+          ? (d.pageContextEnabled === false ? { ...d, pageContextEnabled: true } : d)
+          : { ...d, refTabs: [...d.refTabs, tab], pageContextEnabled: true }
       );
     },
-    [patchActiveDraft, handleTogglePageContext]
+    [patchActiveDraft]
   );
 
   const handleAddCurrentTab = useCallback(async () => {
-    if (!useAppStore.getState().settings.includePageContext) {
-      await handleTogglePageContext(true);
-    }
     const meta = await getActiveTabMeta().catch(() => null);
-    if (meta) addRefTab(meta);
-  }, [addRefTab, handleTogglePageContext]);
+    if (meta) await addRefTab(meta);
+  }, [addRefTab]);
 
   const handleRemoveRefTab = useCallback(
     (id: number) => {
       // 显式移除引用 = 该 tab 脱离当前引用组,组记忆一并作废
       groupMapRef.current.delete(id);
-      const currentSession = selectCurrentSession(useAppStore.getState());
-      const remaining = (currentSession?.draft?.refTabs ?? []).filter((t) => t.id !== id);
+      const left = (selectCurrentSession(useAppStore.getState())?.draft?.refTabs ?? []).filter(
+        (t) => t.id !== id,
+      );
       patchActiveDraft((d) => ({
         ...d,
         refTabs: d.refTabs.filter((t) => t.id !== id),
         // 同步清掉该标签页上的元素框选引用
         pickedElements: d.pickedElements.filter((p) => p.tabId !== id),
+        // 删掉最后一个引用 = 关闭**本会话**的网页引用(决策 48:会话级,其它会话与新会话不受影响,
+        // 新会话照旧默认入住当前页)。重新添加引用或框选元素即重新打开。
+        ...(left.length === 0 ? { pageContextEnabled: false } : {}),
       }));
-      // 移除最后一个引用时同步关闭总开关,保持「X = 关闭网页引用」的心智
-      if (remaining.length === 0 && useAppStore.getState().settings.includePageContext) {
-        handleTogglePageContext(false);
-      }
     },
-    [patchActiveDraft, handleTogglePageContext]
+    [patchActiveDraft]
   );
 
   // ===== 引用组(决策 26):每个 tab 记住它所属的引用工作集,焦点切换即切换工作集。
@@ -172,7 +164,10 @@ export function usePageContextRefs(params: {
   // 会话切换也需要重跑初同步(新建会话 = 空草稿 → 用当前焦点页入住)
   const activeSessionId = useAppStore((s) => s.activeSessionId);
   const activeDraftPicked = useAppStore((s) => selectCurrentSession(s)?.draft?.pickedElements ?? null);
-  const includePageContext = useAppStore((s) => s.settings.includePageContext);
+  /** 网页引用开关 = **活跃会话草稿**的会话级标志(缺省开;决策 48) */
+  const includePageContext = useAppStore(
+    (s) => selectCurrentSession(s)?.draft?.pageContextEnabled !== false,
+  );
 
   // 僵尸引用清理:草稿引用可能指向本会话从未存在过的 tabId——WebDAV 恢复自其它机器/上一次
   // profile 时,那些 tab 在本环境根本没存在过,tabs.onRemoved 永远不会为它们触发(面板存活期
@@ -276,12 +271,6 @@ export function usePageContextRefs(params: {
     },
     [includePageContext, patchActiveDraft]
   );
-
-  // 总开关关闭 = 用户主动放弃网页引用(含删除最后一个引用的路径)→ 组记忆随之重置,
-  // 避免下次开启时陈旧快照复活。生命周期与决策 22 一致:面板关闭即整体失效。
-  useEffect(() => {
-    if (!includePageContext) groupMapRef.current.clear();
-  }, [includePageContext]);
 
   // 焦点变化触发组切换(dock 侧边栏的主窗口内切换;多窗口经 windows.onFocusChanged 兜底)
   useEffect(() => {
@@ -422,15 +411,8 @@ export function usePageContextRefs(params: {
           setErrorMessage(i18n.t('pick.refMetaFailed'));
           return;
         }
-        try {
-          if (!useAppStore.getState().settings.includePageContext) {
-            await updateSettings({ ...useAppStore.getState().settings, includePageContext: true });
-          }
-        } catch {
-          setErrorMessage(i18n.t('pick.refSaveFailed'));
-          return;
-        }
-        // 「引用页面 + 元素 chip」一次性写入当前会话草稿(原子,避免两次 commit)。
+        // 「引用页面 + 元素 chip + 本会话引用开关」一次性写入当前会话草稿(原子,避免多次 commit):
+        // 框选元素即视为本会话启用网页引用,旧实现那次单独的开关写盘与失败分支随之取消。
         // elementId 单调递增:取现有元素与草稿文本内块标记号的最大值 +1(防撞号);
         // 存 draft 即随草稿持久化,页面刷新后继续递增
         patchActiveDraft((d) => {
@@ -463,14 +445,20 @@ export function usePageContextRefs(params: {
                   preview: message.preview ?? '',
                 },
               ];
-          if (refTabs === d.refTabs && pickedElements === d.pickedElements) return d;
-          return { ...d, refTabs, pickedElements };
+          if (
+            refTabs === d.refTabs &&
+            pickedElements === d.pickedElements &&
+            d.pageContextEnabled !== false
+          ) {
+            return d;
+          }
+          return { ...d, refTabs, pickedElements, pageContextEnabled: true };
         });
       })();
     };
     browser.runtime.onMessage.addListener(onMessage);
     return () => browser.runtime.onMessage.removeListener(onMessage);
-  }, [patchActiveDraft, updateSettings, setErrorMessage]);
+  }, [patchActiveDraft, setErrorMessage]);
 
   return {
     addRefTab,

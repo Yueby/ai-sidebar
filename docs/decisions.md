@@ -63,4 +63,10 @@
 46. **开源许可 = MIT;扩展回退语言改 en**(2026-09,用户拍板):①补 `LICENSE`(MIT,© 2026 Yueby)+ `package.json` 的 `license` 字段——此前公开仓库无 LICENSE 文件,法律上默认保留所有权利,与「开源」表述冲突;②`wxt.config.ts` 的 `manifest.default_locale` 由 `zh_CN` 改为 **`en`**:它只决定**匹配不上浏览器语言时的回退**,中文用户仍由浏览器语言命中 `zh_CN`;国际商店场景下英文回退更合适。改动前已核对 en 与 zh_CN 键集完全一致(产物 `_locales/*/messages.json` 488=488),避免回退语言缺键。
 47. **会话级 grant 覆盖全部页面动作工具;`execute_js` 明确排除**(2026-09,用户拍板):用户要求"这种工具都可以让用户选择记住允许,不必每次都点"。审计结果——`click_element`/`fill_element`/`screenshot_page` 早已按 `工具@tabId` 粒度可记住,`open_page` 为 `open_page@*`,**唯 `close_page` 漏了 `grantable`/`grantScope`**(已补,粒度取 `close_page@*`:按 tab 授权对"关页"无意义,同一 tab 很少关两次)。`execute_js` 走的是不支持 grant 的 `createGatedTool` 封装:**用户明确选择保持每次确认**(卡上预览待执行代码),不做会话级豁免。
 **grant 生命周期不变**(决策 22):模块级 Set,存活于侧边栏 JS 上下文,面板关闭即整体失效。
+48. **网页引用开关 = 会话级(草稿字段),不再全局**(2026-09,用户拍板):"总开关是关闭当前会话的,我开新会话为什么会有影响?我们做的所有引用操作都是会话级的"。原实现把 `includePageContext` 存在 Settings(`chrome.storage.local`,全局),而引用本身就是会话级的(引用组、框选元素都在 `SessionDraft`):在某个会话里删掉最后一个引用芯片即把**全局**开关置 false 落盘 → 新会话也不再自动引用当前页,且全应用没有任何 UI 能把它重新打开(单向陷阱)。
+现改为 `SessionDraft.pageContextEnabled?: boolean`(缺省 = 开;仅显式 `false` 表示**本会话**已关闭):
+  - 读取:App 引用栏门槛、`useChatTurn` 的引用组装、`usePageContextRefs` 的焦点跟随与初同步,一律按**活跃会话草稿**的标志判定;
+  - 写入:删掉最后一个引用 → 关本会话;添加引用 / 框选元素 → 开本会话(与引用同一次 `patchActiveDraft`,原子,失败分支随之取消);
+  - `Settings.includePageContext` 降级为新会话默认值,仍校正为 `true` 以清除旧版残留的 false;
+  - 组记忆 effect 不再因开关而 `clear()`(那是给全局开关写的);组记忆是面板级的,按 tab 生命周期自维护(显式移除单个 tab、tab 关闭)。
 

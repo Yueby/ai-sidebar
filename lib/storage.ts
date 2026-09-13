@@ -143,7 +143,10 @@ export function sanitizeSettings(value: unknown): Settings {
     rules: sanitizeRules(v.rules),
     titleThinking: sanitizeAuxThinking(v.titleThinking, 'off'),
     quickPromptThinking: sanitizeAuxThinking(v.quickPromptThinking, 'off'),
-    includePageContext: v.includePageContext === true,
+    // 历史字段(决策 48):网页引用的实际开关已下沉为**会话级**草稿标志(SessionDraft.pageContextEnabled),
+    // 这一项只保留为新会话草稿的默认值。曾有一版把它当全局开关,删掉最后一个引用芯片即置 false 落盘,
+    // 而全应用没有任何 UI 能重新打开它 —— 存盘 false 一律校正为 true,避免旧残留把功能永久关死。
+    includePageContext: true,
     reasoningLevel: REASONING_LEVELS.includes(v.reasoningLevel as never)
       ? (v.reasoningLevel as Settings['reasoningLevel'])
       : 'off',
@@ -241,7 +244,13 @@ function sanitizeDraft(v: unknown): SessionDraft | undefined {
         }];
       })
     : [];
-  return { input: typeof d.input === 'string' ? d.input : '', refTabs, pickedElements };
+  return {
+    input: typeof d.input === 'string' ? d.input : '',
+    refTabs,
+    pickedElements,
+    // 仅显式 false 落盘:缺省(开)不写字段,避免历史草稿被无意义扩写
+    ...(d.pageContextEnabled === false ? { pageContextEnabled: false } : {}),
+  };
 }
 
 /**

@@ -497,7 +497,6 @@ pick:
   invalidResult: 元素选择返回结果无效，请重新框选
   unknownTab: 无法确定元素所属标签页，请重新框选
   refMetaFailed: 添加元素引用失败：无法获取该标签页信息，可能已被关闭
-  refSaveFailed: 添加元素引用失败：写入设置时出错，请重试
   blockedInternal: 无法在该页面启动元素选择：浏览器内部页面无法注入扩展脚本
   blockedStore: 无法在该页面启动元素选择：Chrome 应用商店页面受 Chrome 保护，禁止扩展注入
   blockedPage: 无法在该页面启动元素选择：此页面不允许扩展注入脚本

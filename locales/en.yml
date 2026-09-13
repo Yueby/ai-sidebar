@@ -497,7 +497,6 @@ pick:
   invalidResult: Element picking returned an invalid result — please pick again
   unknownTab: Could not tell which tab the element belongs to — please pick again
   refMetaFailed: Could not add the element reference — its tab is unreachable and may have been closed
-  refSaveFailed: Could not add the element reference — saving failed, please try again
   blockedInternal: Cannot start element picking — browser-internal pages do not allow extension scripts
   blockedStore: Cannot start element picking — Chrome protects the Web Store from extension injection
   blockedPage: Cannot start element picking — this page does not allow extension scripts

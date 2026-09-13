@@ -524,14 +524,14 @@ export function useChatTurn(params: {
         // run 内自动消费(followUp 在 agent 本要停止时轮询);run 已结束时由出队器 continue 消费
         const snapTabs = frozen
           ? frozen.refTabs
-          : store.settings.includePageContext
-            ? draftAtEnqueue.refTabs
-            : [];
+          : draftAtEnqueue.pageContextEnabled === false
+            ? []
+            : draftAtEnqueue.refTabs;
         const snapElements = frozen
           ? frozen.pickedElements
-          : store.settings.includePageContext
-            ? draftAtEnqueue.pickedElements
-            : [];
+          : draftAtEnqueue.pageContextEnabled === false
+            ? []
+            : draftAtEnqueue.pickedElements;
         let queuedRefs: PageRefs | undefined;
         if (snapTabs.length > 0 || snapElements.length > 0) {
           const focusedTabId = (await getActiveTabMeta().catch(() => null))?.id;
@@ -615,14 +615,14 @@ export function useChatTurn(params: {
         // frozen(跨会话队列出队)= 入队时刻的快照;否则取发送时会话草稿
         const snapTabs = frozen
           ? frozen.refTabs
-          : store.settings.includePageContext
-            ? draftAtSend.refTabs
-            : [];
+          : draftAtSend.pageContextEnabled === false
+            ? []
+            : draftAtSend.refTabs;
         const snapElements = frozen
           ? frozen.pickedElements
-          : store.settings.includePageContext
-            ? draftAtSend.pickedElements
-            : [];
+          : draftAtSend.pageContextEnabled === false
+            ? []
+            : draftAtSend.pickedElements;
         let refreshedTabs = snapTabs;
         let pageRefs: PageRefs | undefined;
         if (snapTabs.length > 0 || snapElements.length > 0) {

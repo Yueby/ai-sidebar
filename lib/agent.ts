@@ -165,9 +165,9 @@ export interface RunAgentOptions {
   /** 本轮用户消息(content 已内嵌 <page-refs> 块);与历史同形状,无任何自定义字段 */
   /** 本轮 user 消息(runAgentTurn 必填;continueAgentTurn 不用) */
   userMessage?: UserMessage;
-  /** 当前草稿中被引用的标签页(App 侧已按 includePageContext 门槛过滤) */
+  /** 当前草稿中被引用的标签页(App 侧已按会话级引用开关过滤,见 SessionDraft.pageContextEnabled) */
   refTabs?: RefTab[];
-  /** 当前草稿中用户框选的页面元素(App 侧已按 includePageContext 门槛过滤) */
+  /** 当前草稿中用户框选的页面元素(App 侧已按会话级引用开关过滤) */
   pickedElements?: PickedElement[];
   thinkingLevel: ReasoningLevel;
   /** AI 生成内容语言(已解析英文名);null = 跟随用户消息语言 */

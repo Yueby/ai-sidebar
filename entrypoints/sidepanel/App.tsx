@@ -89,6 +89,8 @@ export default function App() {
 
   // ── Composer 草稿(提升至此以供建议域感知输入) ──────────────────
   const draft = currentSession?.draft ?? EMPTY_DRAFT;
+  // 网页引用开关是**会话级**的(决策 48):存在本会话草稿里,缺省开,新会话永远默认开
+  const pageContextOn = draft.pageContextEnabled !== false;
 
   // ── 推荐跟进建议域 ──────────────────────────────────────────────
   const followUps = useFollowUpSuggestions({
@@ -134,16 +136,8 @@ export default function App() {
     [updateSettings]
   );
 
-  // Toggle page context
-  const handleTogglePageContext = useCallback(
-    async (enabled: boolean) => {
-      await updateSettings({ ...useAppStore.getState().settings, includePageContext: enabled });
-    },
-    [updateSettings]
-  );
-
   // ── 页面引用域 ──────────────────────────────────────────────────
-  const pageRefs = usePageContextRefs({ handleTogglePageContext });
+  const pageRefs = usePageContextRefs();
 
   const handleSaveProvider = useCallback(
     async (savedProvider: ProviderConfig) => {
@@ -730,8 +724,8 @@ export default function App() {
             settings={settings}
             onSelectModel={handleSelectModel}
             onChangeReasoningLevel={handleChangeReasoningLevel}
-            refTabs={settings.includePageContext ? draft.refTabs : []}
-            pickedElements={settings.includePageContext ? draft.pickedElements : []}
+            refTabs={pageContextOn ? draft.refTabs : []}
+            pickedElements={pageContextOn ? draft.pickedElements : []}
             onAddCurrentTab={pageRefs.handleAddCurrentTab}
             onAddRefTab={pageRefs.addRefTab}
             onRemoveRefTab={pageRefs.handleRemoveRefTab}
