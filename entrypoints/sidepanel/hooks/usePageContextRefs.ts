@@ -19,6 +19,15 @@ import { useAppStore, selectCurrentSession } from '../store';
  * 域服务边界:store=共享状态唯一家(草稿经 sessionSlice.patchActiveDraft 写入);
  * 编排 hook=异步流程(框选/同步时序)+ ephemeral ref(pendingPickRef);派生值=消费点就地 useMemo。
  */
+/**
+ * 某个 tab 上的引用工作集快照。
+ * 组记忆按**会话**分桶(见 groupMapRef):引用是会话级的,记忆必须同域。
+ */
+interface RefGroupSnapshot {
+  refTabs: RefTab[];
+  pickedElements: PickedElement[];
+}
+
 export function usePageContextRefs() {
   const setErrorMessage = useAppStore((s) => s.setErrorMessage);
   const patchActiveDraft = useAppStore((s) => s.patchActiveDraft);
@@ -80,7 +89,7 @@ export function usePageContextRefs() {
       });
     };
     const onRemoved = (tabId: number) => {
-      groupMapRef.current.delete(tabId); // tab 关闭:组记忆一并清理
+      for (const groups of groupMapRef.current.values()) groups.delete(tabId); // tab 关闭:各会话的组记忆一并清理
       patchAllDrafts((d) => {
         if (
           !d.refTabs.some((t) => t.id === tabId) &&
@@ -123,11 +132,10 @@ export function usePageContextRefs() {
 
   const handleRemoveRefTab = useCallback(
     (id: number) => {
-      // 显式移除引用 = 该 tab 脱离当前引用组,组记忆一并作废
-      groupMapRef.current.delete(id);
-      const left = (selectCurrentSession(useAppStore.getState())?.draft?.refTabs ?? []).filter(
-        (t) => t.id !== id,
-      );
+      // 显式移除引用 = 该 tab 脱离当前会话的引用组(仅本会话,见下方 groupsOf 调用)
+      const cur = selectCurrentSession(useAppStore.getState());
+      const left = (cur?.draft?.refTabs ?? []).filter((t) => t.id !== id);
+      if (cur) groupsOf(cur.id).delete(id); // 显式移除:只作废**本会话**该 tab 的组记忆
       patchActiveDraft((d) => ({
         ...d,
         refTabs: d.refTabs.filter((t) => t.id !== id),
@@ -142,8 +150,21 @@ export function usePageContextRefs() {
   );
 
   // ===== 引用组(决策 26):每个 tab 记住它所属的引用工作集,焦点切换即切换工作集。
-  // 非破坏:切走的工作集存档于旧焦点页,切回即恢复;组快照为面板生命周期(tab 关闭即清理)。
-  const groupMapRef = useRef<Map<number, { refTabs: RefTab[]; pickedElements: PickedElement[] }>>(new Map());
+  // 非破坏:切走的工作集存档于旧焦点页,切回即恢复。
+  //
+  // **按会话分桶**(决策 49):引用本身是会话级的,组记忆必须同域。单一 map 会把某会话的引用集
+  // 记到"当前 tab"名下,新会话入住同一 tab 时把它当成自己的组恢复 —— 实测表现为
+  // 「新会话引用到旧会话的页面」「切回该 tab 又变回旧引用」。
+  // 生命周期 = 面板存活期(被删会话留下的空桶随面板关闭消失)。
+  const groupMapRef = useRef<Map<string, Map<number, RefGroupSnapshot>>>(new Map());
+  /** 取某会话的组记忆桶(按需创建);面板级 ref,不参与渲染 */
+  const groupsOf = useCallback((sessionId: string): Map<number, RefGroupSnapshot> => {
+    const existing = groupMapRef.current.get(sessionId);
+    if (existing) return existing;
+    const created = new Map<number, RefGroupSnapshot>();
+    groupMapRef.current.set(sessionId, created);
+    return created;
+  }, []);
   /** 最新焦点请求(竞态判据):switchRefGroup 一进入就更新,含尚未落地的那次切换 */
   const focusedTabIdRef = useRef<number | null>(null);
   /**
@@ -200,20 +221,22 @@ export function usePageContextRefs() {
   // 工作集变化 → 快照同步给组内所有成员 + 焦点页(引用组 = 共享记忆)。
   // 发送不清空 refTabs,跨消息的组存活不受影响。
   // 注意:空草稿**不是**重置信号——焦点落到不可引用页(chrome://新标签页)时草稿会变空,
-  // 此时各 tab 的组必须留着,切回原页才能整组恢复。真正的重置点 = 总开关关闭(见下方 effect)。
+  // 此时各 tab 的组必须留着,切回原页才能整组恢复。
   useEffect(() => {
     if (!activeDraftRefTabs || activeDraftRefTabs.length === 0) return;
+    if (!activeSessionId) return;
     const ids = new Set(activeDraftRefTabs.map((t) => t.id));
     // 归属判据必须是「草稿已反映的 tab」:用焦点请求 ref 会把上一个页面的工作集
     // 记到刚切过去的 tab 头上(切换尚未落地时二者不一致),导致后续切换不跟随
     if (appliedTabIdRef.current !== null) ids.add(appliedTabIdRef.current);
+    const groups = groupsOf(activeSessionId);
     for (const id of ids) {
-      groupMapRef.current.set(id, {
+      groups.set(id, {
         refTabs: activeDraftRefTabs,
         pickedElements: activeDraftPicked ?? [],
       });
     }
-  }, [activeDraftRefTabs, activeDraftPicked]);
+  }, [activeDraftRefTabs, activeDraftPicked, activeSessionId, groupsOf]);
 
   const switchRefGroup = useCallback(
     async (tabId: number) => {
@@ -239,7 +262,8 @@ export function usePageContextRefs() {
         patchActiveDraft((d) => ({ ...d, refTabs: [], pickedElements: [] }));
         return;
       }
-      const snapshot = groupMapRef.current.get(tabId);
+      const groups = groupsOf(current.id);
+      const snapshot = groups.get(tabId);
       if (snapshot) {
         // 恢复该 tab 所属引用组(引用 + 框选元素整组还原);已是该组则幂等跳过(重复触发不产生草稿抖动)
         if (current.draft?.refTabs === snapshot.refTabs) {
@@ -266,10 +290,10 @@ export function usePageContextRefs() {
       // 隐式芯片全量快照(meta 来自 getTabMeta;favicon 已由 tabMetaStore 单源提供)
       const self: RefTab = { ...meta };
       appliedTabIdRef.current = tabId;
-      groupMapRef.current.set(tabId, { refTabs: [self], pickedElements: [] });
+      groups.set(tabId, { refTabs: [self], pickedElements: [] });
       patchActiveDraft((d) => ({ ...d, refTabs: [self], pickedElements: [] }));
     },
-    [includePageContext, patchActiveDraft]
+    [includePageContext, patchActiveDraft, groupsOf]
   );
 
   // 焦点变化触发组切换(dock 侧边栏的主窗口内切换;多窗口经 windows.onFocusChanged 兜底)
