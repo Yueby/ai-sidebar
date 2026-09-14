@@ -182,7 +182,7 @@ npx tsx --test "tests/*.test.ts"    # test suites (node:test)
 
 ## Status
 
-Feature-complete for the planned scope, packaged as `0.1.0`. Manual regression has passed for the tool, performance, i18n and storage paths; open issues and anything still unverified are tracked honestly in [docs/status-and-open-issues.md](docs/status-and-open-issues.md).
+Feature-complete for the planned scope, packaged as `0.2.0`. Manual regression has passed for the tool, performance, i18n and storage paths; open issues and anything still unverified are tracked honestly in [docs/status-and-open-issues.md](docs/status-and-open-issues.md).
 
 ## License
 

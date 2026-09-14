@@ -182,7 +182,7 @@ npx tsx --test "tests/*.test.ts"    # 测试(node:test)
 
 ## 状态
 
-规划范围内的功能已完整实现,当前版本 `0.1.0`。工具面、性能、i18n 与存储路径的手动回归已通过;**仍未验证的项与开放问题**如实记录在 [docs/status-and-open-issues.md](docs/status-and-open-issues.md)。
+规划范围内的功能已完整实现,当前版本 `0.2.0`。工具面、性能、i18n 与存储路径的手动回归已通过;**仍未验证的项与开放问题**如实记录在 [docs/status-and-open-issues.md](docs/status-and-open-issues.md)。
 
 ## 许可
 

@@ -34,6 +34,9 @@ export default defineConfig({
   manifest: {
     name: 'AI Sidebar',
     description: 'BYOK AI sidebar — chat with any page using your own API key.',
+    // 工具栏 action:sidePanel.setPanelBehavior({ openPanelOnActionClick: true }) 需要它才有点击目标,
+    // 否则扩展没有工具栏图标、点击行为无法生效(只能从侧边栏菜单进入)
+    action: {},
     // chrome.i18n 必需,@wxt-dev/i18n 也以它为开关(未设置时模块自我禁用)
     default_locale: 'en',
     // scripting: 程序化注入 content script(兜底扩展加载前已存在的标签页)+ execute_js 降级路线(MAIN world)
