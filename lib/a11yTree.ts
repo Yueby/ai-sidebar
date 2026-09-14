@@ -26,6 +26,8 @@ export interface A11yNode {
   states?: string[];
   /** 链接目标(原样相对路径,模型可直接 open_page) */
   href?: string;
+  /** 无名元素的定位线索(img 文件名 / 容器文本等):清单与树都得显示,否则多个无名同类节点无法区分 */
+  hint?: string;
   /** 元素的 id:无名元素唯一的稳定 CSS 句柄(read_element 可照抄) */
   id?: string;
   /** 是否可被 click_element/fill_element 寻址(决定是否编序号) */
@@ -65,7 +67,7 @@ export function renderA11yTree(nodes: readonly A11yNode[], options: RenderOption
       continue;
     }
     const wrapper = WRAPPER_ROLES.has(node.role);
-    const hasPayload = Boolean(node.name || node.text || node.value || node.href || node.note);
+    const hasPayload = Boolean(node.name || node.text || node.value || node.href || node.note || node.hint);
     // 纯包装且无任何载荷 → 不占行(子节点会以其 depth 正常渲染,视觉上等价于上提)
     if (wrapper && !hasPayload) continue;
 
@@ -102,6 +104,7 @@ function renderLine(node: A11yNode): string {
   if (node.value) parts.push(`: ${quote(node.value)}`);
   else if (node.text) parts.push(`: ${quote(node.text)}`);
   if (node.href) parts.push(` /url: ${node.href}`);
+  if (node.hint) parts.push(` (${node.hint})`);
   if (node.note) parts.push(` (${node.note})`);
   return parts.join('');
 }

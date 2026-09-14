@@ -11,6 +11,12 @@
     .hidden-btn { display: none; }
     form > div { margin: .4rem 0; }
     #shadow-host, iframe { border: 1px dashed #bbb; padding: .5rem; margin: .5rem 0; display: block; width: 100%; }
+    /* 图片卡片网格:真实网站的典型形态 —— 可点容器是 <div>,无 role/name/href/tabindex,
+       唯一信号是 cursor:pointer,内部一个无 alt 的 <img>。清单与树必须能列出它,否则模型只能手写 JS。 */
+    .img-card-grid { display: flex; gap: .75rem; }
+    .img-card { border: 1px solid #ddd; border-radius: 8px; padding: .5rem; text-align: center; cursor: pointer; }
+    .img-card img { width: 64px; height: 64px; border-radius: 4px; }
+    .not-clickable-card { border: 1px dashed #bbb; padding: .5rem; text-align: center; }
   </style>
 </head>
 <body>
@@ -82,6 +88,29 @@
       <h2 id="shadow-title">开放 Shadow DOM</h2>
       <!-- 内部元素只能穿 shadow root 才看得到/读得到 -->
       <div id="shadow-host"></div>
+    </section>
+
+    <section aria-labelledby="imgcards-title">
+      <h2 id="imgcards-title">图片卡片（无 ARIA 角色的可点容器）</h2>
+      <!-- 三张可点卡片:①img 带 alt ②img 无 alt 但有可见文本 ③img 无 alt 且无文本
+           + 一张 cursor:auto 的对照卡(不得入列,防误报) -->
+      <div class="img-card-grid">
+        <div class="img-card" id="card-alpha">
+          <img src="./thumb-1.png" alt="阿尔法" />
+          <div>阿尔法</div>
+        </div>
+        <div class="img-card" id="card-beta">
+          <img src="./thumb-2.png" />
+          <div>贝塔</div>
+        </div>
+        <div class="img-card" id="card-gamma">
+          <img src="./thumb-3.png" />
+        </div>
+        <div class="not-clickable-card" id="card-dead">
+          <img src="./thumb-1.png" />
+          <div>不可点对照</div>
+        </div>
+      </div>
     </section>
 
     <section aria-labelledby="frames-title">
