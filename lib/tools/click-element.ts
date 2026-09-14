@@ -3,16 +3,24 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { i18n } from '#i18n';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
-import { performPageAction, snapshotTabs, describeTabChanges, type ActionLocator } from '../pageContext';
+import { performPageAction, snapshotTabs, describeTabChanges } from '../pageContext';
 import { requestGate } from '../gate';
-import { formatLocator, renderActionFailure, renderActionSuccess, resolveActionTab } from './page-action-shared';
+import {
+  actionAddressing,
+  formatActionTarget,
+  parseActionTarget,
+  renderActionFailure,
+  renderActionSuccess,
+  resolveActionTab,
+} from './page-action-shared';
 
 const LOCATOR_PARAMS = Type.Object({
   role: Type.String({
     description: 'ARIA role of the element, exactly as listed by search_element (e.g. button, textbox, link)',
   }),
   name: Type.String({
-    description: 'Accessible name of the element exactly as listed by search_element; use an empty string for unnamed elements',
+    description:
+      'Accessible name of the element exactly as listed by search_element; use an empty string for unnamed elements (an empty name matches the first nameless element of that role — pass ordinal when several share the role)',
   }),
   ordinal: Type.Optional(
     Type.Number({
@@ -22,25 +30,19 @@ const LOCATOR_PARAMS = Type.Object({
 });
 
 const CLICK_ELEMENT_PARAMS = Type.Object({
-  locator: LOCATOR_PARAMS,
+  locator: Type.Optional(LOCATOR_PARAMS),
+  selector: Type.Optional(
+    Type.String({
+      description:
+        'CSS selector of the element, for elements that have no ARIA role or accessible name in search_element / read_page mode="tree" (image cards, custom clickable containers). Pierces open shadow roots. Mutually exclusive with locator.',
+    }),
+  ),
   tabId: Type.Optional(
     Type.Number({
       description: 'Id of the tab to act on; omit to use the currently focused tab',
     }),
   ),
 });
-
-function parseLocatorArgs(args: unknown): ActionLocator | null {
-  const raw = (args as { locator?: unknown } | undefined)?.locator;
-  if (!raw || typeof raw !== 'object') return null;
-  const x = raw as Record<string, unknown>;
-  if (typeof x.role !== 'string' || typeof x.name !== 'string') return null;
-  return {
-    role: x.role,
-    name: x.name,
-    ordinal: typeof x.ordinal === 'number' && x.ordinal > 0 ? x.ordinal : undefined,
-  };
-}
 
 /**
  * click_element 工具定义(confirm 型 + 会话级 grant):按 ARIA locator 点击页面元素。
@@ -57,25 +59,21 @@ export function createClickElementToolDefinition(sessionId?: string): AgentTool<
     label: toolLabel('click_element'),
     risk: 'confirm',
     description:
-      'Click an interactive element on a web page by its ARIA locator (role + accessible name + optional ordinal), exactly as listed by search_element. The element is scrolled into view, flashed with an outline for feedback, then clicked with a synthetic (untrusted) mouse event sequence — most sites and frameworks respond to it, but a few may require a real user click. If the element is covered by another element, the events are dispatched directly on the target and the result says so. Defaults to the currently focused tab; pass tabId to act on another tab. Every call requires explicit user approval via a confirmation card unless the user granted this session for this tool and tab.',
+      'Click an interactive element on a web page, addressed either by its ARIA locator (role + accessible name + optional ordinal, exactly as listed by search_element) or by a CSS selector (for elements that have no role or accessible name — image cards, custom clickable containers). The element is scrolled into view, flashed with an outline for feedback, then clicked with a synthetic (untrusted) mouse event sequence — most sites and frameworks respond to it, but a few may require a real user click. If the element is covered by another element, the events are dispatched directly on the target and the result says so. Defaults to the currently focused tab; pass tabId to act on another tab. Every call requires explicit user approval via a confirmation card unless the user granted this session for this tool and tab.',
     parameters: CLICK_ELEMENT_PARAMS,
     execute: async (toolCallId, args) => {
-      const locator = parseLocatorArgs(args);
-      if (!locator) {
-        return {
-          content: [
-            { type: 'text', text: 'Invalid locator: a locator object with role and name strings is required.' },
-          ],
-          details: null,
-        };
+      const target = parseActionTarget(args);
+      if (target.kind === 'error') {
+        return { content: [{ type: 'text', text: target.message }], details: null };
       }
+      const addressing = actionAddressing(target);
       const tab = await resolveActionTab(args?.tabId);
       if ('errorText' in tab) {
         return { content: [{ type: 'text', text: tab.errorText }], details: null };
       }
       const { tabId } = tab;
 
-      const resolved = await performPageAction(tabId, 'resolve', { locator });
+      const resolved = await performPageAction(tabId, 'resolve', addressing);
       if (!resolved) {
         return {
           content: [
@@ -89,8 +87,8 @@ export function createClickElementToolDefinition(sessionId?: string): AgentTool<
       }
       if (!resolved.ok) {
         return {
-          content: [{ type: 'text', text: renderActionFailure(tabId, resolved) }],
-          details: { tabId, locator },
+          content: [{ type: 'text', text: renderActionFailure(tabId, resolved, target) }],
+          details: { tabId, target },
         };
       }
 
@@ -99,7 +97,7 @@ export function createClickElementToolDefinition(sessionId?: string): AgentTool<
         toolName: 'click_element',
         label: toolLabel('click_element'),
         summary: i18n.t('gateCard.clickElement.summary'),
-        detail: `Click [${formatLocator(locator)}] on tab #${tabId} (${resolved.url})\nResolved: <${resolved.element?.tagName}> ${resolved.element?.preview}`,
+        detail: `Click [${formatActionTarget(target)}] on tab #${tabId} (${resolved.url})\nResolved: <${resolved.element?.tagName}> ${resolved.element?.preview}`,
         toolCallId,
         grantable: true,
         grantScope: `click_element@${tabId}`,
@@ -107,13 +105,13 @@ export function createClickElementToolDefinition(sessionId?: string): AgentTool<
       if (!(approved.kind === 'confirm' && approved.approved)) {
         return {
           content: [{ type: 'text', text: 'User denied permission to run this tool.' }],
-          details: { denied: true, tabId, locator },
+          details: { denied: true, tabId, target },
         };
       }
 
       // target=_blank 链接会开新 tab:前后对比,把新页/焦点变化写进结果,模型不必再猜
       const tabsBefore = await snapshotTabs();
-      const result = await performPageAction(tabId, 'click', { locator });
+      const result = await performPageAction(tabId, 'click', addressing);
       if (!result) {
         return {
           content: [
@@ -127,14 +125,14 @@ export function createClickElementToolDefinition(sessionId?: string): AgentTool<
       }
       if (!result.ok) {
         return {
-          content: [{ type: 'text', text: renderActionFailure(tabId, result) }],
-          details: { tabId, locator },
+          content: [{ type: 'text', text: renderActionFailure(tabId, result, target) }],
+          details: { tabId, target },
         };
       }
       const { note: tabNote } = await describeTabChanges(tabsBefore);
       return {
-        content: [{ type: 'text', text: renderActionSuccess('Clicked', locator, tabId, result) + (tabNote ? `\n${tabNote}` : '') }],
-        details: { tabId, locator },
+        content: [{ type: 'text', text: renderActionSuccess('Clicked', formatActionTarget(target), tabId, result) + (tabNote ? `\n${tabNote}` : '') }],
+        details: { tabId, target },
       };
     },
   };

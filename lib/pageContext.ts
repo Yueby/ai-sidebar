@@ -107,12 +107,33 @@ export async function listCandidateTabs(): Promise<(RefTab & { active?: boolean 
   return result;
 }
 
-/** 打开新标签页(open_page 底层);返回新 tab 元信息,失败 null */
+/**
+ * 打开新标签页(open_page 底层);返回新 tab 元信息,失败 null。
+ * 刚创建的 tab 标题为空(页面尚未加载完),直接回读会让模型拿到 "Opened tab #N ()" ——
+ * 返回前**有界**等待标题就绪;已有标题/超时/查询失败一律返回当前已知值。
+ */
 export async function openTab(url: string, activate = true): Promise<RefTab | null> {
   try {
     const tab = await browser.tabs.create({ url, active: activate });
     if (!tab?.id) return null;
-    return { id: tab.id, title: tab.title ?? '', url: tab.url ?? url };
+    const initial: RefTab = { id: tab.id, title: tab.title || '', url: tab.url || url };
+    if (initial.title) return initial;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      try {
+        const now = await browser.tabs.get(tab.id);
+        // 新建 tab 的 url 字段可能为空串(不是 undefined)→ 用 `||` 回退到请求的 URL,
+        // 否则成功文本会输出 "Opened tab #N ()"
+        initial.url = now.url || initial.url;
+        if (now.title) {
+          initial.title = now.title;
+          return initial;
+        }
+      } catch {
+        return initial; // tab 已被关闭/不可达:返回已知信息
+      }
+    }
+    return initial;
   } catch {
     return null;
   }
@@ -683,7 +704,8 @@ export type PageActionResult =
     };
 
 /**
- * 解析 locator(动作前预览,确认卡用)或执行动作(点击/填充/滚动)。
+ * 解析目标(动作前预览,确认卡用)或执行动作(点击/填充/滚动)。
+ * 目标二选一:locator(role+name+序号)或 selector(CSS,用于无 role/名称的元素)。
  * 失败返回 null(不可达/非 http(s)/导航中/补注入失败);结构化失败走 PageActionResult(ok:false)。
  */
 export async function performPageAction(
@@ -691,6 +713,7 @@ export async function performPageAction(
   action: 'resolve' | 'click' | 'fill' | 'scroll',
   params: {
     locator?: ActionLocator;
+    selector?: string;
     value?: string;
     direction?: string;
     amount?: number;

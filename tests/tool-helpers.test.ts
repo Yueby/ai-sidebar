@@ -316,3 +316,72 @@ test('search_element 行渲染:序号/状态/值/链接去向', async () => {
   assert.equal(line({ href: '/cart', role: 'link' }), '- link "提交" → /cart');
   assert.equal(line({ visible: false }), '- button "提交" [hidden]');
 });
+
+// 动作目标二选一(locator 或 selector):selector 是无 role/名称元素的唯一寻址路。
+// 解析必须是纯函数且把三种非法形状都拦下 —— 否则会带着半个目标进 content 侧,错误被推迟到动作阶段。
+test('parseActionTarget:两种目标互斥,缺参与非法形状都给出可行动错误', async () => {
+  const { parseActionTarget, formatActionTarget, actionAddressing } = await import(
+    '../lib/tools/page-action-shared'
+  );
+
+  assert.deepEqual(parseActionTarget(undefined), {
+    kind: 'error',
+    message:
+      'Provide a target: either a locator object (role + name, from search_element) or a selector string (CSS selector, for elements without an ARIA role or accessible name).',
+  });
+
+  const both = parseActionTarget({
+    locator: { role: 'button', name: 'ok' },
+    selector: '.card',
+  });
+  assert.equal(both.kind, 'error');
+  assert.match((both as { message: string }).message, /not both/);
+
+  for (const bad of [
+    { selector: '   ' },
+    { locator: {} },
+    { locator: { role: '', name: 'x' } },
+    { locator: { role: 'button' } },
+    { locator: 'button' },
+  ]) {
+    const parsed = parseActionTarget(bad);
+    assert.equal(parsed.kind, 'error', `应被拦下: ${JSON.stringify(bad)}`);
+  }
+
+  const byLocator = parseActionTarget({ locator: { role: 'button', name: '提交', ordinal: 2.7 } });
+  assert.deepEqual(byLocator, {
+    kind: 'locator',
+    locator: { role: 'button', name: '提交', ordinal: 2 },
+  });
+
+  const bySelector = parseActionTarget({ selector: '  .role-item-box img  ' });
+  assert.deepEqual(bySelector, { kind: 'selector', selector: '.role-item-box img' });
+
+  // 展示串与寻址参数必须与目标类型一一对应(确认卡与结果文本共用展示串)
+  assert.equal(formatActionTarget(byLocator as never), 'button "提交" #2');
+  assert.equal(formatActionTarget(bySelector as never), '".role-item-box img"');
+  assert.deepEqual(actionAddressing(byLocator as never), {
+    locator: { role: 'button', name: '提交', ordinal: 2 },
+  });
+  assert.deepEqual(actionAddressing(bySelector as never), { selector: '.role-item-box img' });
+});
+
+test('renderActionFailure:selector 目标的 not_found 说明选择器而非 locator', async () => {
+  const { renderActionFailure } = await import('../lib/tools/page-action-shared');
+  const failure = { ok: false as const, url: 'https://x.example/', reason: 'not_found' as const };
+
+  assert.match(renderActionFailure(7, failure), /no element matches the locator in tab #7/);
+  assert.match(
+    renderActionFailure(7, failure, { kind: 'selector', selector: '.card img' }),
+    /no element matches the selector "\.card img" in tab #7/,
+  );
+  // ambiguous 附带候选列表保持不变
+  const ambiguous = renderActionFailure(7, {
+    ok: false,
+    url: 'u',
+    reason: 'ambiguous',
+    matches: [{ ordinal: 2, tagName: 'button', preview: '删除' }],
+  });
+  assert.match(ambiguous, /ambiguous_locator \(1 matches\)/);
+  assert.match(ambiguous, /- \[2\] <button> 删除/);
+});

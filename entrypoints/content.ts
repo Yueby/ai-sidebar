@@ -1286,6 +1286,37 @@ export default defineContentScript({
       return { status: 'ok', hit: sameKey[wanted - 1]! };
     }
 
+    /**
+     * selector 寻址的目标解析(动作工具的第二条寻址路)。
+     * 用于**无 role / 无可访问名称**的可点元素(图片卡片、自绘按钮容器):它们进不了枚举清单,
+     * 但模型能从 read_page(mode='tree') 或 read_element 看到。合成与枚举条目同形的对象,
+     * 后续链路(摘要/CDP 前置/动作/after)完全复用。
+     */
+    function targetFromSelector(selector: string, libs: AccessibilityLibs): EnumeratedElement | null {
+      const el = querySelectorDeep(selector);
+      if (!el) return null;
+      let role = 'generic';
+      try {
+        role = (libs.getRole(el) || 'generic').toLowerCase();
+      } catch {
+        role = 'generic';
+      }
+      let name = '';
+      try {
+        name = (libs.computeAccessibleName(el) ?? '').replace(/\s+/g, ' ').trim();
+      } catch {
+        name = '';
+      }
+      return {
+        el,
+        role,
+        name,
+        ordinal: 1, // selector 路径无组内序号语义;仅在结果 details 里出现
+        disabled: libs.isDisabled(el) === true,
+        visible: isElementVisible(el),
+      };
+    }
+
     function elementSummary(e: EnumeratedElement): {
       role: string;
       name: string;
@@ -1709,6 +1740,7 @@ export default defineContentScript({
     async function runPageAction(message: {
       action?: unknown;
       locator?: unknown;
+      selector?: unknown;
       value?: unknown;
       direction?: unknown;
       amount?: unknown;
@@ -1752,11 +1784,13 @@ export default defineContentScript({
         };
       }
 
-      // after = CDP 可信动作执行后的后置观察:不要求 locator 仍解析成功——
+      // after = CDP 可信动作执行后的后置观察:不要求目标仍解析成功——
       // 元素消失本身就是重要的动作生效信号,必须能作为注记返回而非 not_found 错误
       if (action === 'after') {
-        const locator = parseLocator(message.locator);
-        if (!locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
+        // 寻址与前置请求一致:selector 目标必须走同一条重解析路,否则后置观察直接失效
+        const selector = typeof message.selector === 'string' ? message.selector.trim() : '';
+        const locator = selector ? null : parseLocator(message.locator);
+        if (!selector && !locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
         const notes: string[] = [];
         // 导航检测:与「动作前」URL 比对(后置请求到达时页面可能已是新文档)
         const beforeUrl = typeof message.beforeUrl === 'string' ? message.beforeUrl : location.href;
@@ -1765,21 +1799,25 @@ export default defineContentScript({
           notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
         } else {
           try {
-            const after = resolveLocator(enumerateInteractiveElements(libs), locator);
-            if (after.status === 'not_found') {
-              notes.push('after: the locator no longer resolves — the element is gone (often a strong signal the action took effect).');
-            } else if (after.status === 'ok') {
-              const afterSummary = elementSummary(after.hit);
+            const direct = selector ? targetFromSelector(selector, libs) : null;
+            const locatorHit = locator ? resolveLocator(enumerateInteractiveElements(libs), locator) : null;
+            // locator 变多义时既不算 gone 也不算 hit → 不注记(语义不明,注记反而误导)
+            const gone = selector ? !direct : locatorHit?.status === 'not_found';
+            const hit = selector ? direct : locatorHit?.status === 'ok' ? locatorHit.hit : null;
+            if (gone) {
+              notes.push('after: the target no longer resolves — the element is gone (often a strong signal the action took effect).');
+            } else if (hit) {
+              const afterSummary = elementSummary(hit);
               const before = (message.beforeSummary ?? null) as ResolvedActionElement | null;
               if (before && afterSummary.preview === before.preview) {
-                notes.push(`after: locator still resolves to <${afterSummary.tagName}> "${afterSummary.preview}" — element state unchanged.`);
+                notes.push(`after: target still resolves to <${afterSummary.tagName}> "${afterSummary.preview}" — element state unchanged.`);
               } else {
-                notes.push(`after: locator now resolves to <${afterSummary.tagName}> "${afterSummary.preview}" (was "${before?.preview ?? '?'}").`);
+                notes.push(`after: target now resolves to <${afterSummary.tagName}> "${afterSummary.preview}" (was "${before?.preview ?? '?'}").`);
               }
               // 提交事实信号:回读输入框(仅 Enter 提交场景;元素消失时跳过)
               if (message.submit === 'enter') {
                 try {
-                  const elNow = after.hit.el as HTMLElement;
+                  const elNow = hit.el as HTMLElement;
                   const still =
                     elNow instanceof HTMLInputElement || elNow instanceof HTMLTextAreaElement
                       ? elNow.value
@@ -1804,26 +1842,50 @@ export default defineContentScript({
       }
 
       if (action === 'resolve' || action === 'click' || action === 'fill') {
-        const locator = parseLocator(message.locator);
-        if (!locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
-        const res = resolveLocator(enumerateInteractiveElements(libs), locator);
-        if (res.status === 'not_found') {
-          return { ok: false, url: urlBefore, reason: 'not_found', alternatives: res.alternatives };
+        // 寻址二选一:selector 优先(它只能来自显式传入;两者同给时由工具侧拦下)
+        const selector = typeof message.selector === 'string' ? message.selector.trim() : '';
+        const locator = selector ? null : parseLocator(message.locator);
+        if (!selector && !locator) return { ok: false, url: urlBefore, reason: 'invalid_value' };
+        let hit: EnumeratedElement;
+        if (selector) {
+          const fromSelector = targetFromSelector(selector, libs);
+          if (!fromSelector) return { ok: false, url: urlBefore, reason: 'not_found' };
+          hit = fromSelector;
+        } else {
+          const res = resolveLocator(enumerateInteractiveElements(libs), locator!);
+          if (res.status === 'not_found') {
+            return { ok: false, url: urlBefore, reason: 'not_found', alternatives: res.alternatives };
+          }
+          if (res.status === 'ambiguous') {
+            return { ok: false, url: urlBefore, reason: 'ambiguous', matches: res.matches };
+          }
+          hit = res.hit;
         }
-        if (res.status === 'ambiguous') {
-          return { ok: false, url: urlBefore, reason: 'ambiguous', matches: res.matches };
-        }
-        const summary = elementSummary(res.hit);
+        /** 动作后重解析同一目标(after 注记);gone=目标消失,unknown=无法判定(如变多义) */
+        const resolveTargetAgain = ():
+          | { status: 'ok'; hit: EnumeratedElement }
+          | { status: 'gone' }
+          | { status: 'unknown' } => {
+          if (selector) {
+            const again = targetFromSelector(selector, libs);
+            return again ? { status: 'ok', hit: again } : { status: 'gone' };
+          }
+          const again = resolveLocator(enumerateInteractiveElements(libs), locator!);
+          if (again.status === 'not_found') return { status: 'gone' };
+          if (again.status === 'ok') return { status: 'ok', hit: again.hit };
+          return { status: 'unknown' };
+        };
+        const summary = elementSummary(hit);
         if (action === 'resolve') {
           // CDP 可信执行前置:元素中心视口坐标(仅当中心落在视口内,视口外 CDP 点击无意义) + 遮挡旗标 + 状态旗标
-          const rect = res.hit.el.getBoundingClientRect();
+          const rect = hit.el.getBoundingClientRect();
           const hasRect = rect.width > 0 && rect.height > 0;
           const cx = Math.round(rect.left + rect.width / 2);
           const cy = Math.round(rect.top + rect.height / 2);
           const inViewport =
             hasRect && cx >= 0 && cy >= 0 && cx < window.innerWidth && cy < window.innerHeight;
           const hitTest = inViewport ? document.elementFromPoint(cx, cy) : null;
-          const occluded = !!(hitTest && !(hitTest === res.hit.el || res.hit.el.contains(hitTest) || hitTest.contains(res.hit.el)));
+          const occluded = !!(hitTest && !(hitTest === hit.el || hit.el.contains(hitTest) || hitTest.contains(hit.el)));
           return {
             ok: true,
             url: urlBefore,
@@ -1831,17 +1893,17 @@ export default defineContentScript({
             element: summary,
             notes: [],
             ...(inViewport ? { centerPoint: { x: cx, y: cy }, occluded } : {}),
-            canTextInput: isTextLikeElement(res.hit.el),
-            disabled: res.hit.disabled === true,
-            hidden: res.hit.visible === false,
+            canTextInput: isTextLikeElement(hit.el),
+            disabled: hit.disabled === true,
+            hidden: hit.visible === false,
           };
         }
 
         const notes: string[] = [];
-        if (res.hit.disabled) {
+        if (hit.disabled) {
           notes.push('Note: the target element is disabled; the browser may ignore the interaction.');
         }
-        if (!res.hit.visible) {
+        if (!hit.visible) {
           notes.push('Note: the target element is currently not visible.');
         }
         let fail: { reason: 'option_not_found' | 'unsupported_element' | 'invalid_value'; options?: string[] } | undefined;
@@ -1849,9 +1911,9 @@ export default defineContentScript({
         const submit = message.submit === 'enter' ? ('enter' as const) : undefined;
 
         if (action === 'click') {
-          notes.push(...performClick(res.hit.el));
+          notes.push(...performClick(hit.el));
         } else {
-          const filled = performFill(res.hit.el, value, submit);
+          const filled = performFill(hit.el, value, submit);
           if ('fail' in filled) fail = filled.fail;
           else notes.push(...filled.notes);
         }
@@ -1861,18 +1923,18 @@ export default defineContentScript({
         if (location.href !== urlAfterAct) {
           notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
         } else if (!notes.some((n) => n.startsWith('navigation_started'))) {
-          // 步④ Before/After:re-resolve locator 对比动作后的元素状态。
+          // 步④ Before/After:重解析同一目标对比动作后的元素状态。
           // 仅同 tab 导航时跳过(上下文已重建);settle_skipped(失焦)不跳——后台 DOM 查询正常可用
           try {
-            const after = resolveLocator(enumerateInteractiveElements(libs), locator);
-            if (after.status === 'not_found') {
-              notes.push('after: the locator no longer resolves — the element is gone (often a strong signal the action took effect).');
+            const after = resolveTargetAgain();
+            if (after.status === 'gone') {
+              notes.push('after: the target no longer resolves — the element is gone (often a strong signal the action took effect).');
             } else if (after.status === 'ok') {
               const afterSummary = elementSummary(after.hit);
               if (afterSummary.preview === summary.preview) {
-                notes.push(`after: locator still resolves to <${afterSummary.tagName}> "${afterSummary.preview}" — element state unchanged.`);
+                notes.push(`after: target still resolves to <${afterSummary.tagName}> "${afterSummary.preview}" — element state unchanged.`);
               } else {
-                notes.push(`after: locator now resolves to <${afterSummary.tagName}> "${afterSummary.preview}" (was "${summary.preview}").`);
+                notes.push(`after: target now resolves to <${afterSummary.tagName}> "${afterSummary.preview}" (was "${summary.preview}").`);
               }
             }
             // ambiguous:同名元素变多,语义不明,不注记(避免误导)
@@ -1884,7 +1946,7 @@ export default defineContentScript({
         // 大多数聊天站发送后会清空输入框;残留全文 = Enter 大概率未生效)
         if (action === 'fill' && submit === 'enter') {
           try {
-            const elNow = res.hit.el as HTMLElement;
+            const elNow = hit.el as HTMLElement;
             // 页面重渲染替换节点后游离节点的 value 不可信(会产生假阳性/假阴性)
             if (!elNow.isConnected) return { ok: true, url: location.href, title: document.title, element: summary, notes };
             const still =

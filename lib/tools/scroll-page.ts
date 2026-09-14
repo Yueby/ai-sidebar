@@ -3,7 +3,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
 import { performPageAction, type ActionLocator } from '../pageContext';
-import { renderActionFailure, renderActionSuccess, resolveActionTab } from './page-action-shared';
+import { formatLocator, renderActionFailure, renderActionSuccess, resolveActionTab } from './page-action-shared';
 
 const SCROLL_PAGE_PARAMS = Type.Object({
   direction: Type.Union([Type.Literal('up'), Type.Literal('down'), Type.Literal('left'), Type.Literal('right')], {
@@ -104,7 +104,7 @@ export function createScrollPageToolDefinition(): AgentTool<typeof SCROLL_PAGE_P
         };
       }
       return {
-        content: [{ type: 'text', text: renderActionSuccess('Scrolled', locator, tabId, result) }],
+        content: [{ type: 'text', text: renderActionSuccess('Scrolled', locator ? formatLocator(locator) : null, tabId, result) }],
         details: { tabId, direction },
       };
     },
