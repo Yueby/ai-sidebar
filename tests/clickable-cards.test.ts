@@ -7,7 +7,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clickableCardLabel } from '../lib/elementLabel';
+import { clickableCardLabel } from '../lib/clickableCards';
 
 test('name 优先 img alt,其次 title,再次容器文本', () => {
   assert.equal(clickableCardLabel({ imgAlt: '阿尔法', text: '阿尔法' }).name, '阿尔法');

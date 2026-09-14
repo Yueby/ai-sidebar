@@ -16,7 +16,8 @@ import {
 
 const LOCATOR_PARAMS = Type.Object({
   role: Type.String({
-    description: 'ARIA role of the element, exactly as listed by search_element (e.g. button, textbox, link)',
+    description:
+      'ARIA role of the element, exactly as listed by search_element (e.g. button, textbox, link). Role `clickable` means an element that has no ARIA role but responds to clicks (image cards, tiles) — address it with the name and ordinal search_element shows for it.',
   }),
   name: Type.String({
     description:

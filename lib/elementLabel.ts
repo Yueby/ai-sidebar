@@ -60,28 +60,3 @@ export function elementChipLabel(el: Pick<PickedElement, 'preview' | 'tagName'> 
 export function elementListLabel(el: Pick<PickedElement, 'preview' | 'tagName'> | Pick<RefElementMeta, 'preview' | 'tagName'>): string {
   return truncateVisual(basePreview(el), LIST_LABEL_MAX);
 }
-
-/**
- * "无 ARIA 角色的可点容器"(真实网站的图片卡片,如 `<div class="role-item-box"><img></div>`)
- * 的模型可见线索:
- * - name:优先 img 的 alt/title,其次容器自身的可见文本 —— 有 name 才能用 role+name 寻址;
- * - hint:img 文件名(去路径/查询串),用于区分一批**同名甚至无名**的卡片
- *   (24 个角色的入口长得一模一样,文件名是页面上唯一稳定的区分线索)。
- * 纯函数,便于单测;content 侧采集与清单/树渲染共用同一份判定。
- */
-export function clickableCardLabel(input: {
-  imgAlt?: string | null;
-  imgTitle?: string | null;
-  imgSrc?: string | null;
-  text?: string | null;
-}): { name: string; hint: string } {
-  const clean = (v?: string | null): string => (v ?? '').replace(/\s+/g, ' ').trim();
-  const alt = clean(input.imgAlt);
-  const title = clean(input.imgTitle);
-  const own = clean(input.text).slice(0, 40);
-  const file = clean(input.imgSrc).split(/[?#]/)[0]?.split('/').pop() ?? '';
-  return {
-    name: alt || title || own,
-    hint: file ? `img ${file}` : alt ? `img ${alt}` : 'clickable container',
-  };
-}

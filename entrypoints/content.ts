@@ -8,6 +8,7 @@ import {
 } from '@/lib/types';
 import { isThinText, textWindow } from '@/lib/pageTextWindow';
 import { splitSelectorSegments } from '@/lib/domSelector';
+import { clickableCardLabel } from '@/lib/clickableCards';
 // type-only:编译期擦除(树节点形状与 sidepanel 侧同源)
 import type { A11yNode } from '@/lib/a11yTree';
 // type-only:编译期擦除,不引入运行时代码(载荷形状与 sidepanel 侧同源)
@@ -868,6 +869,12 @@ export default defineContentScript({
       return elementPreview(el).slice(0, 80);
  }
 
+    /**
+     * 图片卡片探测预算:每页最多对这么多个"含 img 的容器"读一次计算样式。
+     * 读 cursor 会强制样式解析,不能对全页每个元素做;先用 :has(img) 预筛,再在预算内探测。
+     */
+    const CLICKABLE_PROBE_LIMIT = 300;
+
     function enumerateInteractiveElements(libs: AccessibilityLibs): EnumeratedElement[] {
       const { getRole, computeAccessibleName, isDisabled } = libs;
       const ordinals = new Map<string, number>();
@@ -914,6 +921,50 @@ export default defineContentScript({
             inputTypeOf(el) === 'checkbox' || inputTypeOf(el) === 'radio'
               ? (el as HTMLInputElement).checked
               : undefined,
+        });
+      }
+      // ===== 图片卡片兜底:无 ARIA 角色的可点容器 =====
+      // 真实网站的主入口常是 <div class="card"><img></div> + cursor:pointer:无 role/name/href/tabindex,
+      // 上面所有语义判据都抓不到,但用户要点的就是它(实测:一个角色卡片网格页因此完全无法操作,
+      // 模型只能回落到手写 JS)。信号只有 cursor:pointer,代价是样式解析,故预筛 + 预算封顶。
+      const listed = new Set(out.map((e) => e.el));
+      let probed = 0;
+      for (const el of Array.from(document.querySelectorAll(':has(img)'))) {
+        if (probed >= CLICKABLE_PROBE_LIMIT) break;
+        if (listed.has(el) || el.localName === 'img') continue;
+        if (el.closest(SEARCH_SKIP_SUBTREE_SELECTOR)) continue;
+        if (!isElementVisible(el)) continue;
+        // 嵌套容器(卡片里还套卡片)只取最外层:外层可点时内层不再占一个序号
+        let nested = false;
+        for (let p = el.parentElement; p; p = p.parentElement) {
+          if (listed.has(p)) {
+            nested = true;
+            break;
+          }
+        }
+        if (nested) continue;
+        probed += 1;
+        if (getComputedStyle(el).cursor !== 'pointer') continue;
+        const img = el.querySelector('img');
+        const { name, hint } = clickableCardLabel({
+          imgAlt: img?.getAttribute('alt'),
+          imgTitle: img?.getAttribute('title'),
+          imgSrc: img?.getAttribute('src'),
+          text: el.textContent,
+        });
+        const key = `clickable\u0000${name}`;
+        const ordinal = (ordinals.get(key) ?? 0) + 1;
+        ordinals.set(key, ordinal);
+        listed.add(el);
+        out.push({
+          el,
+          // 合成 role:无 ARIA 角色但会响应点击。动作侧按字符串匹配 role,故 clickable 可寻址
+          role: 'clickable',
+          name,
+          ordinal,
+          disabled: isDisabled(el),
+          visible: true,
+          hint,
         });
       }
       return out;
@@ -1155,7 +1206,7 @@ export default defineContentScript({
           truncated = true;
           return;
         }
-        const role = (effectiveRole(el, libs.getRole) || 'generic').toLowerCase();
+        const computedRole = (effectiveRole(el, libs.getRole) || 'generic').toLowerCase();
         let name = '';
         try {
           name = libs.computeAccessibleName(el) ?? '';
@@ -1167,7 +1218,11 @@ export default defineContentScript({
           name = el.placeholder.replace(/\s+/g, ' ').trim();
         }
         const disabled = libs.isDisabled(el);
-        const interactive = isInteractiveCandidate(el, libs.getRole) && Boolean(role);
+        // 「可被动作工具寻址」= 动作枚举里有它(含 clickable 卡片)。不在此处重算候选:
+        // 树与动作侧必须给出同一个名字/序号,否则模型照抄会点错元素(子集重编号的旧事故)。
+        const actionHit = actionByEl.get(el);
+        const interactive = Boolean(actionHit);
+        const role = actionHit?.role ?? computedRole;
         const leafText = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
         // 无角色的**叶子**必须保留文本:价格、标签这类内容常写在 <span class=price> 里,
         // 它们没有 role/name,若只按 TREE_TEXT_ROLES 输出,"名称与价格相邻"这条信息会整段消失。
@@ -1190,8 +1245,6 @@ export default defineContentScript({
             ? clipMarked(leafText, 160)
             : undefined;
         const href = isAnchorEl(el) ? el.getAttribute('href') ?? undefined : undefined;
-        // 可操作节点:名字与序号取动作枚举(与 click_element 精确匹配的那个字符串,零改写)
-        const actionHit = interactive ? actionByEl.get(el) : undefined;
         const states = a11yStates(el, disabled);
         // 隐藏的交互节点仍列出(模型需要知道页面上有它),但必须标明:照抄点它会 not_found,
         // 需先让它可见。可见性检查只对交互节点做(checkVisibility + getBoundingClientRect 不便宜)
@@ -1206,6 +1259,7 @@ export default defineContentScript({
           value: a11yValue(el),
           states,
           href,
+          hint: actionHit?.hint,
           interactive,
           ordinal: actionHit?.ordinal,
         });

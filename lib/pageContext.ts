@@ -574,6 +574,8 @@ export interface InteractiveElementInfo {
   value?: string;
   /** 复选框/单选框选中态(true/false 都有信息量) */
   checked?: boolean;
+  /** 无名节点的定位线索(img 文件名等):清单与树都渲染它,否则一批无名同类节点无法区分 */
+  hint?: string;
 }
 
 /** content.ts 交互元素清单应答载荷 */
