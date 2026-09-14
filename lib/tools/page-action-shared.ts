@@ -8,35 +8,56 @@ export function formatLocator(locator: ActionLocator): string {
 }
 
 /**
- * 动作目标:ARIA locator 或 CSS selector,二者互斥。
+ * 动作目标:ARIA locator、CSS selector 或视口坐标,三者互斥。
  * selector 用于**无 role/可访问名称**的可点元素(图片卡片、自绘按钮容器):
  * 模型能从 read_page(mode='tree') 或 read_element 看到它们,但无法用 role+name 寻址。
+ * point 用于**连 selector 都靠不住**的场合(canvas、图像卡片网格、只有截图可依赖的元素):
+ * 坐标来自 screenshot_page 的画面,按视口 CSS 像素给出。
  */
 export type ActionTarget =
   | { kind: 'locator'; locator: ActionLocator }
   | { kind: 'selector'; selector: string }
+  | { kind: 'point'; point: { x: number; y: number } }
   | { kind: 'error'; message: string };
 
 const SELECTOR_MAX = 1000;
 
-/** 目标参数的纯解析(可单测):缺参/双给/形状不对都给出可行动的英文错误 */
+/** 目标参数的纯解析(可单测):缺参/多给/形状不对都给出可行动的英文错误 */
 export function parseActionTarget(args: unknown): ActionTarget {
-  const raw = (args ?? {}) as { locator?: unknown; selector?: unknown };
+  const raw = (args ?? {}) as { locator?: unknown; selector?: unknown; x?: unknown; y?: unknown };
   const hasLocator = raw.locator !== undefined && raw.locator !== null;
   const rawSelector = typeof raw.selector === 'string' ? raw.selector.trim() : '';
   const hasSelector = raw.selector !== undefined && raw.selector !== null;
-  if (hasLocator && hasSelector) {
-    return {
-      kind: 'error',
-      message: 'Provide either a locator (role + name) or a selector, not both.',
-    };
-  }
-  if (!hasLocator && !hasSelector) {
+  const hasAnyCoord = raw.x !== undefined || raw.y !== undefined;
+  const given = [hasLocator, hasSelector, hasAnyCoord].filter(Boolean).length;
+  if (given > 1) {
     return {
       kind: 'error',
       message:
-        'Provide a target: either a locator object (role + name, from search_element) or a selector string (CSS selector, for elements without an ARIA role or accessible name).',
+        'Provide exactly one target: a locator (role + name), a selector (CSS) or a viewport point (x and y), not several.',
     };
+  }
+  if (given === 0) {
+    return {
+      kind: 'error',
+      message:
+        'Provide a target: a locator object (role + name, from search_element), a selector string (CSS selector, for elements without an ARIA role or accessible name), or viewport coordinates (x and y, from a screenshot).',
+    };
+  }
+  if (hasAnyCoord) {
+    if (raw.x === undefined || raw.y === undefined) {
+      return { kind: 'error', message: 'Invalid point: both x and y are required (viewport CSS pixels).' };
+    }
+    if (typeof raw.x !== 'number' || typeof raw.y !== 'number') {
+      return { kind: 'error', message: 'Invalid point: x and y must be numbers (viewport CSS pixels).' };
+    }
+    if (!Number.isFinite(raw.x) || !Number.isFinite(raw.y) || raw.x < 0 || raw.y < 0) {
+      return {
+        kind: 'error',
+        message: 'Invalid point: x and y must be finite, non-negative viewport coordinates.',
+      };
+    }
+    return { kind: 'point', point: { x: Math.round(raw.x), y: Math.round(raw.y) } };
   }
   if (hasSelector) {
     if (!rawSelector) {
@@ -76,14 +97,18 @@ export function parseActionTarget(args: unknown): ActionTarget {
 
 /** 目标的展示串(确认卡与结果文本共用;结果文本用它指明动作对象) */
 export function formatActionTarget(target: Exclude<ActionTarget, { kind: 'error' }>): string {
-  return target.kind === 'locator' ? formatLocator(target.locator) : JSON.stringify(target.selector);
+  if (target.kind === 'locator') return formatLocator(target.locator);
+  if (target.kind === 'point') return `(${target.point.x}, ${target.point.y})`;
+  return JSON.stringify(target.selector);
 }
 
 /** 目标 → performPageAction 的定位参数 */
 export function actionAddressing(
   target: Exclude<ActionTarget, { kind: 'error' }>,
-): { locator: ActionLocator } | { selector: string } {
-  return target.kind === 'locator' ? { locator: target.locator } : { selector: target.selector };
+): { locator: ActionLocator } | { selector: string } | { point: { x: number; y: number } } {
+  if (target.kind === 'locator') return { locator: target.locator };
+  if (target.kind === 'point') return { point: target.point };
+  return { selector: target.selector };
 }
 
 /**
@@ -126,6 +151,10 @@ export function renderActionFailure(
     ambiguous: `ambiguous_locator (${result.matches?.length ?? 0} matches): the locator matches multiple elements in tab #${tabId}; pass an ordinal to disambiguate.`,
     option_not_found: `option_not_found: the select element has no option matching the provided value in tab #${tabId}.`,
     unsupported_element: `unsupported_element: the target element in tab #${tabId} cannot be filled by this tool (only text fields, selects, checkboxes, radios and switches are supported).`,
+    no_element_at_point:
+      target?.kind === 'point'
+        ? `no_element_at_point: nothing is clickable at (${target.point.x}, ${target.point.y}) in tab #${tabId} — the point may be outside the viewport or over empty space. Take a fresh screenshot and use the viewport size it reports.`
+        : `no_element_at_point: no element at the requested point in tab #${tabId}.`,
     invalid_value: `invalid_value: a parameter is invalid (toggles accept only "true"/"false"; scroll direction must be up, down, left or right).`,
   }[result.reason];
   const lines = [head];

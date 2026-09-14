@@ -319,23 +319,27 @@ test('search_element 行渲染:序号/状态/值/链接去向', async () => {
 
 // 动作目标二选一(locator 或 selector):selector 是无 role/名称元素的唯一寻址路。
 // 解析必须是纯函数且把三种非法形状都拦下 —— 否则会带着半个目标进 content 侧,错误被推迟到动作阶段。
-test('parseActionTarget:两种目标互斥,缺参与非法形状都给出可行动错误', async () => {
+test('parseActionTarget:三种目标互斥,缺参与非法形状都给出可行动错误', async () => {
   const { parseActionTarget, formatActionTarget, actionAddressing } = await import(
     '../lib/tools/page-action-shared'
   );
 
-  assert.deepEqual(parseActionTarget(undefined), {
-    kind: 'error',
-    message:
-      'Provide a target: either a locator object (role + name, from search_element) or a selector string (CSS selector, for elements without an ARIA role or accessible name).',
-  });
+  const missing = parseActionTarget(undefined);
+  assert.equal(missing.kind, 'error');
+  assert.match((missing as { message: string }).message, /Provide a target/);
+  assert.match((missing as { message: string }).message, /viewport coordinates/);
 
-  const both = parseActionTarget({
-    locator: { role: 'button', name: 'ok' },
-    selector: '.card',
-  });
-  assert.equal(both.kind, 'error');
-  assert.match((both as { message: string }).message, /not both/);
+  // 三种寻址方式必须恰好给一个:双给/三给都是错误(否则执行路径要靠猜)
+  for (const many of [
+    { locator: { role: 'button', name: 'ok' }, selector: '.card' },
+    { locator: { role: 'button', name: 'ok' }, x: 10, y: 20 },
+    { selector: '.card', x: 10, y: 20 },
+    { locator: { role: 'button', name: 'ok' }, selector: '.card', x: 1, y: 2 },
+  ]) {
+    const parsed = parseActionTarget(many);
+    assert.equal(parsed.kind, 'error', `多目标应被拦下: ${JSON.stringify(many)}`);
+    assert.match((parsed as { message: string }).message, /exactly one target/);
+  }
 
   for (const bad of [
     { selector: '   ' },
@@ -348,6 +352,20 @@ test('parseActionTarget:两种目标互斥,缺参与非法形状都给出可行�
     assert.equal(parsed.kind, 'error', `应被拦下: ${JSON.stringify(bad)}`);
   }
 
+  // 坐标:必须成对、有限、非负(负数与非有限值在页面上没有意义)
+  for (const badPoint of [
+    { x: 10 },
+    { y: 10 },
+    { x: '10', y: 20 },
+    { x: Number.NaN, y: 1 },
+    { x: Number.POSITIVE_INFINITY, y: 1 },
+    { x: -1, y: 5 },
+    { x: 5, y: -1 },
+  ]) {
+    const parsed = parseActionTarget(badPoint);
+    assert.equal(parsed.kind, 'error', `非法坐标应被拦下: ${JSON.stringify(badPoint)}`);
+  }
+
   const byLocator = parseActionTarget({ locator: { role: 'button', name: '提交', ordinal: 2.7 } });
   assert.deepEqual(byLocator, {
     kind: 'locator',
@@ -357,13 +375,19 @@ test('parseActionTarget:两种目标互斥,缺参与非法形状都给出可行�
   const bySelector = parseActionTarget({ selector: '  .role-item-box img  ' });
   assert.deepEqual(bySelector, { kind: 'selector', selector: '.role-item-box img' });
 
+  // 坐标取整(子像素坐标无意义,且取整后详情/确认卡文本稳定)
+  const byPoint = parseActionTarget({ x: 320.4, y: 480.6 });
+  assert.deepEqual(byPoint, { kind: 'point', point: { x: 320, y: 481 } });
+
   // 展示串与寻址参数必须与目标类型一一对应(确认卡与结果文本共用展示串)
   assert.equal(formatActionTarget(byLocator as never), 'button "提交" #2');
   assert.equal(formatActionTarget(bySelector as never), '".role-item-box img"');
+  assert.equal(formatActionTarget(byPoint as never), '(320, 481)');
   assert.deepEqual(actionAddressing(byLocator as never), {
     locator: { role: 'button', name: '提交', ordinal: 2 },
   });
   assert.deepEqual(actionAddressing(bySelector as never), { selector: '.role-item-box img' });
+  assert.deepEqual(actionAddressing(byPoint as never), { point: { x: 320, y: 481 } });
 });
 
 test('renderActionFailure:selector 目标的 not_found 说明选择器而非 locator', async () => {

@@ -692,11 +692,20 @@ export type PageActionResult =
       /** CDP 前置解析:元素状态旗标(供注记;合成路径在 content 内部产生同样注记) */
       disabled?: boolean;
       hidden?: boolean;
+      /** viewport 动作专用:设备像素比(截图坐标换算;与上面的视口尺寸配套) */
+      devicePixelRatio?: number;
     }
   | {
       ok: false;
       url: string;
-      reason: 'not_found' | 'ambiguous' | 'option_not_found' | 'unsupported_element' | 'invalid_value';
+      reason:
+        | 'not_found'
+        | 'ambiguous'
+        | 'option_not_found'
+        | 'unsupported_element'
+        | 'invalid_value'
+        /** 坐标点击专用:该视口坐标上没有可命中的元素 */
+        | 'no_element_at_point';
       /** ambiguous 时的同名候选 */
       matches?: { ordinal: number; tagName: string; preview: string }[];
       /** option_not_found 时的选项文本(前 20) */
@@ -707,15 +716,18 @@ export type PageActionResult =
 
 /**
  * 解析目标(动作前预览,确认卡用)或执行动作(点击/填充/滚动)。
- * 目标二选一:locator(role+name+序号)或 selector(CSS,用于无 role/名称的元素)。
+ * 目标三选一:locator(role+name+序号)、selector(CSS,用于无 role/名称的元素)、
+ * point(视口 CSS 像素坐标,用于只有截图可依赖的元素——如 canvas 或图像卡片网格)。
  * 失败返回 null(不可达/非 http(s)/导航中/补注入失败);结构化失败走 PageActionResult(ok:false)。
  */
 export async function performPageAction(
   tabId: number,
-  action: 'resolve' | 'click' | 'fill' | 'scroll',
+  action: 'resolve' | 'click' | 'fill' | 'scroll' | 'viewport',
   params: {
     locator?: ActionLocator;
     selector?: string;
+    /** 视口 CSS 像素坐标(仅 click 可用;与 locator/selector 互斥,由工具侧拦下) */
+    point?: { x: number; y: number };
     value?: string;
     direction?: string;
     amount?: number;
@@ -728,8 +740,8 @@ export async function performPageAction(
     if (!tab?.url?.startsWith('http')) return null;
     url = tab.url;
     // 后台 tab 的计时器被 Chrome 节流(settle/高亮会冻结到分钟级):实际动作前自动激活目标页;
-    // resolve 仅预览(确认卡展示),不抢用户焦点
-    if (action !== 'resolve' && tab.active !== true) {
+    // resolve/viewport 仅预览(确认卡展示 / 尺寸查询),不抢用户焦点
+    if (action !== 'resolve' && action !== 'viewport' && tab.active !== true) {
       await browser.tabs.update(tabId, { active: true }).catch(() => {});
     }
   } catch {
@@ -738,7 +750,7 @@ export async function performPageAction(
   // scroll 模式轮次:wheel = 合成滚轮优先(模拟鼠标);CDP 附加失败才切 js = 滚动条快路径
   let currentMode: 'wheel' | 'js' = 'wheel';
   // click/fill CDP 优先编排:requestAction 可在 resolve/after 间切换;beforeSummary 供 after 注记
-  let requestAction: 'resolve' | 'click' | 'fill' | 'scroll' | 'after' = action;
+  let requestAction: 'resolve' | 'click' | 'fill' | 'scroll' | 'viewport' | 'after' = action;
   let nextBeforeSummary: unknown = undefined;
   let nextBeforeUrl: string | undefined = undefined;
   const request = async (): Promise<PageActionResult | undefined> => {
@@ -788,16 +800,21 @@ export async function performPageAction(
     const rOutcome = await requestWithTimeout();
     requestAction = savedAction;
     const rRes = rOutcome.kind === 'response' ? rOutcome.res : undefined;
+    // 坐标点击:目标点由调用方给出(视口坐标),**不使用**元素中心 —— 大容器的中心往往打偏;
+    // 也不做遮挡判定:「点到什么就是什么」正是这条路径的语义(模型看的是截图)
+    const usePoint =
+      action === 'click' && typeof params.point?.x === 'number' && typeof params.point?.y === 'number';
     if (
       rRes?.ok === true &&
-      typeof rRes.centerPoint?.x === 'number' &&
-      typeof rRes.centerPoint?.y === 'number' &&
-      rRes.occluded !== true &&
+      (usePoint ||
+        (typeof rRes.centerPoint?.x === 'number' &&
+          typeof rRes.centerPoint?.y === 'number' &&
+          rRes.occluded !== true)) &&
       // fill 仅文本型元素可走 CDP(insertText);select/toggle 走合成(它们有自己的分支语义)
       (action === 'click' || rRes.canTextInput === true)
     ) {
-      const cx = rRes.centerPoint.x;
-      const cy = rRes.centerPoint.y;
+      const cx = usePoint ? params.point!.x : rRes.centerPoint!.x;
+      const cy = usePoint ? params.point!.y : rRes.centerPoint!.y;
       const fillValue = typeof params.value === 'string' ? params.value : '';
       // fill 序列状态:任一步派发成功后失败 → partial_or_unknown(禁止重发)
       let fillState: 'not_dispatched' | 'dispatched' | 'partial_or_unknown' = 'not_dispatched';
@@ -846,11 +863,12 @@ export async function performPageAction(
       // 闭包内赋值的读取:显式函数避免 TS 控制流把 fillState 收窄回初始字面量
       const isFillPartial = (): boolean => fillState === 'partial_or_unknown';
       if (cdpActed) {
-        // after 注记:content 侧 settle + before/after 对比 + submit 回读(与合成路径同一套)
+        // after 注记:content 侧 settle + before/after 对比 + submit 回读(与合成路径同一套)。
+        // 坐标点击没有可重解析的元素(目标是画面上的一个点),故跳过 after 而不谎报状态。
         nextBeforeSummary = rRes.element ?? null;
         nextBeforeUrl = url;
         requestAction = 'after';
-        const aOutcome = await requestWithTimeout();
+        const aOutcome = usePoint ? { kind: 'response' as const, res: undefined } : await requestWithTimeout();
         requestAction = savedAction;
         const aRes = aOutcome.kind === 'response' ? aOutcome.res : undefined;
         let aNotes = aRes?.ok === true && Array.isArray(aRes.notes) ? aRes.notes.filter((n): n is string => typeof n === 'string') : [];

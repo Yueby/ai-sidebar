@@ -35,7 +35,19 @@ const CLICK_ELEMENT_PARAMS = Type.Object({
   selector: Type.Optional(
     Type.String({
       description:
-        'CSS selector of the element, for elements that have no ARIA role or accessible name in search_element / read_page mode="tree" (image cards, custom clickable containers). Pierces open shadow roots. Mutually exclusive with locator.',
+        'CSS selector of the element, for elements that have no ARIA role or accessible name in search_element / read_page mode="tree" (image cards, custom clickable containers). Pierces open shadow roots. Mutually exclusive with locator and with x/y.',
+    }),
+  ),
+  x: Type.Optional(
+    Type.Number({
+      description:
+        'Viewport X coordinate in CSS pixels, from the screenshot you are looking at (the same coordinate system as the viewport size reported by screenshot_page). Use coordinates only when you can see the target in a screenshot and it has no usable role, name or selector (canvas, image grids). This path does NO element resolution and NO occlusion check: the click lands wherever that point is, so confirm the position from a screenshot first. Mutually exclusive with locator and selector.',
+    }),
+  ),
+  y: Type.Optional(
+    Type.Number({
+      description:
+        'Viewport Y coordinate in CSS pixels; required together with x. If the screenshot is larger than the viewport (device pixel ratio above 1), divide the image pixel coordinates by that ratio first.',
     }),
   ),
   tabId: Type.Optional(
@@ -60,7 +72,7 @@ export function createClickElementToolDefinition(sessionId?: string): AgentTool<
     label: toolLabel('click_element'),
     risk: 'confirm',
     description:
-      'Click an interactive element on a web page, addressed either by its ARIA locator (role + accessible name + optional ordinal, exactly as listed by search_element) or by a CSS selector (for elements that have no role or accessible name — image cards, custom clickable containers). The element is scrolled into view, flashed with an outline for feedback, then clicked with a synthetic (untrusted) mouse event sequence — most sites and frameworks respond to it, but a few may require a real user click. If the element is covered by another element, the events are dispatched directly on the target and the result says so. Defaults to the currently focused tab; pass tabId to act on another tab. Every call requires explicit user approval via a confirmation card unless the user granted this session for this tool and tab.',
+      'Click an interactive element on a web page, addressed by its ARIA locator (role + accessible name + optional ordinal, exactly as listed by search_element), by a CSS selector (for elements that have no role or accessible name — image cards, custom clickable containers), or by viewport coordinates (x and y, for targets you can only see in a screenshot). The element is scrolled into view, flashed with an outline for feedback, then clicked with a synthetic (untrusted) mouse event sequence — most sites and frameworks respond to it, but a few may require a real user click. If the element is covered by another element, the events are dispatched directly on the target and the result says so. Coordinates are different: nothing is scrolled, flashed or checked, the click simply lands at that point of the current viewport, so read the target position from a fresh screenshot_page first. Defaults to the currently focused tab; pass tabId to act on another tab. Every call requires explicit user approval via a confirmation card unless the user granted this session for this tool and tab.',
     parameters: CLICK_ELEMENT_PARAMS,
     execute: async (toolCallId, args) => {
       const target = parseActionTarget(args);

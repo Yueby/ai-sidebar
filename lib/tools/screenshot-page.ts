@@ -4,7 +4,7 @@ import { i18n } from '#i18n';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import { toolLabel } from '../toolLabels';
 import { type ToolRisk } from '../types';
-import { getActiveTabMeta, getTabMeta, type RefTab } from '../pageContext';
+import { getActiveTabMeta, getTabMeta, performPageAction, type RefTab } from '../pageContext';
 import { capturePathFor, captureTabViaCdpForModel, captureVisibleForModel } from '../imageFetch';
 import { requestGate } from '../gate';
 
@@ -133,10 +133,29 @@ export function createScreenshotPageToolDefinition(
             : `Failed to capture tab #${tabId}: the browser refused the capture.${result.detail ? ` Browser said: ${result.detail}` : ''} If this is a permissions error, retrying after a short wait may also help (captures are rate-limited to 2 per second).`;
         return { content: [{ type: 'text', text }], details: { tabId } };
       }
+      // 视口尺寸与 DPR:坐标点击要靠它把截图像素换算成点击坐标(DPR>1 时图比视口大)。
+      // 取不到就省略这一行,不因附加信息失败而让截图本身失败。
+      let viewportNote = '';
+      try {
+        const vp = await performPageAction(tabId, 'viewport');
+        const width = vp?.ok === true ? vp.viewport?.width : undefined;
+        const height = vp?.ok === true ? vp.viewport?.height : undefined;
+        const dpr = vp?.ok === true ? vp.devicePixelRatio : undefined;
+        if (typeof width === 'number' && typeof height === 'number' && typeof dpr === 'number') {
+          viewportNote =
+            dpr === 1
+              ? ` Viewport: ${width}×${height} CSS px (device pixel ratio 1 — one image pixel is one click_element x/y unit).`
+              : ` Viewport: ${width}×${height} CSS px (device pixel ratio ${dpr} — the image is about ${Math.round(
+                  width * dpr,
+                )}×${Math.round(height * dpr)}; divide image pixel coordinates by ${dpr} to get the x/y values click_element expects).`;
+        }
+      } catch {
+        /* 视口查询失败:不报该行 */
+      }
       const content: (ImageContent | { type: 'text'; text: string })[] = [
         {
           type: 'text',
-          text: `Screenshot of tab #${tabId} (${meta.url}) — visible viewport only, not the full scrollable page.${viaCdp ? ' Captured from the background via CDP (the tab was not brought to the front, so the user\'s view did not change).' : ''}`,
+          text: `Screenshot of tab #${tabId} (${meta.url}) — visible viewport only, not the full scrollable page.${viewportNote}${viaCdp ? ' Captured from the background via CDP (the tab was not brought to the front, so the user\'s view did not change).' : ''}`,
         },
         { type: 'image', data: result.image.data, mimeType: result.image.mimeType },
       ];

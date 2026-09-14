@@ -1346,9 +1346,11 @@ export default defineContentScript({
      * 但模型能从 read_page(mode='tree') 或 read_element 看到。合成与枚举条目同形的对象,
      * 后续链路(摘要/CDP 前置/动作/after)完全复用。
      */
-    function targetFromSelector(selector: string, libs: AccessibilityLibs): EnumeratedElement | null {
-      const el = querySelectorDeep(selector);
-      if (!el) return null;
+    /**
+     * 由已知元素构造枚举项(selector 寻址与坐标寻址共用):role/name 从元素本身读。
+     * 序号无组内语义取 1(仅在结果 details 里出现,不参与 locator 解析)。
+     */
+    function enumeratedFromElement(el: Element, libs: AccessibilityLibs): EnumeratedElement {
       let role = 'generic';
       try {
         role = (libs.getRole(el) || 'generic').toLowerCase();
@@ -1365,10 +1367,15 @@ export default defineContentScript({
         el,
         role,
         name,
-        ordinal: 1, // selector 路径无组内序号语义;仅在结果 details 里出现
+        ordinal: 1,
         disabled: libs.isDisabled(el) === true,
         visible: isElementVisible(el),
       };
+    }
+
+    function targetFromSelector(selector: string, libs: AccessibilityLibs): EnumeratedElement | null {
+      const el = querySelectorDeep(selector);
+      return el ? enumeratedFromElement(el, libs) : null;
     }
 
     function elementSummary(e: EnumeratedElement): {
@@ -1467,20 +1474,15 @@ export default defineContentScript({
      * 命中失败走固定 fallback(直接在元素上派发事件序列,拍板:结果里注明)。
      * 事件为 untrusted(chrome.debugger 特权层条件触发,不排期)。返回注记(英文)。
      */
-    function performClick(el: Element): string[] {
-      const notes: string[] = [];
-      el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
-      highlightElement(el);
+    /**
+     * 在元素上派发合成鼠标序列(click 的降级路径共用)。
+     * clientX/clientY 可取显式视口坐标:坐标点击时元素中心与用户点的位置可能不同(大容器),
+     * 事件坐标必须落到**用户点的那个点**上,否则依赖坐标的页面会反应错。
+     */
+    function dispatchSyntheticClick(el: Element, point?: { x: number; y: number }): void {
       const rect = el.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      const hit = document.elementFromPoint(x, y);
-      const clear = !!hit && (hit === el || el.contains(hit) || hit.contains(el));
-      if (!clear && hit) {
-        notes.push(
-          `Element was occluded by <${hit.localName.toLowerCase()}>; the event sequence was dispatched directly on the element.`,
-        );
-      }
+      const x = point ? point.x : rect.left + rect.width / 2;
+      const y = point ? point.y : rect.top + rect.height / 2;
       for (const type of ['mouseover', 'mousedown', 'mouseup', 'click']) {
         el.dispatchEvent(
           new MouseEvent(type, {
@@ -1495,6 +1497,23 @@ export default defineContentScript({
         );
       }
       if (typeof (el as HTMLElement).focus === 'function') (el as HTMLElement).focus();
+    }
+
+    function performClick(el: Element): string[] {
+      const notes: string[] = [];
+      el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+      highlightElement(el);
+      const rect = el.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      const clear = !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+      if (!clear && hit) {
+        notes.push(
+          `Element was occluded by <${hit.localName.toLowerCase()}>; the event sequence was dispatched directly on the element.`,
+        );
+      }
+      dispatchSyntheticClick(el);
       return notes;
     }
 
@@ -1791,10 +1810,29 @@ export default defineContentScript({
       return { moved: false, notes: [`Viewport is not scrollable in this direction; no scrollable content found in the page.`] };
     }
 
+    /** 视口坐标解析(坐标点击):必须是成对的有限数;取整避免子像素抖动 */
+    function parsePoint(raw: unknown): { x: number; y: number } | null {
+      if (!raw || typeof raw !== 'object') return null;
+      const p = raw as { x?: unknown; y?: unknown };
+      if (typeof p.x !== 'number' || typeof p.y !== 'number') return null;
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+      return { x: Math.round(p.x), y: Math.round(p.y) };
+    }
+
+    /** 视口尺寸与设备像素比(截图坐标换算用;截图是可视区截图,坐标同系) */
+    function viewportInfo(): { width: number; height: number; devicePixelRatio: number } {
+      return {
+        width: document.documentElement.clientWidth || window.innerWidth,
+        height: document.documentElement.clientHeight || window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio || 1,
+      };
+    }
+
     async function runPageAction(message: {
       action?: unknown;
       locator?: unknown;
       selector?: unknown;
+      point?: unknown;
       value?: unknown;
       direction?: unknown;
       amount?: unknown;
@@ -1807,6 +1845,18 @@ export default defineContentScript({
       if (!libs) return { ok: false, url: location.href, reason: 'not_found' };
       const urlBefore = location.href;
       const action = message.action;
+
+      if (action === 'viewport') {
+        const vp = viewportInfo();
+        return {
+          ok: true,
+          url: urlBefore,
+          title: document.title,
+          notes: [],
+          viewport: { width: vp.width, height: vp.height },
+          devicePixelRatio: vp.devicePixelRatio,
+        };
+      }
 
       if (action === 'scroll') {
         const direction = typeof message.direction === 'string' ? message.direction : '';
@@ -1896,6 +1946,41 @@ export default defineContentScript({
       }
 
       if (action === 'resolve' || action === 'click' || action === 'fill') {
+        // 坐标寻址(vision → 动作):不做元素解析/高亮/遮挡检测 —— 用户截图上看到的就是目标。
+        // 与 locator/selector 互斥(工具侧已拦);fill 不接受坐标(填充需要元素语义)。
+        const point = parsePoint(message.point);
+        if (point) {
+          if (action === 'fill') return { ok: false, url: urlBefore, reason: 'invalid_value' };
+          const at = document.elementFromPoint(point.x, point.y);
+          if (!at) return { ok: false, url: urlBefore, reason: 'no_element_at_point' };
+          const hit = enumeratedFromElement(at, libs);
+          const summary = elementSummary(hit);
+          if (action === 'resolve') {
+            return {
+              ok: true,
+              url: urlBefore,
+              title: document.title,
+              element: summary,
+              notes: [],
+              // 用**请求的坐标**而非元素中心:大容器(如整块卡片区)的中心往往不是用户要点的位置
+              centerPoint: point,
+              // 显式坐标:遮挡与否正是用户看到的画面,不判定
+              occluded: false,
+              canTextInput: false,
+              disabled: hit.disabled === true,
+              hidden: hit.visible === false,
+            };
+          }
+          // click 的合成降级路径(CDP 不可用时走这里):不滚动、不高亮 —— 坐标是相对**当前**视口给定的
+          dispatchSyntheticClick(at, point);
+          const notes: string[] = [];
+          const urlAfterAct = location.href;
+          notes.push(...(await waitForSettle()));
+          if (location.href !== urlAfterAct) {
+            notes.push(`navigation_started: the page navigated to ${location.href}; element state may have changed.`);
+          }
+          return { ok: true, url: location.href, title: document.title, element: summary, notes };
+        }
         // 寻址二选一:selector 优先(它只能来自显式传入;两者同给时由工具侧拦下)
         const selector = typeof message.selector === 'string' ? message.selector.trim() : '';
         const locator = selector ? null : parseLocator(message.locator);
