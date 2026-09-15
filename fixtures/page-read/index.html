@@ -146,16 +146,14 @@
     list.innerHTML = Array.from({ length: 40 }, (_, i) => `<li>列表项 ${i + 1}</li>`).join('');
 
     // 图片卡片的点击反馈:用 addEventListener 而非 inline onclick —— 保持"无 onclick 属性"这一事实,
-    // 使发现路径只剩 cursor:pointer(测试台要验的就是那条路)。点中后卡片内会出现 "已打开"。
+    // 使发现路径只剩 cursor:pointer(测试台要验的就是那条路)。
+    // 反馈**不写入文本**:卡片的名字取自容器文本,写文本会让点名漂移("贝塔"→"贝塔 已打开"),
+    // 于是模型无法用同一个名字再寻址。改为绿色描边(人眼可看)+ data-opened 属性(工具可查)。
     for (const card of document.querySelectorAll('.img-card')) {
       card.addEventListener('click', () => {
         card.dataset.opened = '1';
-        if (!card.querySelector('.opened')) {
-          const mark = document.createElement('div');
-          mark.className = 'opened';
-          mark.textContent = '已打开';
-          card.appendChild(mark);
-        }
+        card.style.outline = '3px solid #22c55e';
+        card.style.outlineOffset = '2px';
       });
     }
   </script>
