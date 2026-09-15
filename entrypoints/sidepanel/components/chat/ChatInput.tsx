@@ -19,9 +19,10 @@ import {
 } from 'lucide-react';
 import type { FollowUpSuggestion } from '@/lib/followUpSuggestions';
 import type { QueuedMessage } from '../../store/chatSlice';
-import type { Settings, ReasoningLevel, PickedElement } from '@/lib/types';
+import type { Settings, ReasoningLevel, PickedElement, Skill } from '@/lib/types';
 import { reasoningLabel } from '@/lib/reasoningLabels';
 import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
+import { listSkills } from '@/lib/skills';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { listCandidateTabs, getActiveTabMeta, type RefTab } from '@/lib/pageContext';
@@ -137,6 +138,12 @@ export function ChatInput({
   // 斜杠命令:输入以 '/' 开头且无空白 → 浮层;Esc 手动关;空格自然进参数模式
   const [slashClosed, setSlashClosed] = useState(false);
   const [slashIndex, setSlashIndex] = useState(0);
+  /**
+   * 已安装且启用的技能:斜杠菜单的 `/skill:<name>` 条目来源。
+   * 仅手动唤起的技能(disable-model-invocation)也列出——那个标记只把技能从模型的 catalog 拿掉,
+   * 不影响用户自己发起;禁用的技能不列(用户已经关掉它)。
+   */
+  const [skills, setSkills] = useState<Skill[]>([]);
   /** 队列卡展开/收起(与引用栏多引用折叠态同构,默认收起) */
   const [queueExpanded, setQueueExpanded] = useState(false);
   // 记录上一帧的框选元素列表引用与数量,用于侦测「新框选完成」并在光标处插入徽章节点
@@ -146,10 +153,33 @@ export function ChatInput({
 
   const slashOpen = Boolean(onCommand) && !slashClosed && /^\/[^\s]*$/.test(text);
   const slashQuery = text.replace(/^\//, '').toLowerCase();
+  /** 斜杠命令 = 内建 + 技能(`/skill:<name>`);名字与内建重复的技能跳过,内建优先 */
+  const skillCommands: SlashCommand[] = skills
+    .filter((s) => !SLASH_COMMANDS.some((c) => c.name === s.name))
+    .map((s) => ({
+      name: `skill:${s.name}`,
+      description: s.description.length > 160 ? `${s.description.slice(0, 159)}…` : s.description,
+    }));
+  const allCommands = [...SLASH_COMMANDS, ...skillCommands];
   const filteredCommands: SlashCommand[] = slashOpen
-    ? SLASH_COMMANDS.filter((c) => c.name.startsWith(slashQuery))
+    ? allCommands.filter((c) => c.name.startsWith(slashQuery))
     : [];
   const slashActiveIndex = Math.min(slashIndex, Math.max(0, filteredCommands.length - 1));
+
+  // 技能列表进菜单:打开时取一次即可(面板存活期内的技能变动由设置页自己负责刷新)
+  useEffect(() => {
+    let cancelled = false;
+    void listSkills()
+      .then((list) => {
+        if (!cancelled) setSkills(list.filter((s) => s.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const reportText = useCallback(
     (value: string) => {
@@ -162,23 +192,50 @@ export function ChatInput({
     [onInputChange]
   );
 
-  /** 执行斜杠命令:分发 App,清空编辑器与文本(命令文本不进草稿) */
+  /** 执行一条技能命令:正文作为一条普通用户消息发出(与普通发送同一条链路，不另建发送路径) */
+  const runSkillCommand = useCallback(
+    (skill: Skill, args: string) => {
+      if (disabled) return;
+      const body = `<skill_content name="${skill.name}">\n${skill.content}\n</skill_content>`;
+      onSend(args ? `${body}\n\nUser: ${args}` : body);
+    },
+    [disabled, onSend]
+  );
+
+  /** 执行斜杠命令:技能命令走正文注入,其余分发 App;清空编辑器与文本(命令文本不进草稿) */
   const executeCommand = useCallback(
     (name: string, args: string) => {
-      onCommand?.(name, args);
+      const skill = skills.find((s) => `skill:${s.name}` === name);
+      if (skill) runSkillCommand(skill, args);
+      else onCommand?.(name, args);
       setSlashClosed(false);
       setSlashIndex(0);
       editorRef.current?.commands.clearContent();
       reportText('');
     },
-    [onCommand, reportText]
+    [onCommand, reportText, skills, runSkillCommand]
   );
 
-  /** 斜杠命令识别:参数模式(浮层已关)与直接提交共用;/未知命令按普通文本发送 */
+  /**
+   * 斜杠命令识别:参数模式(浮层已关)与直接提交共用。命令名允许 `域:名`(技能命令 `/skill:<name>`)。
+   * 未知**技能**名不外发(按普通文本发出会变成一条莫名其妙的用户消息)：
+   * 把 `/skill:` 填回输入框并重开菜单,列出全部可用技能作为可见提示。其它未知命令照旧按普通文本发送。
+   */
   const dispatchSlashCommand = (trimmed: string): boolean => {
-    const m = /^\/([a-zA-Z]+)(?:\s+([\s\S]*))?$/.exec(trimmed);
-    if (!m || !SLASH_COMMANDS.some((c) => c.name === m[1])) return false;
-    executeCommand(m[1]!, (m[2] ?? '').trim());
+    const m = /^\/([a-zA-Z][a-zA-Z0-9-]*(?::[a-zA-Z0-9-]*)?)(?:\s+([\s\S]*))?$/.exec(trimmed);
+    if (!m) return false;
+    // 命令名大小写不敏感(菜单过滤已是小写):/SKILL:PDF-TOOLS 也应命中该技能
+    const typed = m[1]!.toLowerCase();
+    const canonical = allCommands.find((c) => c.name === typed)?.name;
+    if (!canonical) {
+      if (!typed.startsWith('skill:')) return false;
+      setSlashClosed(false);
+      setSlashIndex(0);
+      editorRef.current?.commands.setContent('/skill:');
+      reportText('/skill:');
+      return true;
+    }
+    executeCommand(canonical, (m[2] ?? '').trim());
     return true;
   };
 
@@ -190,8 +247,8 @@ export function ChatInput({
     // 规则 4:发送后草稿清空(编辑器清空 + 上报 App 清 draft)
     editorRef.current?.commands.clearContent();
     reportText('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatchSlashCommand 为组件内纯函数
-  }, [text, disabled, onSend, reportText, onCommand, onInputChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatchSlashCommand 为组件内函数;其依赖的技能列表由 skills 项保证同步重算
+  }, [text, disabled, onSend, reportText, onCommand, onInputChange, skills]);
 
   // ── 编辑器回调经 ref 间接(useEditor options 只捕获稳定引用,回调取实时值)─────────
   const editorRef = useRef<Editor | null>(null);

@@ -128,10 +128,38 @@ function serializeConversation(messages: ChatMessage[]): string {
   return parts.join('\n\n');
 }
 
+/** 技能正文标记:read_skill 的输出与 /skill:<name> 注入的用户消息都用它包裹(决策 52) */
+export const SKILL_CONTENT_MARKER = '<skill_content';
+
+/**
+ * 技能正文的压缩豁免(纯函数,可单测;决策 52)。
+ *
+ * 技能指令是**持久行为指导**:被摘要扫走会让 agent 悄悄丢掉专门知识,而且没有任何可见错误
+ * (标准明确要求客户端保住它)。做法是把切点夹紧到区域内最早一条含 <skill_content 的消息之前 ——
+ * 该消息连同其后内容一起留在保留区。夹紧只缩小被摘范围,不会把新内容卷进摘要。
+ *
+ * 夹紧后为 0 = 无可压缩内容(调用方按既有 "Nothing to compact" 语义处理,不强行压缩)。
+ * 夹紧时不得让 toolResult 成为首条保留消息(它必须跟随自己的 toolCall):必要时再往前挪一格。
+ */
+export function protectSkillContent(messages: ChatMessage[], cutIndex: number): number {
+  const cut = Math.max(0, Math.min(cutIndex, messages.length));
+  let target = cut;
+  for (let i = 0; i < cut; i += 1) {
+    if (contentText(messages[i]!.content, '').includes(SKILL_CONTENT_MARKER)) {
+      target = i;
+      break;
+    }
+  }
+  if (target === cut) return cut;
+  while (target > 0 && messages[target]!.role === 'toolResult') target -= 1;
+  return target;
+}
+
 /**
  * 切点定位(pi findCutPoint 的扁平消息版):自后向前累计估算 token,
  * 达到 keepRecentTokens 后停在最近的有效切点;toolResult 永不作为切点
  * (必须跟随其 toolCall)。返回第一条保留消息的下标。
+ * 技能正文受保护(protectSkillContent):带 <skill_content 的消息不会被摘要扫走。
  * 导出给调用方按同一确定性规则计算保留区(拼装摘要消息 + 保留消息)。
  */
 export function findCutIndex(messages: ChatMessage[], keepRecentTokens = KEEP_RECENT_TOKENS): number {
@@ -157,7 +185,7 @@ export function findCutIndex(messages: ChatMessage[], keepRecentTokens = KEEP_RE
       break;
     }
   }
-  return cutIndex;
+  return protectSkillContent(messages, cutIndex);
 }
 
 /**
