@@ -14,7 +14,7 @@
 3. **开放项(需拍板)**:
    - 跨源 iframe 读取的 CDP 兜底:`Accessibility.getFullAXTree`(逐 frame 取),经 `lib/cdp.ts` 白名单启用;代价 = 期间显示"正在调试"横幅,建议仅在显式请求时启用。
    - Defuddle 作为第二抽取器与 Readability A/B(1 个新依赖)。
-   - 四期后续(规格见决策/历史):技能存储与工具、内置三技能(memory / skill-creator / skill-installer)、自动反思、同步纳入 rules/skills。
+   - 四期后续(规格见决策/历史):**技能核心已落地**(决策 52:存储 + catalog 注入 + `read_skill`/`save_skill` + 三个内置技能);**剩余 = 压缩豁免(含 `<skill_content` 的消息不得被摘要扫走)+ `/skill:name` 斜杠命令 + 设置页技能视图 + 自造/安装的交互层 + 同步纳入 rules/skills**;再往后是自动反思。
 4. **性能残留(已量化,未定位)**:流式 + 40 条消息时约 140 renders/s(全量重渲约 580,即每次 flush 仍重渲 3-7 条);工具循环阶段为 10/s 与 2/s,已在理论下限。剩余嫌疑:新消息追加时 `quietFrom` 位移导致尾部若干项 props 变化。要继续压则加 per-item 诊断(打印哪一项、因哪个 prop 变化)。
 5. **观察项**:工具 grant 当前是**面板级**(决策 22,关面板失效),与引用/开关的"会话级"不同域;如需一致再做。
 

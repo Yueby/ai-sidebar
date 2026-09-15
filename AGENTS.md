@@ -1,6 +1,6 @@
 # ai-sidebar — 项目代号
 
-> **交接注(2026-09,文档已同步)**:UI 已全部实现,agent 运行时 = pi-agent-core 会话 Agent(每会话一实例自持转录,决策 36);会话存储 = **JSONL 记录**(库 `ai-sidebar-sessions` 单 store,决策 38 零旧版兼容);引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ 工具面(read/read_element/search_element/search_page/click/fill/scroll/screenshot/open/activate/close/fetch_url/search_web/execute_js/compact_context/read_time/ask_user)。**设置页 = 全高 Drawer**(七视图:提供商/模型/提示词/搜索/外观/备份/关于,权限 tab 已删);userScripts 强引导;模型分工卡(per-role 思考档)+ 全局语言偏好 + 动态快捷指令 + 会话导出 Markdown;动作可靠性三件套(click tab 变化报告/open_page 同 URL 复用/settle 隐藏短路 + 8s 看门狗);聊天视觉改版(决策 40:AI 平铺无气泡/头像顶部/用户气泡 secondary/代码块 shiki 双主题/composer 四层堆叠);页面动作测试台 `fixtures/page-actions`。**实施细节一律以代码为准**;决策日志 `docs/decisions.md`、避坑与环境备注 `docs/pitfalls.md`、当前阶段与开放项 `docs/status-and-open-issues.md`、回归清单 `docs/regression.md`。
+> **交接注(2026-09,文档已同步)**:UI 已全部实现,agent 运行时 = pi-agent-core 会话 Agent(每会话一实例自持转录,决策 36);会话存储 = **JSONL 记录**(库 `ai-sidebar-sessions` 单 store,决策 38 零旧版兼容);引用架构 = `<page-refs>` 元数据块(tabs)+ 用户消息内嵌 `<picked-element …/>` 自闭合块(元素引用单一表示)+ 工具面(read/read_element/search_element/search_page/click/fill/scroll/screenshot/open/activate/close/fetch_url/search_web/execute_js/compact_context/read_time/ask_user/read_skill/save_skill)。**设置页 = 全高 Drawer**(七视图:提供商/模型/提示词/搜索/外观/备份/关于,权限 tab 已删);userScripts 强引导;模型分工卡(per-role 思考档)+ 全局语言偏好 + 动态快捷指令 + 会话导出 Markdown;动作可靠性三件套(click tab 变化报告/open_page 同 URL 复用/settle 隐藏短路 + 8s 看门狗);聊天视觉改版(决策 40:AI 平铺无气泡/头像顶部/用户气泡 secondary/代码块 shiki 双主题/composer 四层堆叠);页面动作测试台 `fixtures/page-actions`。**实施细节一律以代码为准**;决策日志 `docs/decisions.md`、避坑与环境备注 `docs/pitfalls.md`、当前阶段与开放项 `docs/status-and-open-issues.md`、回归清单 `docs/regression.md`。
 
 开源 **BYOK 浏览器 AI 侧边栏扩展**(Chromium 系:Chrome/Edge/Brave),对标 Chrome 内置 Gemini 侧边栏,但用你自己的 API Key、UI 现代化。
 
@@ -78,6 +78,8 @@ lib/
   shiki.ts            # 代码高亮单例(决策 40 ⑤):模块级懒初始化 29 语言+github-light/dark,highlightToHtml 同步双主题 CSS 变量输出(未就绪降级 null),onShikiReady 订阅重渲染,normalizeShikiLang 别名归一
   models.ts           # fetchProviderModels/fetchModelsDevMeta/applyModelMeta/syncModelsWithModelsDev/testConnection
   refGroups.ts        # 网页引用的纯决策逻辑(会话级引用组记忆/焦点切换/初同步资格/草稿改写;零浏览器依赖,tests/ref-groups.test.ts 覆盖)
+  skills.ts           # 技能(Agent Skills 标准子集,决策 52):纯逻辑(parseSkillMarkdown 含未加引号含冒号的 YAML 兜底/validateSkillName/renderSkillsCatalog 只含 enabled 且非仅手动唤起/sanitizeSkill/mergeBuiltinSkills)+ 存储(local:skills 键:listSkills/saveSkill/deleteSkill/setSkillEnabled);tests/skills.test.ts 覆盖
+  builtinSkills.ts    # 三个内置技能文本(skill-creator/skill-installer/memory):走同一条解析路径,可禁用不可删,正文随代码刷新
   pageRefs.ts         # renderPageRefsBlock/parsePageRefs/stripPageRefs/collectPageRefs(纯函数,<page-refs> 块)
   elementLabel.ts     # elementChipLabel/elementListLabel(元素预览 chip label,CJK 视觉宽度加权)
   pageContext.ts      # tab 级读取原语(getActiveTabMeta/getTabMeta/listCandidateTabs/findTabByUrl/extractFromTab/renderPageContext)+ startPickElement/resolveElement(框选/元素解析)+ searchElementsInTab(交互元素清单,search_element 底层)+ performPageAction(页面动作原语 resolve/click/fill/scroll;8s 看门狗+导航守卫)+ snapshotTabs/describeTabChanges(click tab 变化报告)+ buildUnreadableTabError(可行动错误)+ agent 开启注册表(openTab/registerAgentOpenedTab,决策 27)
