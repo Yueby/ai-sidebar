@@ -1841,11 +1841,10 @@ export default defineContentScript({
       beforeSummary?: unknown;
       beforeUrl?: unknown;
     }): Promise<PageActionResult> {
-      const libs = await loadAccessibilityLibs();
-      if (!libs) return { ok: false, url: location.href, reason: 'not_found' };
       const urlBefore = location.href;
       const action = message.action;
-
+      // 视口尺寸查询不需要 a11y 库:必须放在取库**之前** —— 否则库加载失败会连带
+      // 截图坐标换算信息一起消失(实测症状:截图结果没有 Viewport 行)
       if (action === 'viewport') {
         const vp = viewportInfo();
         return {
@@ -1857,7 +1856,8 @@ export default defineContentScript({
           devicePixelRatio: vp.devicePixelRatio,
         };
       }
-
+      const libs = await loadAccessibilityLibs();
+      if (!libs) return { ok: false, url: urlBefore, reason: 'action_failed' };
       if (action === 'scroll') {
         const direction = typeof message.direction === 'string' ? message.direction : '';
         if (direction !== 'up' && direction !== 'down' && direction !== 'left' && direction !== 'right') {
@@ -1951,7 +1951,14 @@ export default defineContentScript({
         const point = parsePoint(message.point);
         if (point) {
           if (action === 'fill') return { ok: false, url: urlBefore, reason: 'invalid_value' };
-          const at = document.elementFromPoint(point.x, point.y);
+          // elementFromPoint 对**视口外**坐标可能抛异常(而非返回 null):两种都要归为"该点无元素",
+          // 否则异常被外层 catch 吞成 not_found,模型会得到"locator 找不到元素"这种错误归因
+          let at: Element | null = null;
+          try {
+            at = document.elementFromPoint(point.x, point.y);
+          } catch {
+            at = null;
+          }
           if (!at) return { ok: false, url: urlBefore, reason: 'no_element_at_point' };
           const hit = enumeratedFromElement(at, libs);
           const summary = elementSummary(hit);
@@ -2141,7 +2148,11 @@ export default defineContentScript({
       if (message?.type === PAGE_ACTION_MESSAGE) {
         runPageAction(message)
           .then(sendResponse)
-          .catch(() => sendResponse({ ok: false, url: location.href, reason: 'not_found' }));
+          .catch((err) => {
+            // 不再把异常伪报成 not_found(那会让模型/用户按"元素不存在"去修,而实际是别的问题)
+            if (import.meta.env.DEV) console.warn('[ai-sidebar] page action failed:', err);
+            sendResponse({ ok: false, url: location.href, reason: 'action_failed' });
+          });
         return true;
       }
       if (message?.type !== READ_PAGE_MESSAGE) {

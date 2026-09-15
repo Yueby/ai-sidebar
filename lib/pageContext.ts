@@ -705,7 +705,9 @@ export type PageActionResult =
         | 'unsupported_element'
         | 'invalid_value'
         /** 坐标点击专用:该视口坐标上没有可命中的元素 */
-        | 'no_element_at_point';
+        | 'no_element_at_point'
+        /** 动作执行内部失败(a11y 库加载失败、页面抛异常等):绝不是"元素不存在",不得归因到 locator */
+        | 'action_failed';
       /** ambiguous 时的同名候选 */
       matches?: { ordinal: number; tagName: string; preview: string }[];
       /** option_not_found 时的选项文本(前 20) */

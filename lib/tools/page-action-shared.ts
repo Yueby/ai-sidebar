@@ -156,6 +156,8 @@ export function renderActionFailure(
         ? `no_element_at_point: nothing is clickable at (${target.point.x}, ${target.point.y}) in tab #${tabId} — the point may be outside the viewport or over empty space. Take a fresh screenshot and use the viewport size it reports.`
         : `no_element_at_point: no element at the requested point in tab #${tabId}.`,
     invalid_value: `invalid_value: a parameter is invalid (toggles accept only "true"/"false"; scroll direction must be up, down, left or right).`,
+    // 内部失败:绝不能说成"元素不存在" —— 那会把故障归因引向错误的方向
+    action_failed: `action_failed: the page action could not be completed in tab #${tabId} (the page may have changed, or the extension lost contact with it). Read the page again before retrying.`,
   }[result.reason];
   const lines = [head];
   if (result.reason === 'ambiguous' && result.matches?.length) {
