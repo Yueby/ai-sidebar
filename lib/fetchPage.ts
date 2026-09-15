@@ -106,6 +106,85 @@ export type FetchPageResult =
   | { ok: true; page: FetchedPage }
   | { ok: false; error: string };
 
+/** GitHub URL 归一化:blob 链接自动转为 raw.githubusercontent.com 直链 */
+export function normalizeGitHubRawUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  const m = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/i.exec(trimmed);
+  if (m) {
+    return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/${m[4]}`;
+  }
+  return trimmed;
+}
+
+/** 抓取公开 URL 的纯文本内容(带私有网络地址防御与重定向复检,供 GitHub 安装技能等安全使用) */
+export async function fetchRawText(
+  url: string,
+  maxBytes = FETCH_MAX_BYTES,
+): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return { ok: false, error: `Invalid URL: "${url}".` };
+  }
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return {
+      ok: false,
+      error: `Unsupported protocol "${parsedUrl.protocol}" — only http/https URLs can be fetched.`,
+    };
+  }
+  if (isPrivateHost(parsedUrl.hostname)) {
+    return {
+      ok: false,
+      error: 'Private/internal network addresses are not allowed.',
+    };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { redirect: 'follow' });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Network request failed: ${reason}` };
+  }
+
+  try {
+    if (isPrivateHost(new URL(response.url).hostname)) {
+      return {
+        ok: false,
+        error: 'Redirect to a private/internal address was blocked.',
+      };
+    }
+  } catch {
+    return { ok: false, error: 'Invalid redirect target.' };
+  }
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: `HTTP ${response.status} ${response.statusText || 'request failed'}.`,
+    };
+  }
+
+  const declaredLength = Number(response.headers.get('content-length') ?? '0');
+  if (declaredLength > maxBytes) {
+    return {
+      ok: false,
+      error: `Content is too large (${declaredLength} bytes, limit ${maxBytes}).`,
+    };
+  }
+
+  const text = await response.text();
+  if (text.length > maxBytes) {
+    return {
+      ok: false,
+      error: `Content is too large (${text.length} characters, limit ${maxBytes}).`,
+    };
+  }
+
+  return { ok: true, text };
+}
+
 /** 抓取并提取任意 URL 的网页正文;一切失败返回英文错误文本(规范化前缀),不抛出 */
 export async function fetchAndExtractPage(url: string): Promise<FetchPageResult> {
   let parsedUrl: URL;

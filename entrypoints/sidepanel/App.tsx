@@ -769,6 +769,7 @@ export default function App() {
               onRestoreAll={handleSyncRestore}
               latestLocalSessionAt={latestLocalSessionAt}
               activeSessionId={activeSessionId}
+              onPrefillPrompt={handleSelectPrompt}
             />
           </div>
         </DrawerContent>

@@ -19,6 +19,7 @@ import { toast } from '@/components/ui/toast';
 import { testConnection } from '@/lib/models';
 import { SearchSettingsView } from './SearchSettingsView';
 import { SettingsPromptView } from './SettingsPromptView';
+import { SettingsSkillsView } from './SettingsSkillsView';
 import { SettingsBackupView } from './SettingsBackupView';
 import { InfoTip } from './InfoTip';
 import {
@@ -76,9 +77,11 @@ interface SettingsMainViewProps {
   latestLocalSessionAt: number | null;
   /** 当前激活会话(上传快照元数据) */
   activeSessionId: string | null;
+  /** 预填提示词至输入框(让 AI 创作等) */
+  onPrefillPrompt?: (promptText: string) => void;
 }
 
-type SettingsTab = 'providers' | 'models' | 'prompt' | 'search' | 'appearance' | 'backup' | 'about';
+type SettingsTab = 'providers' | 'models' | 'prompt' | 'skills' | 'search' | 'appearance' | 'backup' | 'about';
 
 /** 辅助模型思考档位选项:文案在渲染时按当前语言求值(模块级常量会固定成加载时语言) */
 const auxThinkingOptions = (): { value: AuxThinkingLevel; label: string }[] => [
@@ -114,6 +117,7 @@ export function SettingsMainView({
   onRestoreAll,
   latestLocalSessionAt,
   activeSessionId,
+  onPrefillPrompt,
 }: SettingsMainViewProps) {
   const [currentTab, setCurrentTab] = useState<SettingsTab>('providers');
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -341,12 +345,13 @@ export function SettingsMainView({
         >
           <TabsList
             aria-label={i18n.t('settings.navAria')}
-            className="w-full group-data-horizontal/tabs:h-8 h-8 p-0.5"
+            className="w-full group-data-horizontal/tabs:h-8 h-8 p-0.5 overflow-x-auto"
           >
             {[
               { id: 'providers', label: i18n.t('settings.tabs.providers') },
               { id: 'models', label: i18n.t('settings.tabs.models') },
               { id: 'prompt', label: i18n.t('settings.tabs.prompt') },
+              { id: 'skills', label: i18n.t('settings.tabs.skills') },
               { id: 'search', label: i18n.t('settings.tabs.search') },
               { id: 'appearance', label: i18n.t('settings.tabs.appearance') },
               { id: 'backup', label: i18n.t('settings.tabs.backup') },
@@ -355,7 +360,7 @@ export function SettingsMainView({
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
-                className="h-7 px-1 text-[11px] sm:text-xs min-w-0 truncate"
+                className="h-7 px-1 text-[11px] sm:text-xs min-w-fit shrink-0 truncate"
               >
                 {tab.label}
               </TabsTrigger>
@@ -858,6 +863,11 @@ export function SettingsMainView({
         {/* VIEW: Prompt Settings (规则 / 技能 / 记忆) */}
         {currentTab === 'prompt' && (
           <SettingsPromptView settings={settings} onUpdateSettings={onUpdateSettings} />
+        )}
+
+        {/* VIEW: Skills Settings */}
+        {currentTab === 'skills' && (
+          <SettingsSkillsView onBack={onBack} onPrefillPrompt={onPrefillPrompt} />
         )}
 
         {/* VIEW 2: Search Settings */}

@@ -117,6 +117,10 @@ messages:
   cancelResend: Cancel
   stopped: (Generation stopped)
   emptyReply: No response content
+  skillBadge: Skill
+  expandSkill: View instructions
+  collapseSkill: Hide instructions
+  skillInstructions: Skill Instructions
 
 compaction:
   expand: Expand full summary
@@ -204,10 +208,43 @@ settings:
     providers: Providers
     models: Models
     prompt: Prompts
+    skills: Skills
     search: Search
     appearance: Appearance
     backup: Backup
     about: About
+  skills:
+    title: "Skills ({count})"
+    desc: "Agent Skills standard extensions: progressively disclosed on demand via /skill:name or autonomous model activation."
+    addSkill: New Skill
+    installFromGithub: Install from GitHub
+    createWithAi: Create with AI
+    createPromptText: "Use skill-creator to help me create a skill for: "
+    emptyTitle: No skills installed yet
+    emptyDesc: "Skills are reusable workflows and instructions that the model automatically loads on-demand when relevant."
+    emptyAction: Create First Skill
+    sourceBuiltin: Built-in
+    sourceGithub: GitHub
+    sourceUser: Custom
+    manualOnlyBadge: Manual Only
+    builtinCannotEdit: Built-in skill content is updated with code and cannot be edited (disable them instead)
+    builtinCannotDelete: Built-in skills cannot be deleted (disable them instead)
+    editSkill: Edit Skill
+    deleteSkill: Delete Skill
+    disabledHint: "Excluded from model catalog; can still be invoked manually via /skill:{name}"
+    manualOnlyHint: "Manual only: model will not call automatically; invoke explicitly via /skill:{name}"
+    deleteConfirmTitle: Delete Skill
+    deleteConfirmDesc: "Skill \"{name}\" will be permanently deleted. This cannot be undone."
+    deleteConfirmCancel: Cancel
+    deleteConfirmAction: Delete
+    toggleSuccessEnabled: "Enabled skill \"{name}\""
+    toggleSuccessDisabled: "Disabled skill \"{name}\""
+    toggleFailed: Failed to toggle skill status
+    deleteSuccess: "Deleted skill \"{name}\""
+    deleteFailed: Failed to delete skill
+    saveSuccess: "Saved skill \"{name}\""
+    saveFailed: Failed to save skill
+    loadFailed: Failed to load skills list
   systemPrompt:
     title: System Prompt
     desc: "Defines the AI's role and behavior; injected into the system prompt for every conversation. Rules act as toggleable supplements."
@@ -300,6 +337,47 @@ settings:
     messagesDesc: "Standard /v1/messages endpoint, supporting official Claude API and compatible formats."
     dataSecurityTitle: "Data & Security:"
     dataSecurityDesc: API requests are initiated directly from the browser to target endpoints without passing through any third-party proxy servers. API keys are stored only in local browser extension storage.
+
+skillDialog:
+  addTitle: New Skill
+  editTitle: Edit Skill
+  nameLabel: Skill Name
+  namePlaceholder: "e.g. pdf-processing, code-review"
+  nameHint: 1-64 characters, lowercase letters, digits and single hyphens
+  descLabel: Description
+  descPlaceholder: "What this skill does and when to use it (max 1024 chars). This is the only text the model sees before loading."
+  contentLabel: Instructions (Markdown)
+  contentPlaceholder: "# Skill Instructions\n\n## Steps\n1. ..."
+  save: Save
+  cancel: Cancel
+  validationNameRequired: Skill name is required
+  validationDescRequired: Skill description is required
+  validationContentRequired: Skill content is required
+  collisionBuiltin: Cannot overwrite a built-in skill name
+  collisionOverwriteWarning: A skill with this name already exists and will be updated
+
+skillInstallDialog:
+  title: Install Skill from GitHub
+  subtitle: Enter the URL of a SKILL.md file from a public GitHub repository
+  urlLabel: File URL
+  urlPlaceholder: "https://raw.githubusercontent.com/.../SKILL.md or github.com blob URL"
+  urlHint: Supports automatic conversion of github.com/.../blob/... links
+  fetchAction: Fetch & Parse
+  fetching: Fetching…
+  previewTitle: Skill Preview
+  diagnosticsTitle: Parsing Warnings
+  willOverwriteWarning: A skill with this name already exists and will be updated
+  cannotOverwriteBuiltin: "Cannot install: conflicts with built-in skill \"{name}\""
+  installAction: Confirm & Install
+  cancel: Cancel
+  installSuccess: "Successfully installed skill \"{name}\""
+  errorEmptyUrl: Please enter a valid URL
+  errorFetchFailed: "Fetch failed: {error}"
+  errorParseFailed: "Parsing failed: {error}"
+  parseReasonFrontmatterMissing: File missing leading --- frontmatter block
+  parseReasonFrontmatterUnterminated: Frontmatter is unterminated (missing closing ---)
+  parseReasonDescriptionRequired: Missing required description in frontmatter
+  parseReasonNameRequired: Missing required name in frontmatter
 
 providerDialog:
   addTitle: Add AI Provider

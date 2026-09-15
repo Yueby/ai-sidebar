@@ -21,6 +21,7 @@ import { messageText } from '@/lib/storage';
 import { parsePageRefs } from '@/lib/pageRefs';
 import { elementChipLabel, elementListLabel } from '@/lib/elementLabel';
 import { renderMarkersInText } from './elementMarkerText';
+import { renderUserContentWithSkills } from './SkillContentBlock';
 import { FaviconIcon, RefTooltipContent } from './FaviconIcon';
 import { MarkdownView } from './MarkdownView';
 import { CompactionRow } from './CompactionRow';
@@ -100,7 +101,7 @@ function renderUserMessageText(
   elementById?: Map<number, RefElementMeta> | null,
   tabUrlById?: Map<number, string>,
 ) {
-  return renderMarkersInText(text, elementById, tabUrlById);
+  return renderUserContentWithSkills(text, elementById, tabUrlById);
 }
 
 /** 引用项来源页网址(tabId → url):元素 chip 的图标与 tooltip 靠它标出“来自哪一页” */
@@ -829,9 +830,9 @@ export const MessageItem = memo(function MessageItem({
           <Bubble variant="secondary" align="end" className="max-w-full">
             <BubbleContent className="rounded-lg px-3 py-1.5 text-sm shadow-xs">
               {/* rawText 已经过 messageText 剥离 <page-refs> 块,正文不泄漏 JSON;标记渲染为内容预览 chip(新旧标记兼容) */}
-              <p className="whitespace-pre-wrap break-all leading-relaxed">
+              <div className="whitespace-pre-wrap break-all leading-relaxed">
                 {renderUserMessageText(rawText, elementById, tabUrlById)}
-              </p>
+              </div>
               {pageRefs && <UserRefSnapshot refs={pageRefs} />}
             </BubbleContent>
           </Bubble>
