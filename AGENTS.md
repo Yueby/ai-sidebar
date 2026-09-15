@@ -42,7 +42,7 @@
 | Markdown | react-markdown + remark-gfm + **shiki**(VS Code 引擎,github-light/github-dark 双主题 CSS 变量跟随 .dark,`lib/shiki.ts` 懒初始化+降级纯文本);代码块官方 Badge 风复制按钮 |
 | 权限 | manifest:`storage` / `sidePanel` / `unlimitedStorage` / `scripting` / `activeTab` / `userScripts` / `debugger`(+ host_permissions **`<all_urls>`**——captureVisibleTab 硬要求;决策 25);`minimum_chrome_version: "135"`(userScripts.execute 门槛);Chrome 138+ 需用户在扩展详情页开启 Allow User Scripts(强引导弹窗;设置页权限 tab 已删,决策 40) |
 | 路径别名 | `@/*` → 项目根 |
-| 工具命名 | `<动词>_<域词>`:动词集 {read, search, fetch, click, fill, scroll, screenshot, execute, ask, open} × 域词集 {page, element, url, web, js, user, time},新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key 兼容历史会话;协议字符串已随名同步,常量单一来源 lib/types.ts) |
+| 工具命名 | `<动词>_<域词>`:动词集 {read, search, fetch, click, fill, scroll, screenshot, execute, ask, open, save} × 域词集 {page, element, url, web, js, user, time, **skill**}(`skill` 域与 `save` 动词由技能功能引入:Agent Skills 标准,见决策 52),新工具只许集合内组合(`extract_page` 已改名 `read_page`;`TOOL_LABELS` 保留旧 key 兼容历史会话;协议字符串已随名同步,常量单一来源 lib/types.ts) |
 | 模型可见文本 | **一律英文**(Model-facing text):工具 description/参数 description、返回模板与截断标注、错误分支、非 vision 图片描述、system prompt 全文;UI 显示文案(TOOL_LABELS 中文值等)保持中文,以后收敛 i18n |
 
 ## 关键 UI 决策(已实现)

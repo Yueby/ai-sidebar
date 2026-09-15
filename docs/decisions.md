@@ -79,4 +79,13 @@
     现于入口处记下 `sessionIdAtCall`,await 后校验 `current?.id === sessionIdAtCall` 才写入,否则作废(由新会话自己的路径接管)。
 51. **网页引用决策下沉为纯函数 + 回归测试**(2026-09,code review):引用规则(组记忆分桶/焦点切换/初同步资格/草稿改写)原先全部长在 `usePageContextRefs` 的 effect/async 里,node 测不到,导致同类缺陷连续多轮靠真机实测收敛。现抽到 `lib/refGroups.ts`(零浏览器依赖、零 `#i18n`,仅类型导入),hook 只做编排;`tests/ref-groups.test.ts` 10 条覆盖上述规则与历史回归场景(含"同名 tab 在不同会话互不影响")。**验收方式**:把已修缺陷注入回去,对应测试必须失败(已实测)。
   同轮独立复核发现的 6 处缺陷亦已修:①发送后重建草稿丢掉会话开关(P1)②焦点监听器 add/remove 函数引用不一致导致订阅叠加、旧闭包绕过本会话关闭(P1)③组记忆归属 ref 未带会话(P1)④框选归属在 `startPickElement` 之后才捕获(P1)⑤多窗口焦点查询未钉世代(P1)⑥历史引用的图标会跟随同名 tab 的后续导航(P2)。
+52. **技能功能 = Agent Skills 标准的子集,按"无文件系统"路径实现**(2026-09,用户拍板):
+  - **依据**:agentskills.io 客户端集成指南明写"没有文件读取能力时,用**专用工具**或直接注入提示词",且"有专用激活工具的实现在提取 name/description 后**剥掉 frontmatter 只返回正文**"——侧边栏没有文件系统,走的正是这条路。
+  - **渐进披露三层**:①catalog(name+description,常驻 system prompt)②正文(激活时)③资源(按需)。**我们只做前两层**(用户拍板:技能只支持正文,不带 scripts/references/assets——那些在浏览器里也无法执行)。
+  - **存储**:`chrome.storage.local` 的 `skills` 键(与 Settings 分开:正文可能较大);字段 `{id,name,description,content,source,enabled,createdAt,disableModelInvocation?}`。内置三技能(memory/skill-creator/skill-installer)`source:'builtin'`,可禁用不可删。
+  - **注入**:`buildSystemPrompt` 加 `<available_skills>` 层(仅 enabled 且非 disableModelInvocation);无技能时该层整体省略,零 token 成本。
+  - **激活**:专用工具 `read_skill({name})`(safe),返回 `<skill_content name="…">正文</skill_content>`;同会话已加载过则告知而非重复注入。工具命名扩容:域词 +`skill`,动词 +`save`(`save_skill` 供创作/安装,confirm 门控且**永不进 grant**)。
+  - **压缩豁免**(标准专门点名,我们有压缩所以必须做):含 `<skill_content` 的消息**不得被摘要扫走**,由压缩切点逻辑保证。
+  - **安全**:技能 = 纯指令,不引入可执行脚本;技能要求模型用动作工具时**照走既有确认卡/grant**(技能不能提权);`allowed-tools` 实验字段暂不映射为权限。
+  - **与「规则」的分工**:规则(四期步①)= 常驻注入;技能 = catalog + 按需加载,两者都进 `buildSystemPrompt`。
 
