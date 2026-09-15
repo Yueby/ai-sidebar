@@ -59,3 +59,28 @@ test('条件注册:vision 才有 screenshot_page;未配置搜索源不占工具�
   assert.ok(!getTools(baseOptions({ canUseImage: false })).some((t) => t.name === 'screenshot_page'));
   assert.ok(!getTools(baseOptions({ webSearch: null })).some((t) => t.name === 'search_web'));
 });
+
+test('技能工具:save_skill 常在;read_skill 仅在存在面向模型的技能时注册', () => {
+  const none = getTools(baseOptions()).map((t) => t.name);
+  assert.ok(none.includes('save_skill'), 'save_skill 无条件注册(创作/安装的落库端)');
+  assert.ok(!none.includes('read_skill'), '没有技能时不占工具面(条件注册省 token)');
+
+  const skill = (over: Record<string, unknown>) => ({
+    id: 's1',
+    name: 'demo',
+    description: 'demo skill',
+    content: 'body',
+    source: 'user',
+    enabled: true,
+    createdAt: 1,
+    ...over,
+  });
+  const withSkill = getTools(baseOptions({ skills: [skill({})] })).map((t) => t.name);
+  assert.ok(withSkill.includes('read_skill'), '有可用技能时必须能载入');
+
+  // 只有禁用/仅手动唤起的技能 → 对模型而言没有可载入项,不占工具面
+  const hidden = getTools(
+    baseOptions({ skills: [skill({ name: 'a', enabled: false }), skill({ name: 'b', disableModelInvocation: true })] }),
+  ).map((t) => t.name);
+  assert.ok(!hidden.includes('read_skill'));
+});

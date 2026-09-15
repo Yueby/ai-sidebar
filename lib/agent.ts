@@ -12,7 +12,7 @@ import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.l
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
 import type { AssistantMessage, Api } from '@earendil-works/pi-ai';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, SessionCompaction, UserMessage, UserRule, WebSearchConfig } from './types';
+import type { ChatMessage, ModelConfig, ProviderConfig, ReasoningLevel, PickedElement, PageRefs, SessionCompaction, Skill, UserMessage, UserRule, WebSearchConfig } from './types';
 import { effectiveMessages } from './contextTokens';
 import { normalizeBaseUrl } from './providers';
 import type { RefTab } from './pageContext';
@@ -20,6 +20,7 @@ import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
 import { getTools } from './tools/registry';
 import { getAgentOpenedTabs } from './pageContext';
 import { collectPageRefs, PAGE_REFS_TAG, parsePageRefs, renderPageRefsBlock } from './pageRefs';
+import { listSkills, renderSkillsCatalog } from './skills';
 
 export type { AgentEvent } from '@earendil-works/pi-agent-core';
 
@@ -93,6 +94,8 @@ export function buildSystemPrompt(
   rules: UserRule[] = [],
   /** 用户自定义系统提示词(常驻注入,独立于规则;四期规格 v1) */
   customPrompt = '',
+  /** 已安装技能(渐进披露第一层:catalog 只给名字与描述;正文由 read_skill 按需载入) */
+  skills: Skill[] = [],
 ): string {
   const now = new Date();
   // 语言策略:未设置 = 跟随用户消息语言(原行为);设置 = 全局语言优先,用户消息明确指定时以用户为准
@@ -118,6 +121,16 @@ export function buildSystemPrompt(
   // 规则注入:常驻,超预算按序丢整条(与 docs/status-and-open-issues.md 的四期规格预算一致)
   const rulesBlock = renderRulesBlock(rules);
   if (rulesBlock) parts.push('', rulesBlock);
+  // 技能 catalog:无技能时整层省略(零 token);正文不在提示词里,加载靠 read_skill
+  const skillsCatalog = renderSkillsCatalog(skills);
+  if (skillsCatalog) {
+    parts.push(
+      '',
+      'Skills may be available to you. Each entry below carries only a name and a description:',
+      skillsCatalog,
+      'When a task matches a skill description, load its full instructions with read_skill before proceeding. Skills provide instructions only — any tool they ask you to use still requires the user\'s approval as usual.',
+    );
+  }
   return parts.join('\n');
 }
 
@@ -176,6 +189,8 @@ export interface RunAgentOptions {
   rules?: UserRule[];
   /** 用户自定义系统提示词(常驻注入;四期规格 v1) */
   systemPrompt?: string;
+  /** 已安装技能(调用方提供则直接用;省略时由 runTurnCore 每轮从存储读一次) */
+  skills?: Skill[];
   /** 会话 id,转发给支持提示缓存的提供商 */
   sessionId?: string;
   signal?: AbortSignal;
@@ -313,9 +328,16 @@ function buildAgentInputs(options: RunAgentOptions, transcript: ChatMessage[]): 
       dynamicTabs: getAgentOpenedTabs(),
       // 门控归属会话(并发 run 各自独立,确认卡/提问按会话路由)
       sessionId: options.sessionId,
+      // 技能:本轮快照(catalog 注入与 read_skill 同一份;无技能时 read_skill 不占工具面)
+      skills: options.skills ?? [],
     });
 
-  const systemPrompt = buildSystemPrompt(options.language ?? null, options.rules ?? [], options.systemPrompt ?? '');
+  const systemPrompt = buildSystemPrompt(
+    options.language ?? null,
+    options.rules ?? [],
+    options.systemPrompt ?? '',
+    options.skills ?? [],
+  );
   return { models, model, tools, systemPrompt };
 }
 
@@ -451,7 +473,10 @@ async function runTurnCore(
   options: RunAgentOptions,
   kickoff: (agent: Agent) => Promise<void>,
 ): Promise<RunAgentResult> {
-  const agent = ensureSessionAgent(options);
+  // 技能目录每轮读一次(存储往返便宜,且 round 中途新增的技能下一轮自然生效);
+  // 显式传入时以调用方为准(测试与嵌入场景)
+  const skills = options.skills ?? (await listSkills());
+  const agent = ensureSessionAgent({ ...options, skills });
 
   let newMessages: ChatMessage[] = [];
   const unsubscribe = agent.subscribe((event) => {

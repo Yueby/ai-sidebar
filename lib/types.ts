@@ -146,6 +146,27 @@ export interface UserRule {
 }
 
 /**
+ * 技能(Agent Skills 标准的子集,决策 52):**纯指令**,不含可执行脚本。
+ * 三层渐进披露里我们只做前两层——catalog(name+description)常驻 system prompt,
+ * 正文由 read_skill 按需载入;第三层(scripts/references/assets)需要文件系统,浏览器里也无法执行。
+ */
+export interface Skill {
+  /** 内置技能用 `builtin:<name>`(升级时按 id 合并并保留用户的启用状态),其余用生成 id */
+  id: string;
+  /** catalog 里的名字:1-64,小写字母/数字/连字符;不合规只告警仍载入(标准要求宽松) */
+  name: string;
+  /** catalog 的唯一线索:缺失或空白则整条技能不载入(没有它模型无从判断何时使用) */
+  description: string;
+  /** SKILL.md 正文(frontmatter 已剥离) */
+  content: string;
+  source: 'builtin' | 'user' | 'github';
+  enabled: boolean;
+  createdAt: number;
+  /** 标准字段:true 时不出现在 catalog,也不可由模型自行载入(只允许用户显式唤起) */
+  disableModelInvocation?: boolean;
+}
+
+/**
  * user 消息 content 内嵌的 <page-refs> 块的结构(发送瞬间序列化为 JSON,此后永不改变):
  * 一份数据两个消费者 —— LLM 直接读 content 里的块,UI 从同一 content 解析渲染。
  */

@@ -17,6 +17,8 @@ toolLabels:
   fill_element: Fill page element
   scroll_page: Scroll page
   screenshot_page: Capture page screenshot
+  read_skill: Load skill
+  save_skill: Save skill
 
 refBar:
   referencing: Referencing
@@ -412,6 +414,8 @@ gateCard:
     summaryOpen: Open new browser tab
   closePage:
     summary: Close tab opened by agent
+  saveSkill:
+    summary: Save a skill
 
 sync:
   title: WebDAV Sync

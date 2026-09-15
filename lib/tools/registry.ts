@@ -1,5 +1,5 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import type { PickedElement, WebSearchConfig } from '../types';
+import type { PickedElement, Skill, WebSearchConfig } from '../types';
 import type { RefTab } from '../pageContext';
 import { createReadPageToolDefinition } from './read-page';
 import { createReadElementToolDefinition } from './read-element';
@@ -16,6 +16,9 @@ import { createFetchUrlToolDefinition } from './fetch-url';
 import { createWebSearchToolDefinition } from './web-search';
 import { isWebSearchConfigured } from '../webSearch';
 import { createExecuteJsToolDefinition } from './execute-js';
+import { createReadSkillToolDefinition } from './read-skill';
+import { createSaveSkillToolDefinition } from './save-skill';
+import { modelFacingSkills } from '../skills';
 import { createReadTimeToolDefinition } from './read-time';
 import { createAskUserToolDefinition } from './ask-user';
 import { createCompactContextToolDefinition } from './compact-context';
@@ -42,6 +45,8 @@ export interface GetToolsOptions {
   dynamicTabs?: ReadonlySet<number>;
   /** 本次运行的归属会话(门控请求按会话隔离;agent.ts 组装时注入) */
   sessionId?: string;
+  /** 已安装技能(本轮读一次):catalog 与 read_skill 都取这一份;无面向模型的技能时不注册 read_skill */
+  skills?: Skill[];
 }
 
 /** 页面读取组(safe):read_page + read_element(tab 级白名单;selector 不设白名单) */
@@ -102,25 +107,36 @@ export function createWebSearchTools(config: WebSearchConfig | null | undefined)
   return [createWebSearchToolDefinition(config)];
 }
 
-/** 确认型工具组(confirm):execute_js 经 createGatedTool 包装,tab 句柄同 read_page 白名单 */
+/** 确认型工具组(confirm):execute_js 经 createGatedTool 包装,tab 句柄同 read_page 白名单;
+ *  save_skill 同为 confirm 且不带 grantScope(写技能改变模型未来每轮的指令,与 execute_js 同待遇) */
 export function createGatedTools(options: GetToolsOptions): AgentTool[] {
   // execute_js 无条件注册:同 read 组,动态注册表的 tab 在 execute 时实时检查可达
-  return [createExecuteJsToolDefinition(options.refTabs ?? [], options.dynamicTabs, options.sessionId)];
+  return [
+    createExecuteJsToolDefinition(options.refTabs ?? [], options.dynamicTabs, options.sessionId),
+    createSaveSkillToolDefinition(options.sessionId),
+  ];
 }
 
-/** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩 */
-export function createUtilityTools(onCompactContext?: () => void, sessionId?: string): AgentTool[] {
+/** 常驻工具组:read_time 免弹卡;ask_user 经 gate ask 路径;compact_context 模型申请压缩;
+ *  read_skill 仅在存在面向模型的技能时注册(条件注册省 token,与 search_web 同思路) */
+export function createUtilityTools(
+  onCompactContext?: () => void,
+  sessionId?: string,
+  skills?: Skill[],
+): AgentTool[] {
+  const readable = modelFacingSkills(skills ?? []);
   return [
     createReadTimeToolDefinition(),
     createAskUserToolDefinition(sessionId),
     createCompactContextToolDefinition(onCompactContext ?? (() => {})),
+    ...(readable.length > 0 ? [createReadSkillToolDefinition(readable, sessionId)] : []),
   ];
 }
 
 /** 最终工具数组——唯一组装点(顺序:utility → web → read → discovery → action → fetch → gated) */
 export function getTools(options: GetToolsOptions): AgentTool[] {
   return [
-    ...createUtilityTools(options.onCompactContext, options.sessionId),
+    ...createUtilityTools(options.onCompactContext, options.sessionId, options.skills),
     ...createWebSearchTools(options.webSearch),
     ...createPageReadTools(options),
     ...createPageDiscoveryTools(options),
