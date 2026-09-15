@@ -16,7 +16,7 @@ Built with [WXT](https://wxt.dev) + React 19, running entirely on your machine: 
 
 - Native `sidePanel` UI: streaming answers, Markdown, syntax-highlighted code (Shiki, light/dark themes), collapsible thinking sections, tool-call cards
 - Session history with AI auto-titling, inline rename, Markdown export, and follow-up suggestions
-- Composer with slash commands (`/compact`, `/clear`, `/help`), quick prompts, and a per-session draft that follows the session
+- Composer with slash commands (`/compact`, `/clear`, `/help`, `/skill:<name>`), quick prompts, and a per-session draft that follows the session
 - Context-window ring so you can see how full the model's window is, plus one-command compaction
 
 **Your providers, your keys**
@@ -32,6 +32,7 @@ Built with [WXT](https://wxt.dev) + React 19, running entirely on your machine: 
 - Pick elements visually — a picked element becomes an inline badge in your message, and the model reads it back when needed
 - `read_page` / `read_element` / `search_page` fetch content only when the model asks for it; images can be sent to vision models
 - Long pages are windowed: a truncated read tells the model exactly which character range it got and how to read the rest
+- **Skills** in the Agent Skills format: author them by hand or have the model write one, install from a GitHub URL with a preview, manage them in the settings drawer, and let the model load one on demand with `read_skill` — only a name and a description sit in the prompt until a skill is actually needed
 
 **Agentic page actions**
 
