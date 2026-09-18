@@ -18,7 +18,17 @@ const READ_SKILL_PARAMS = Type.Object({
  * **随转录截断重置**:编辑重发会截掉旧工具结果,这时正文已经不在转录里了,
  * 继续去重会让模型只拿到"already loaded"而拿不到指令 —— 故由转录替换路径调 clearLoadedSkills。
  */
-const loadedBySession = new Map<string, Set<string>>();
+/**
+ * 已载入记录:会话 → (技能名 → 正文指纹)。
+ * 指纹而非布尔:技能在会话中途被编辑后,旧正文已过时,必须重新注入当前版本,
+ * 否则模型会继续照着**被替换掉的指令**行事(布尔标记看不出这一点)。
+ */
+const loadedBySession = new Map<string, Map<string, string>>();
+
+/** 正文指纹:长度 + 头尾片段,足以识别"这份技能正文换了" */
+function contentFingerprint(content: string): string {
+  return `${content.length}:${content.slice(0, 48)}:${content.slice(-48)}`;
+}
 
 /** 清掉某会话的已载入记录(转录被替换/截断时调用:旧正文已不在上下文里) */
 export function clearLoadedSkills(sessionId: string): void {
@@ -89,8 +99,9 @@ export function createReadSkillToolDefinition(
         };
       }
       const sessionKey = sessionId ?? '';
-      const loaded = loadedBySession.get(sessionKey) ?? new Set<string>();
-      if (loaded.has(skill.name)) {
+      const loaded = loadedBySession.get(sessionKey) ?? new Map<string, string>();
+      const fingerprint = contentFingerprint(skill.content);
+      if (loaded.get(skill.name) === fingerprint) {
         return {
           content: [
             {
@@ -101,7 +112,7 @@ export function createReadSkillToolDefinition(
           details: { skill: skill.name, loaded: false },
         };
       }
-      loaded.add(skill.name);
+      loaded.set(skill.name, fingerprint);
       loadedBySession.set(sessionKey, loaded);
       return {
         content: [

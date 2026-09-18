@@ -352,3 +352,18 @@ test('read_skill:转录被截断后清掉已载入记录,正文可以再次载�
     '清掉之后必须能再次拿到正文',
   );
 });
+
+test('read_skill:技能正文被改动后必须重新注入(去重按内容指纹,不是布尔)', async () => {
+  // 会话中途在设置里改了正文:旧指令已过时,再调必须拿到新版本
+  const before = [skill({ name: 'mutable', content: 'OLD-INSTRUCTIONS' })];
+  const t1 = createReadSkillToolDefinition(before, 'sess-fingerprint');
+  const first = await t1.execute('c1', { name: 'mutable' });
+  assert.ok(String((first.content as { type: string; text: string }[])[0]?.text).includes('OLD-INSTRUCTIONS'));
+
+  const after = [skill({ name: 'mutable', content: 'NEW-INSTRUCTIONS' })];
+  const t2 = createReadSkillToolDefinition(after, 'sess-fingerprint');
+  const second = await t2.execute('c2', { name: 'mutable' });
+  const text = String((second.content as { type: string; text: string }[])[0]?.text ?? '');
+  assert.ok(text.includes('NEW-INSTRUCTIONS'), '正文变了就要给新的');
+  assert.ok(!text.includes('already loaded'), '不能拿旧记录挡住新正文');
+});
