@@ -153,9 +153,8 @@ export function ChatInput({
 
   const slashOpen = Boolean(onCommand) && !slashClosed && /^\/[^\s]*$/.test(text);
   const slashQuery = text.replace(/^\//, '').toLowerCase();
-  /** 斜杠命令 = 内建 + 技能(`/skill:<name>`);名字与内建重复的技能跳过,内建优先 */
+  /** 斜杠命令 = 内建 + 技能(`/skill:<name>`);`skill:` 自成命名空间,与裸名内建命令不冲突,故不做名字比较过滤 */
   const skillCommands: SlashCommand[] = skills
-    .filter((s) => !SLASH_COMMANDS.some((c) => c.name === s.name))
     .map((s) => ({
       name: `skill:${s.name}`,
       description: s.description.length > 160 ? `${s.description.slice(0, 159)}…` : s.description,
@@ -166,20 +165,23 @@ export function ChatInput({
     : [];
   const slashActiveIndex = Math.min(slashIndex, Math.max(0, filteredCommands.length - 1));
 
-  // 技能列表进菜单:打开时取一次即可(面板存活期内的技能变动由设置页自己负责刷新)
-  useEffect(() => {
-    let cancelled = false;
-    void listSkills()
-      .then((list) => {
-        if (!cancelled) setSkills(list.filter((s) => s.enabled));
-      })
-      .catch(() => {
-        if (!cancelled) setSkills([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+  /** 技能列表 = 菜单条目与发送前校验的唯一来源 */
+  const refreshSkills = useCallback(async () => {
+    try {
+      const list = await listSkills();
+      setSkills(list.filter((s) => s.enabled));
+    } catch {
+      setSkills([]);
+    }
   }, []);
+
+  useEffect(() => {
+    void refreshSkills();
+  }, [refreshSkills]);
+  // 每次打开斜杠菜单都重新读:设置页里刚新增/删除/启用的技能,当前窗口也要立即生效
+  useEffect(() => {
+    if (slashOpen) void refreshSkills();
+  }, [slashOpen, refreshSkills]);
 
   const reportText = useCallback(
     (value: string) => {
@@ -192,21 +194,46 @@ export function ChatInput({
     [onInputChange]
   );
 
-  /** 执行一条技能命令:正文作为一条普通用户消息发出(与普通发送同一条链路，不另建发送路径) */
+  /** 未知技能名的回填:把 `/skill:` 放回输入框并重开菜单(菜单里的名字是刚读出来的) */
+  const resetToSkillPrefix = useCallback(() => {
+    void refreshSkills();
+    setSlashClosed(false);
+    setSlashIndex(0);
+    editorRef.current?.commands.setContent('/skill:');
+    reportText('/skill:');
+  }, [refreshSkills, reportText]);
+
+  /**
+   * 执行一条技能命令:正文作为一条普通用户消息发出(与普通发送同一条链路,不另建发送路径)。
+   * 发送前**重读一遍**:菜单是打开时的快照,期间技能可能已被删除或禁用 ——
+   * 那种情况不能把旧正文发出去,按"未知技能"回填菜单让用户重选。
+   */
   const runSkillCommand = useCallback(
-    (skill: Skill, args: string) => {
+    async (skill: Skill, args: string) => {
       if (disabled) return;
-      const body = `<skill_content name="${skill.name}">\n${skill.content}\n</skill_content>`;
+      let fresh: Skill | undefined;
+      try {
+        fresh = (await listSkills()).find(
+          (s) => s.name.toLowerCase() === skill.name.toLowerCase() && s.enabled,
+        );
+      } catch {
+        fresh = undefined;
+      }
+      if (!fresh) {
+        resetToSkillPrefix();
+        return;
+      }
+      const body = `<skill_content name="${fresh.name}">\n${fresh.content}\n</skill_content>`;
       onSend(args ? `${body}\n\nUser: ${args}` : body);
     },
-    [disabled, onSend]
+    [disabled, onSend, resetToSkillPrefix]
   );
 
   /** 执行斜杠命令:技能命令走正文注入,其余分发 App;清空编辑器与文本(命令文本不进草稿) */
   const executeCommand = useCallback(
     (name: string, args: string) => {
       const skill = skills.find((s) => `skill:${s.name}` === name);
-      if (skill) runSkillCommand(skill, args);
+      if (skill) void runSkillCommand(skill, args);
       else onCommand?.(name, args);
       setSlashClosed(false);
       setSlashIndex(0);
@@ -229,10 +256,7 @@ export function ChatInput({
     const canonical = allCommands.find((c) => c.name === typed)?.name;
     if (!canonical) {
       if (!typed.startsWith('skill:')) return false;
-      setSlashClosed(false);
-      setSlashIndex(0);
-      editorRef.current?.commands.setContent('/skill:');
-      reportText('/skill:');
+      resetToSkillPrefix();
       return true;
     }
     executeCommand(canonical, (m[2] ?? '').trim());

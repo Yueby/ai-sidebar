@@ -231,7 +231,7 @@ settings:
     builtinCannotDelete: 内置技能不可删除（可在此停用）
     editSkill: 编辑技能
     deleteSkill: 删除技能
-    disabledHint: "未进模型目录；仍可通过 /skill:{name} 手动唤起"
+    disabledHint: "完全关闭：不进模型目录，/skill:{name} 也不会执行它"
     manualOnlyHint: "仅手动唤起：模型不会自动调用，请通过 /skill:{name} 显式触发"
     deleteConfirmTitle: 删除技能
     deleteConfirmDesc: "将删除技能「{name}」，此操作不可撤销。"
@@ -344,6 +344,7 @@ skillDialog:
   nameLabel: 技能名称
   namePlaceholder: "如 pdf-processing, code-review"
   nameHint: "1-64 字符，仅小写字母、数字和单连字符"
+  nameLockedHint: "名字是技能的身份；要改名请新建一个再删除旧的"
   descLabel: 描述
   descPlaceholder: "阐明该技能的功能及何时使用（最长 1024 字符）。这是模型决定是否载入技能的唯一依据。"
   contentLabel: 指令正文 (Markdown)
@@ -371,6 +372,9 @@ skillInstallDialog:
   installAction: 确认安装
   cancel: 取消
   installSuccess: "成功安装技能「{name}」"
+  installSuccessRenamed: "已安装为「{name}」（文件里的名字是「{from}」；只允许小写字母、数字和单连字符）"
+  renameNote: "将保存为「{to}」——文件里的名字「{from}」不是合法的技能名"
+  renameImpossible: "无法安装：「{from}」无法规范化为合法技能名（只允许小写字母、数字和单连字符）"
   errorEmptyUrl: 请输入有效的 URL
   errorFetchFailed: "获取失败: {error}"
   errorParseFailed: "解析失败: {error}"

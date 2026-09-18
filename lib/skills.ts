@@ -32,6 +32,22 @@ export function validateSkillName(name: string): string[] {
   return issues;
 }
 
+/**
+ * 把不合规的名字规范化到标准形状:小写、非字母数字转 `-`、去首尾与连续连字符、截到上限。
+ * 用于**外部导入** —— 别人仓库里的 `PDF_Processing` 不该因为我们的严格保存策略而装不进来。
+ * 规范化后为空串 = 这个名字救不回来(调用方报错)。
+ */
+export function normalizeSkillName(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, SKILL_NAME_MAX)
+    .replace(/-+$/, '');
+}
+
 export type SkillParseResult =
   | {
       ok: true;
@@ -44,11 +60,73 @@ export type SkillParseResult =
     }
   | { ok: false; reason: string };
 
+/** 块标量起始标记(`>` 折叠 / `|` 保留换行,含 `-`/`+` 修饰);其后缩进行属于它的值 */
+const BLOCK_SCALAR = /^[>|][-+]?$/;
+
+/**
+ * 解析 frontmatter 的顶层字段。
+ *
+ * 缩进敏感:缩进行的键值属于**嵌套映射**(如 `metadata:` 的子键),绝不参与顶层收集 —— 否则
+ * `metadata:` 里写一个 `disable-model-invocation: false` 就能把顶层的 true 覆盖掉。
+ * 块标量(`description: >` / `|`)按 YAML 语义收敛:缩进行拼成值,`>` 折空格、`|` 保留换行。
+ *
+ * 兼容性:值里未加引号却含冒号(`description: Use this when: ...`)按 YAML 是非法的,但其它客户端的
+ * 解析器接受它 —— 只取**第一个**冒号作分隔符即可原样保留整行剩余部分,并记一条告警。
+ */
+function parseFrontmatterFields(front: string, diagnostics: string[]): Map<string, string> {
+  const fields = new Map<string, string>();
+  let block: { key: string; folded: boolean; lines: string[] } | null = null;
+  const flushBlock = (): void => {
+    if (!block) return;
+    const { key, folded, lines } = block;
+    block = null;
+    if (!KNOWN_FIELDS.has(key)) return;
+    const joined = folded ? lines.join(' ').replace(/\s+/g, ' ').trim() : lines.join('\n').trim();
+    if (joined) fields.set(key, joined);
+  };
+
+  for (const line of front.split('\n')) {
+    // 块标量内的空行保留(段落分隔),但不要在它上面收尾
+    if (block && !line.trim()) {
+      block.lines.push('');
+      continue;
+    }
+    if (/^\s/.test(line)) {
+      // 缩进行:块标量的内容,或嵌套映射的键值(后者忽略,不参与顶层)
+      if (block) block.lines.push(line.trim());
+      continue;
+    }
+    flushBlock();
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const sep = trimmed.indexOf(':');
+    if (sep <= 0) {
+      diagnostics.push(`ignored a frontmatter line without a key: ${trimmed.slice(0, 40)}`);
+      continue;
+    }
+    const key = trimmed.slice(0, sep).trim().toLowerCase();
+    const rawValue = trimmed.slice(sep + 1).trim();
+    if (BLOCK_SCALAR.test(rawValue)) {
+      block = { key, folded: rawValue.startsWith('>'), lines: [] };
+      continue;
+    }
+    let value = rawValue;
+    const quoted =
+      value.length > 1 &&
+      ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")));
+    if (quoted) value = value.slice(1, -1);
+    else if (value.includes(':')) {
+      diagnostics.push(`value of "${key}" contains an unquoted colon; the whole remainder was taken as the value`);
+    }
+    if (!KNOWN_FIELDS.has(key)) continue;
+    fields.set(key, value.trim());
+  }
+  flushBlock();
+  return fields;
+}
+
 /**
  * 解析 SKILL.md:frontmatter 取 name/description(可选 disable-model-invocation),其余为正文。
- *
- * 兼容性:值里未加引号却含冒号(`description: Use this when: the user asks about PDFs`)按 YAML 是非法的,
- * 但其它客户端的解析器接受它 —— 只取**第一个**冒号作分隔符即可原样保留整行剩余部分,并记一条告警。
  */
 export function parseSkillMarkdown(raw: string): SkillParseResult {
   const text = (raw ?? '').replace(/\r\n?/g, '\n');
@@ -63,28 +141,7 @@ export function parseSkillMarkdown(raw: string): SkillParseResult {
   const front = text.slice(firstBreak + 1, close);
   const content = text.slice(close + 4).replace(/^\n+/, '').trimEnd();
 
-  const fields = new Map<string, string>();
-  for (const line of front.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const sep = trimmed.indexOf(':');
-    if (sep <= 0) {
-      diagnostics.push(`ignored a frontmatter line without a key: ${trimmed.slice(0, 40)}`);
-      continue;
-    }
-    const key = trimmed.slice(0, sep).trim().toLowerCase();
-    let value = trimmed.slice(sep + 1).trim();
-    const quoted =
-      value.length > 1 &&
-      ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")));
-    if (quoted) value = value.slice(1, -1);
-    else if (value.includes(':')) {
-      diagnostics.push(`value of "${key}" contains an unquoted colon; the whole remainder was taken as the value`);
-    }
-    if (!KNOWN_FIELDS.has(key)) continue;
-    fields.set(key, value.trim());
-  }
-
+  const fields = parseFrontmatterFields(front, diagnostics);
   const name = fields.get('name') ?? '';
   const description = fields.get('description') ?? '';
   if (!description) return { ok: false, reason: 'description-required' };
@@ -98,19 +155,28 @@ export function parseSkillMarkdown(raw: string): SkillParseResult {
   if (content.length > SKILL_CONTENT_MAX) {
     diagnostics.push(`body is longer than ${SKILL_CONTENT_MAX} characters and was truncated`);
   }
-  // 正文截断必须**在正文里留痕**:模型读到的是被切过的指令,而它自己看不出被切过
-  const truncatedContent =
-    content.length > SKILL_CONTENT_MAX
-      ? `${content.slice(0, SKILL_CONTENT_MAX)}\n\n…(the rest of this skill's instructions was truncated at ${SKILL_CONTENT_MAX} characters)`
-      : content;
   return {
     ok: true,
     name,
     description: description.slice(0, SKILL_DESCRIPTION_MAX),
-    content: truncatedContent,
+    content: withContentBudget(content),
     disableModelInvocation: (fields.get('disable-model-invocation') ?? '').toLowerCase() === 'true',
     diagnostics,
   };
+}
+
+/**
+ * 正文预算的**唯一收尾函数**(幂等):超限则截到 `MAX` 再附英文截断提示,已带提示的不重复追加。
+ *
+ * 解析、保存、清洗三处必须共用:只在解析处加的提示会在读回时被清洗的 `slice` 抹掉,
+ * 而模型看不出自己拿到的指令被切过 —— 截断必须在正文里留痕。
+ */
+export function withContentBudget(content: string): string {
+  const note = `\n\n…(the rest of this skill's instructions was truncated at ${SKILL_CONTENT_MAX} characters)`;
+  const marked = content.endsWith(note);
+  const body = marked ? content.slice(0, -note.length) : content;
+  if (body.length <= SKILL_CONTENT_MAX) return marked ? content : body;
+  return `${body.slice(0, SKILL_CONTENT_MAX)}${note}`;
 }
 
 function escapeXml(value: string): string {
@@ -151,7 +217,7 @@ export function sanitizeSkill(raw: unknown): Skill | null {
     id: typeof x.id === 'string' && x.id ? x.id : name,
     name,
     description: description.slice(0, SKILL_DESCRIPTION_MAX),
-    content: content.slice(0, SKILL_CONTENT_MAX),
+    content: withContentBudget(content),
     source,
     enabled: x.enabled !== false,
     createdAt: typeof x.createdAt === 'number' && Number.isFinite(x.createdAt) ? x.createdAt : Date.now(),
@@ -231,7 +297,13 @@ export function mergeBuiltinSkills(existing: Skill[]): { skills: Skill[]; change
   return { skills: out, changed };
 }
 
-/** 全部技能(读取 → 清洗 → 合并内置);内置变更会顺带落盘 */
+/** 全部技能(读取 → 清洗 → 合并内置)。
+ *
+ * 读**永不写盘**:合并只在内存生效(内置正文随代码刷新,每次读重新合并),写盘会绕过
+ * serializeSkillWrite 并与并发的 save/setEnabled 相撞。
+ * 已知残留:两个浏览器窗口各自持有一份模块级队列 —— 跨上下文的并发变更仍是
+ * "后写覆盖先写"(chrome.storage 无 CAS)。单窗口内已避免,不再做跨上下文锁。
+ */
 export async function listSkills(): Promise<Skill[]> {
   const stored = await skillsItem.getValue().catch(() => [] as unknown[]);
   const skills: Skill[] = [];
@@ -264,16 +336,29 @@ export interface SaveSkillInput {
   content: string;
   /** 安装来源(github)与用户手写(user);内置不可写 */
   source?: 'user' | 'github';
+  /**
+   * 标准字段:true = 不进模型 catalog,只允许用户 `/skill:<name>` 手动唤起。
+   * 不传表示"不动这个字段"(编辑既有技能时保留原值)。
+   */
+  disableModelInvocation?: boolean;
+  /**
+   * 外部导入(安装)专用:名字不合标准时**规范化后保存**而不是拒绝。
+   * 手写/编辑走严格校验(用户当场能改),别人的仓库没法要求他改名。
+   */
+  allowNonStandardName?: boolean;
 }
 
 /** 保存(按名字 upsert):内置技能不可被覆盖(它随代码升级,改写会被冲掉) */
 export async function saveSkill(
   input: SaveSkillInput,
-): Promise<{ ok: true; skill: Skill } | { ok: false; error: string }> {
-  const name = input.name.trim();
+): Promise<
+  | { ok: true; skill: Skill; renamedFrom?: string; bodyTruncated?: boolean }
+  | { ok: false; error: string }
+> {
+  const requestedName = input.name.trim();
   const description = input.description.trim();
   const content = input.content.trim();
-  if (!name) return { ok: false, error: 'Invalid skill: a non-empty name is required.' };
+  if (!requestedName) return { ok: false, error: 'Invalid skill: a non-empty name is required.' };
   if (!description) {
     return {
       ok: false,
@@ -282,6 +367,22 @@ export async function saveSkill(
     };
   }
   if (!content) return { ok: false, error: 'Invalid skill: the instruction body must not be empty.' };
+  // 外部导入:名字规范化到合法形状(小写/连字符);规范化后为空 = 这个名字救不回来
+  let name = requestedName;
+  let renamedFrom: string | undefined;
+  if (input.allowNonStandardName && validateSkillName(requestedName).length > 0) {
+    const normalized = normalizeSkillName(requestedName);
+    if (!normalized) {
+      return {
+        ok: false,
+        error: `Invalid skill name: ${JSON.stringify(
+          requestedName,
+        )} cannot be turned into a usable name (lowercase letters, digits and hyphens).`,
+      };
+    }
+    name = normalized;
+    renamedFrom = requestedName;
+  }
   const issues = validateSkillName(name);
   if (issues.length > 0) {
     return {
@@ -298,21 +399,33 @@ export async function saveSkill(
         error: `"${current.name}" is a built-in skill and cannot be overwritten. Save it under a different name, or disable the built-in one with a name of your own.`,
       };
     }
-    const skill: Skill = current
-      ? { ...current, name, description, content }
+    // 正文超限:截断 + 在正文里留痕(不静默、不拒绝) —— 与解析/清洗共用同一条收尾
+    const budgeted = withContentBudget(content);
+    const bodyTruncated = budgeted !== content;
+    const base = current
+      ? { ...current, name, description, content: budgeted }
       : {
           id: `skill-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
           name,
           description,
-          content,
+          content: budgeted,
           source: input.source ?? 'user',
           enabled: true,
           createdAt: Date.now(),
         };
+    // disable-model-invocation:只有调用方明确给出时才动(编辑既有技能时保留原值)
+    const skill: Skill = { ...base };
+    if (input.disableModelInvocation === true) skill.disableModelInvocation = true;
+    else if (input.disableModelInvocation === false) delete skill.disableModelInvocation;
     const next = current ? existing.map((s) => (s.id === current.id ? skill : s)) : [...existing, skill];
     const wrote = await writeSkills(next);
     if (!wrote.ok) return { ok: false, error: wrote.error };
-    return { ok: true, skill };
+    return {
+      ok: true,
+      skill,
+      ...(renamedFrom ? { renamedFrom } : {}),
+      ...(bodyTruncated ? { bodyTruncated: true } : {}),
+    };
   });
 }
 

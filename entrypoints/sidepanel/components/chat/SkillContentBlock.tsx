@@ -84,9 +84,48 @@ export function SkillContentBlock({ name, content }: SkillContentBlockProps) {
 }
 
 /**
+ * 把文本按代码围栏切成"围栏内 / 围栏外"的段(CommonMark:行首最多 3 个空格 + 3 个以上 ` 或 ~)。
+ * 围栏内是用户粘贴的**示例文本**,里面的 `<skill_content>` 不该被折叠成徽章。
+ */
+function splitCodeFences(text: string): { text: string; code: boolean }[] {
+  const segments: { text: string; code: boolean }[] = [];
+  let buffer: string[] = [];
+  let fenceChar: string | null = null;
+  const flush = (code: boolean): void => {
+    if (buffer.length === 0) return;
+    segments.push({ text: buffer.join('\n'), code });
+    buffer = [];
+  };
+  for (const line of text.split('\n')) {
+    const open = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+    if (!fenceChar && open) {
+      flush(false);
+      fenceChar = open[1]![0]!;
+      buffer.push(line);
+      continue;
+    }
+    if (fenceChar) {
+      buffer.push(line);
+      const closeRe = new RegExp(`^\\s{0,3}\\${fenceChar}{3,}\\s*$`);
+      if (closeRe.test(line)) {
+        flush(true);
+        fenceChar = null;
+      }
+      continue;
+    }
+    buffer.push(line);
+  }
+  flush(fenceChar !== null);
+  return segments;
+}
+
+/**
  * 解析并渲染用户消息文本:
- * 优先抽离 `<skill_content name="x">...</skill_content>`,
+ * 优先抽离 `<skill_content name="x">...</skill_content>`(非代码段内),
  * 其它文本段落按既有 renderMarkersInText 处理(支持元素引用 chip)。
+ *
+ * 正文取到本段**最后一个** `</skill_content>`:技能正文里出现同类字面量时,
+ * 非贪婪匹配会提前结束并留下半截正文。
  */
 export function renderUserContentWithSkills(
   text: string,
@@ -94,31 +133,37 @@ export function renderUserContentWithSkills(
   tabUrlById?: Map<number, string>,
 ): ReactNode[] {
   const parts: ReactNode[] = [];
-  const regex = /<skill_content\s+name="([^"]*)">([\s\S]*?)<\/skill_content>/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  const segments = splitCodeFences(text);
 
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      const preceding = text.slice(lastIndex, match.index);
-      parts.push(...renderMarkersInText(preceding, elementById, tabUrlById));
+  segments.forEach((segment, index) => {
+    // 分段是按 '\n' 切的,拼回去要补上分隔符(原文逐字不变)
+    if (index > 0) parts.push('\n');
+    if (segment.code) {
+      parts.push(...renderMarkersInText(segment.text, elementById, tabUrlById));
+      return;
     }
-    const skillName = match[1] ?? '';
-    const skillBody = match[2] ?? '';
-    parts.push(
-      <SkillContentBlock
-        key={`skill-${skillName}-${match.index}`}
-        name={skillName}
-        content={skillBody}
-      />,
-    );
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    const trailing = text.slice(lastIndex);
-    parts.push(...renderMarkersInText(trailing, elementById, tabUrlById));
-  }
+    const regex = /<skill_content\s+name="([^"]*)">([\s\S]*)<\/skill_content>/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(segment.text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(
+          ...renderMarkersInText(segment.text.slice(lastIndex, match.index), elementById, tabUrlById),
+        );
+      }
+      parts.push(
+        <SkillContentBlock
+          key={`skill-${match[1] ?? ''}-${index}-${match.index}`}
+          name={match[1] ?? ''}
+          content={match[2] ?? ''}
+        />,
+      );
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < segment.text.length) {
+      parts.push(...renderMarkersInText(segment.text.slice(lastIndex), elementById, tabUrlById));
+    }
+  });
 
   return parts;
 }

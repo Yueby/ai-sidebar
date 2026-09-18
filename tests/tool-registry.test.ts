@@ -84,3 +84,45 @@ test('技能工具:save_skill 常在;read_skill 仅在存在面向模型的技�
   ).map((t) => t.name);
   assert.ok(!hidden.includes('read_skill'));
 });
+
+test('read_skill 拿到完整列表:禁用/仅手动技能被如实挡下,而不是报成不存在', async () => {
+  const skill = (over: Record<string, unknown>) => ({
+    id: 's1',
+    name: 'demo',
+    description: 'demo skill',
+    content: 'BODY',
+    source: 'user',
+    enabled: true,
+    createdAt: 1,
+    ...over,
+  });
+  const tools = getTools(
+    baseOptions({
+      skills: [
+        skill({ id: 's1', name: 'usable' }),
+        skill({ id: 's2', name: 'switched-off', enabled: false }),
+        skill({ id: 's3', name: 'manual-only', disableModelInvocation: true }),
+      ],
+    }),
+  );
+  const readSkill = tools.find((t) => t.name === 'read_skill');
+  assert.ok(readSkill, '有可用技能时必须注册 read_skill');
+
+  const textOf = (res: { content: unknown }) =>
+    String((res.content as { type: string; text: string }[])[0]?.text ?? '');
+
+  const disabled = await readSkill!.execute('c1', { name: 'switched-off' });
+  assert.ok(
+    textOf(disabled).startsWith('skill_not_available:'),
+    `禁用技能必须被如实挡下,实际: ${textOf(disabled).slice(0, 70)}`,
+  );
+
+  const manual = await readSkill!.execute('c2', { name: 'manual-only' });
+  assert.ok(
+    textOf(manual).startsWith('skill_not_available:'),
+    `仅手动技能必须被如实挡下,实际: ${textOf(manual).slice(0, 70)}`,
+  );
+
+  const usable = await readSkill!.execute('c3', { name: 'usable' });
+  assert.ok(textOf(usable).includes('BODY'), '可用技能正常载入');
+});

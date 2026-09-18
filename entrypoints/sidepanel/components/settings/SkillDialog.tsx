@@ -126,12 +126,12 @@ export function SkillDialog({
 
         <form onSubmit={handleSubmit} className="space-y-3 pt-1">
           <FieldGroup className="gap-3">
-            {/* Skill Name */}
+            {/* Skill Name(编辑时锁定:改名 = 另一条技能,saveSkill 是按名字 upsert 的) */}
             <Field data-invalid={nameIssues.length > 0 || collision?.type === 'builtin'}>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <FieldLabel className="text-[11px] font-medium">{i18n.t('skillDialog.nameLabel')}</FieldLabel>
                 <span className="text-[10px] opacity-70">
-                  {i18n.t('skillDialog.nameHint')}
+                  {isEditing ? i18n.t('skillDialog.nameLockedHint') : i18n.t('skillDialog.nameHint')}
                 </span>
               </div>
               <Input
@@ -140,7 +140,8 @@ export function SkillDialog({
                 placeholder={i18n.t('skillDialog.namePlaceholder')}
                 maxLength={SKILL_NAME_MAX}
                 autoFocus={!isEditing}
-                className="h-8 font-mono text-xs"
+                disabled={isEditing}
+                className="h-8 font-mono text-xs disabled:opacity-60"
               />
               {nameIssues.map((issue, idx) => (
                 <FieldError key={idx} className="text-[11px] text-destructive">

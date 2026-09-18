@@ -13,15 +13,25 @@ const READ_SKILL_PARAMS = Type.Object({
 
 /**
  * 同一会话里已载入的技能:同一套指令重复进转录纯属浪费 token,标准也要求去重。
+ *
  * 会话即作用域(新对话 = 新 sessionId),面板存活期内的 Map 足够。
+ * **随转录截断重置**:编辑重发会截掉旧工具结果,这时正文已经不在转录里了,
+ * 继续去重会让模型只拿到"already loaded"而拿不到指令 —— 故由转录替换路径调 clearLoadedSkills。
  */
 const loadedBySession = new Map<string, Set<string>>();
+
+/** 清掉某会话的已载入记录(转录被替换/截断时调用:旧正文已不在上下文里) */
+export function clearLoadedSkills(sessionId: string): void {
+  loadedBySession.delete(sessionId);
+}
 
 /**
  * read_skill 工具定义(safe):按需载入技能正文(渐进披露第二层;决策 52)。
  *
  * 技能是**纯指令**:载入不授予任何权限,技能里要求用的工具仍走各自的确认卡。
  * 只认"面向模型可见"的技能(启用且非仅手动唤起)—— 否则模型能绕过用户的选择。
+ * 注:调用方传**完整**技能列表(不只是可见的那部分),这样禁用/仅手动技能能被
+ * 如实挡下并说明原因(skill_not_available),而不是报成"不存在"。
  */
 export function createReadSkillToolDefinition(
   skills: Skill[],

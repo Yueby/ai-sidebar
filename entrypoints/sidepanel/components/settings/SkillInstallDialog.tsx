@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { i18n } from '#i18n';
 import type { Skill } from '@/lib/types';
-import { parseSkillMarkdown, type SkillParseResult } from '@/lib/skills';
+import { parseSkillMarkdown, normalizeSkillName, validateSkillName, type SkillParseResult } from '@/lib/skills';
 import { fetchRawText, normalizeGitHubRawUrl } from '@/lib/fetchPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,12 +15,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
-import { AlertCircle, AlertTriangle, CheckCircle2, Download } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Download, Info } from 'lucide-react';
 
 interface SkillInstallDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInstall: (data: { name: string; description: string; content: string }) => Promise<void> | void;
+  onInstall: (data: {
+    name: string;
+    description: string;
+    content: string;
+    disableModelInvocation?: boolean;
+  }) => Promise<void> | void;
   existingSkills: Skill[];
 }
 
@@ -48,17 +53,22 @@ export function SkillInstallDialog({
     }
   }, [open]);
 
-  // 检查名字冲突
+  // 名字不合标准 → 安装时会被规范化(外部仓库无法要求改名),预览里先说清楚会存成什么
+  const normalizedName = preview ? normalizeSkillName(preview.name) : '';
+  const willRename = Boolean(preview) && validateSkillName(preview!.name).length > 0;
+
+  // 检查名字冲突(按**实际会存下的名字**比较:规范化后的名字才是落库的那个)
   const collision = useMemo(() => {
     if (!preview) return null;
-    const name = preview.name.toLowerCase();
+    const name = (willRename ? normalizedName : preview.name).toLowerCase();
+    if (!name) return null;
     const match = existingSkills.find((s) => s.name.toLowerCase() === name);
     if (!match) return null;
     if (match.source === 'builtin') {
-      return { type: 'builtin', message: i18n.t('skillInstallDialog.cannotOverwriteBuiltin', { name: preview.name }) };
+      return { type: 'builtin', message: i18n.t('skillInstallDialog.cannotOverwriteBuiltin', { name }) };
     }
     return { type: 'overwrite', message: i18n.t('skillInstallDialog.willOverwriteWarning') };
-  }, [preview, existingSkills]);
+  }, [preview, existingSkills, willRename, normalizedName]);
 
   const handleFetch = async () => {
     const raw = url.trim();
@@ -110,12 +120,15 @@ export function SkillInstallDialog({
 
   const handleConfirmInstall = async () => {
     if (!preview || collision?.type === 'builtin' || installing) return;
+    if (willRename && !normalizedName) return; // 规范化后为空:这个名字救不回来
     setInstalling(true);
     try {
       await onInstall({
         name: preview.name,
         description: preview.description,
         content: preview.content,
+        // 仅手动唤起的技能装上后仍不进模型 catalog —— 这个字段必须完整传递
+        ...(preview.disableModelInvocation ? { disableModelInvocation: true } : {}),
       });
       onOpenChange(false);
     } finally {
@@ -189,7 +202,7 @@ export function SkillInstallDialog({
                 <div className="flex items-center gap-2 min-w-0">
                   <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
                   <span className="font-mono text-xs font-semibold text-foreground truncate">
-                    {preview.name}
+                    {willRename && normalizedName ? normalizedName : preview.name}
                   </span>
                 </div>
                 <span className="text-[10px] text-muted-foreground shrink-0 uppercase tracking-wider font-medium">
@@ -207,6 +220,21 @@ export function SkillInstallDialog({
                 >
                   <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
                   <span className="min-w-0 flex-1 leading-tight">{collision.message}</span>
+                </div>
+              )}
+
+              {/* 名字不合标准:会被规范化后保存(外部仓库无法要求改名) */}
+              {willRename && (
+                <div className="flex items-start gap-2 rounded-md p-2 text-xs border border-border/70 bg-muted/40 text-muted-foreground">
+                  <Info className="size-3.5 shrink-0 mt-0.5" />
+                  <span className="min-w-0 flex-1 leading-tight break-all">
+                    {normalizedName
+                      ? i18n.t('skillInstallDialog.renameNote', {
+                          from: preview.name,
+                          to: normalizedName,
+                        })
+                      : i18n.t('skillInstallDialog.renameImpossible', { from: preview.name })}
+                  </span>
                 </div>
               )}
 
@@ -253,7 +281,12 @@ export function SkillInstallDialog({
             <Button
               type="button"
               size="sm"
-              disabled={!preview || collision?.type === 'builtin' || installing}
+              disabled={
+                !preview ||
+                collision?.type === 'builtin' ||
+                installing ||
+                (willRename && !normalizedName)
+              }
               onClick={() => void handleConfirmInstall()}
             >
               {installing ? i18n.t('app.loading') : i18n.t('skillInstallDialog.installAction')}

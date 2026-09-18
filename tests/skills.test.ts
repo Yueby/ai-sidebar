@@ -23,8 +23,9 @@ import {
   renderSkillsCatalog,
   sanitizeSkill,
   validateSkillName,
+  withContentBudget,
 } from '../lib/skills';
-import { createReadSkillToolDefinition } from '../lib/tools/read-skill';
+import { clearLoadedSkills, createReadSkillToolDefinition } from '../lib/tools/read-skill';
 import { BUILTIN_SKILL_MARKDOWN } from '../lib/builtinSkills';
 
 const skill = (over: Partial<Skill> = {}): Skill => ({
@@ -233,4 +234,121 @@ test('解析:正文超长时截断,并在正文里留痕', () => {
       '解析告警仍要保留',
     );
   }
+});
+
+test('解析:嵌套映射的子键不参与顶层收集(metadata 不能覆盖 disable-model-invocation)', () => {
+  const parsed = parseSkillMarkdown(
+    [
+      '---',
+      'name: nested',
+      'description: A skill',
+      'disable-model-invocation: true',
+      'metadata:',
+      '  disable-model-invocation: false',
+      '  author: someone',
+      '---',
+      'BODY',
+    ].join('\n'),
+  );
+  assert.ok(parsed.ok);
+  if (parsed.ok) {
+    assert.equal(parsed.disableModelInvocation, true, '顶层字段才是真值');
+  }
+});
+
+test('解析:块标量(> 折空格 / | 保留换行)', () => {
+  const folded = parseSkillMarkdown(
+    ['---', 'name: folded-desc', 'description: >', '  Use this when', '  the user asks', '---', 'BODY'].join('\n'),
+  );
+  assert.ok(folded.ok);
+  if (folded.ok) assert.equal(folded.description, 'Use this when the user asks');
+
+  const literal = parseSkillMarkdown(
+    ['---', 'name: literal-desc', 'description: |', '  first line', '  second line', '---', 'BODY'].join('\n'),
+  );
+  assert.ok(literal.ok);
+  if (literal.ok) assert.equal(literal.description, 'first line\nsecond line');
+});
+
+test('正文预算:截断留痕、幂等,且清洗路径不抹掉痕迹', () => {
+  const short = 'short body';
+  assert.equal(withContentBudget(short), short, '未超限原样返回');
+
+  const once = withContentBudget('x'.repeat(SKILL_CONTENT_MAX + 500));
+  assert.ok(once.includes('truncated at'), '截断必须留痕');
+  assert.ok(once.length <= SKILL_CONTENT_MAX + 150, '长度受限');
+  assert.equal(withContentBudget(once), once, '幂等:再跑一次结果不变');
+
+  const sanitized = sanitizeSkill({
+    id: 's',
+    name: 'budgeted',
+    description: 'd',
+    content: once,
+    source: 'user',
+    enabled: true,
+    createdAt: 1,
+  });
+  assert.ok(sanitized, '清洗后仍是一条技能');
+  assert.ok(sanitized!.content.includes('truncated at'), '清洗路径不得把留痕切掉');
+});
+
+test('安装:不合标准的名字被规范化后保存(手写路径仍严格)', async () => {
+  const installed = await saveSkill({
+    name: 'PDF_Processing',
+    description: 'A skill',
+    content: 'BODY',
+    source: 'github',
+    allowNonStandardName: true,
+  });
+  assert.ok(installed.ok, '外部导入不因名字被拒');
+  if (installed.ok) {
+    assert.equal(installed.skill.name, 'pdf-processing', '规范化到标准形状');
+    assert.equal(installed.renamedFrom, 'PDF_Processing', '回报被规范化的原名');
+  }
+
+  const handwritten = await saveSkill({ name: 'PDF_Processing', description: 'A skill', content: 'BODY' });
+  assert.equal(handwritten.ok, false, '手写/编辑路径仍然严格');
+});
+
+test('保存:disable-model-invocation 只在明确传值时才改变', async () => {
+  const created = await saveSkill({
+    name: 'manual-skill',
+    description: 'A skill',
+    content: 'BODY',
+    disableModelInvocation: true,
+  });
+  assert.ok(created.ok);
+
+  const kept = await saveSkill({ name: 'manual-skill', description: 'Updated', content: 'BODY2' });
+  assert.ok(kept.ok);
+  if (kept.ok) assert.equal(kept.skill.disableModelInvocation, true, '未传 = 保留原值');
+
+  const cleared = await saveSkill({
+    name: 'manual-skill',
+    description: 'Updated',
+    content: 'BODY3',
+    disableModelInvocation: false,
+  });
+  assert.ok(cleared.ok);
+  if (cleared.ok) assert.equal(cleared.skill.disableModelInvocation, undefined, '明确 false = 清掉');
+});
+
+test('read_skill:转录被截断后清掉已载入记录,正文可以再次载入', async () => {
+  const skills = [skill({ name: 'reloadable', content: 'RELOAD-BODY-MARKER' })];
+  const tool = createReadSkillToolDefinition(skills, 'sess-reload');
+  const textOf = (res: { content: unknown }) =>
+    String((res.content as { type: string; text: string }[])[0]?.text ?? '');
+
+  assert.ok(textOf(await tool.execute('c1', { name: 'reloadable' })).includes('RELOAD-BODY-MARKER'));
+  assert.ok(
+    !textOf(await tool.execute('c2', { name: 'reloadable' })).includes('RELOAD-BODY-MARKER'),
+    '未清之前不重复注入',
+  );
+
+  // 编辑重发截断了转录 → 旧正文已不在上下文里,去重记录必须失效
+  clearLoadedSkills('sess-reload');
+  assert.ok(
+    textOf(await tool.execute('c3', { name: 'reloadable' })).includes('RELOAD-BODY-MARKER'),
+    '清掉之后必须能再次拿到正文',
+  );
 });

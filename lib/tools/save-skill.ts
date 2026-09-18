@@ -51,6 +51,9 @@ export function createSaveSkillToolDefinition(sessionId?: string): AgentTool<typ
             type: 'text',
             text:
               `Saved the "${res.skill.name}" skill (${res.skill.content.length} characters of instructions). ` +
+              (res.bodyTruncated
+                ? `The body was longer than the limit and was truncated, with a note left at the end of it. `
+                : '') +
               'It is offered to the model in future conversations; load it now with read_skill if it should apply to the current one.',
           },
         ],

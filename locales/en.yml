@@ -231,7 +231,7 @@ settings:
     builtinCannotDelete: Built-in skills cannot be deleted (disable them instead)
     editSkill: Edit Skill
     deleteSkill: Delete Skill
-    disabledHint: "Excluded from model catalog; can still be invoked manually via /skill:{name}"
+    disabledHint: "Fully off: not in the model catalog, and /skill:{name} will not run it"
     manualOnlyHint: "Manual only: model will not call automatically; invoke explicitly via /skill:{name}"
     deleteConfirmTitle: Delete Skill
     deleteConfirmDesc: "Skill \"{name}\" will be permanently deleted. This cannot be undone."
@@ -344,6 +344,7 @@ skillDialog:
   nameLabel: Skill Name
   namePlaceholder: "e.g. pdf-processing, code-review"
   nameHint: 1-64 characters, lowercase letters, digits and single hyphens
+  nameLockedHint: The name identifies the skill — to rename, create a new one and delete the old
   descLabel: Description
   descPlaceholder: "What this skill does and when to use it (max 1024 chars). This is the only text the model sees before loading."
   contentLabel: Instructions (Markdown)
@@ -371,6 +372,9 @@ skillInstallDialog:
   installAction: Confirm & Install
   cancel: Cancel
   installSuccess: "Successfully installed skill \"{name}\""
+  installSuccessRenamed: "Installed as \"{name}\" (the file named it \"{from}\"; only lowercase letters, digits and single hyphens are allowed)"
+  renameNote: "Will be saved as \"{to}\" — the file names it \"{from}\", which is not a valid skill name"
+  renameImpossible: "Cannot install: \"{from}\" cannot be turned into a valid skill name (lowercase letters, digits and single hyphens)"
   errorEmptyUrl: Please enter a valid URL
   errorFetchFailed: "Fetch failed: {error}"
   errorParseFailed: "Parsing failed: {error}"

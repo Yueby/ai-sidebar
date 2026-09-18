@@ -92,6 +92,8 @@ export function SettingsSkillsView({ onBack, onPrefillPrompt }: SettingsSkillsVi
     const res = await saveSkill({
       ...data,
       source: editingSkill?.source === 'github' ? 'github' : 'user',
+      // 编辑既有技能时保留“仅手动唤起”这一选择(它不属手写对话框的字段)
+      disableModelInvocation: editingSkill?.disableModelInvocation,
     });
     if (res.ok) {
       toast.success(i18n.t('settings.skills.saveSuccess', { name: res.skill.name }));
@@ -103,13 +105,27 @@ export function SettingsSkillsView({ onBack, onPrefillPrompt }: SettingsSkillsVi
   };
 
   // GitHub 安装完成
-  const handleInstall = async (data: { name: string; description: string; content: string }) => {
+  const handleInstall = async (data: {
+    name: string;
+    description: string;
+    content: string;
+    disableModelInvocation?: boolean;
+  }) => {
     const res = await saveSkill({
       ...data,
       source: 'github',
+      // 外部仓库的名字不受我们控制:不合标准就规范化后保存,而不是拒装
+      allowNonStandardName: true,
     });
     if (res.ok) {
-      toast.success(i18n.t('skillInstallDialog.installSuccess', { name: res.skill.name }));
+      toast.success(
+        res.renamedFrom
+          ? i18n.t('skillInstallDialog.installSuccessRenamed', {
+              name: res.skill.name,
+              from: res.renamedFrom,
+            })
+          : i18n.t('skillInstallDialog.installSuccess', { name: res.skill.name }),
+      );
       await loadSkillsList();
     } else {
       toast.error(res.error || i18n.t('settings.skills.saveFailed'));

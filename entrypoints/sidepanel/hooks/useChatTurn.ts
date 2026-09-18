@@ -21,6 +21,7 @@ import { i18n } from '#i18n';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
 import { parsePageRefs } from '@/lib/pageRefs';
+import { clearLoadedSkills } from '@/lib/tools/read-skill';
 import { draftAfterSend } from '@/lib/refGroups';
 import { activeRuntimeSessionIds, runtimeFor } from '@/lib/sessionRuntime';
 import type { SessionRuntime } from '@/lib/sessionRuntime';
@@ -787,6 +788,9 @@ export function useChatTurn(params: {
           .sessions.map((s) => (s.id === session.id ? updatedSession : s));
         useAppStore.getState().setSessions(nextSessions);
         dropPendingDraftSave(session.id);
+        // 转录被截断了:被截掉的工具结果可能带着技能正文,已载入记录随之作废 ——
+        // 否则模型再调 read_skill 只会拿到 "already loaded",而上下文里已经没有任何指令
+        clearLoadedSkills(session.id);
         await saveSession(updatedSession);
 
         // 7. 转换原引用为 refTabs / pickedElements (若标签页存活则刷新实时元信息)

@@ -48,7 +48,6 @@ export interface GetToolsOptions {
   /** 已安装技能(本轮读一次):catalog 与 read_skill 都取这一份;无面向模型的技能时不注册 read_skill */
   skills?: Skill[];
 }
-
 /** 页面读取组(safe):read_page + read_element(tab 级白名单;selector 不设白名单) */
 export function createPageReadTools(options: GetToolsOptions): AgentTool[] {
   const refTabs = options.refTabs ?? [];
@@ -129,7 +128,9 @@ export function createUtilityTools(
     createReadTimeToolDefinition(),
     createAskUserToolDefinition(sessionId),
     createCompactContextToolDefinition(onCompactContext ?? (() => {})),
-    ...(readable.length > 0 ? [createReadSkillToolDefinition(readable, sessionId)] : []),
+    // 注册与否看"有没有面向模型的技能",但传**完整**列表:禁用/仅手动技能才能被如实挡下
+    // (skill_not_available)而不是报成不存在
+    ...(readable.length > 0 ? [createReadSkillToolDefinition(skills ?? [], sessionId)] : []),
   ];
 }
 
