@@ -98,11 +98,16 @@ export function parseSkillMarkdown(raw: string): SkillParseResult {
   if (content.length > SKILL_CONTENT_MAX) {
     diagnostics.push(`body is longer than ${SKILL_CONTENT_MAX} characters and was truncated`);
   }
+  // 正文截断必须**在正文里留痕**:模型读到的是被切过的指令,而它自己看不出被切过
+  const truncatedContent =
+    content.length > SKILL_CONTENT_MAX
+      ? `${content.slice(0, SKILL_CONTENT_MAX)}\n\n…(the rest of this skill's instructions was truncated at ${SKILL_CONTENT_MAX} characters)`
+      : content;
   return {
     ok: true,
     name,
     description: description.slice(0, SKILL_DESCRIPTION_MAX),
-    content: content.slice(0, SKILL_CONTENT_MAX),
+    content: truncatedContent,
     disableModelInvocation: (fields.get('disable-model-invocation') ?? '').toLowerCase() === 'true',
     diagnostics,
   };
@@ -156,8 +161,33 @@ export function sanitizeSkill(raw: unknown): Skill | null {
 
 const skillsItem = storage.defineItem<unknown[]>('local:skills', { fallback: [] });
 
-async function writeSkills(skills: Skill[]): Promise<void> {
-  await skillsItem.setValue(skills);
+type SkillWriteResult = { ok: true } | { ok: false; error: string };
+
+async function writeSkills(skills: Skill[]): Promise<SkillWriteResult> {
+  try {
+    await skillsItem.setValue(skills);
+    return { ok: true };
+  } catch (err) {
+    // 存储写失败(配额/受限上下文)必须说出来:静默吞掉会让调用方以为已经保存
+    return {
+      ok: false,
+      error: `Could not save skills: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+/**
+ * 写入串行化:技能列表是"读-改-写"整体,两个写者并发(模型 save_skill 与设置页的开关/删除)
+ * 会各自基于同一份旧列表写回,后写的把先写的抹掉。变更一律排进同一条链,链内重新读取最新状态。
+ */
+let skillWriteQueue: Promise<unknown> = Promise.resolve();
+function serializeSkillWrite<T>(work: () => Promise<T>): Promise<T> {
+  const run = skillWriteQueue.then(work, work);
+  skillWriteQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 /**
@@ -222,7 +252,9 @@ export async function listSkills(): Promise<Skill[]> {
     console.warn(`[skills] dropped ${dropped} invalid or duplicate stored skill entr(ies)`);
   }
   const merged = mergeBuiltinSkills(skills);
-  if (merged.changed) await writeSkills(merged.skills).catch(() => undefined);
+  // 读**永不写盘**:合并只在内存生效(内置正文随代码刷新,每次读都会重新合并)。
+  // 这里写盘会绕过 serializeSkillWrite,与并发的 save/setEnabled 相撞并把它们的更新抹掉
+  // (实测:两次并发 saveSkill 后只剩内置技能)。下一次变更会把当前状态整体写下去。
   return merged.skills;
 }
 
@@ -257,43 +289,47 @@ export async function saveSkill(
       error: `Invalid skill name: ${issues.join('; ')}. Use 1-${SKILL_NAME_MAX} lowercase letters, digits and single hyphens.`,
     };
   }
-  const existing = await listSkills();
-  const current = existing.find((skill) => skill.name.toLowerCase() === name.toLowerCase());
-  if (current?.source === 'builtin') {
-    return {
-      ok: false,
-      error: `"${current.name}" is a built-in skill and cannot be overwritten. Save it under a different name, or disable the built-in one with a name of your own.`,
-    };
-  }
-  const skill: Skill = current
-    ? { ...current, name, description, content }
-    : {
-        id: `skill-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        name,
-        description,
-        content,
-        source: input.source ?? 'user',
-        enabled: true,
-        createdAt: Date.now(),
+  return serializeSkillWrite(async () => {
+    const existing = await listSkills();
+    const current = existing.find((skill) => skill.name.toLowerCase() === name.toLowerCase());
+    if (current?.source === 'builtin') {
+      return {
+        ok: false,
+        error: `"${current.name}" is a built-in skill and cannot be overwritten. Save it under a different name, or disable the built-in one with a name of your own.`,
       };
-  const next = current ? existing.map((s) => (s.id === current.id ? skill : s)) : [...existing, skill];
-  await writeSkills(next);
-  return { ok: true, skill };
+    }
+    const skill: Skill = current
+      ? { ...current, name, description, content }
+      : {
+          id: `skill-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          name,
+          description,
+          content,
+          source: input.source ?? 'user',
+          enabled: true,
+          createdAt: Date.now(),
+        };
+    const next = current ? existing.map((s) => (s.id === current.id ? skill : s)) : [...existing, skill];
+    const wrote = await writeSkills(next);
+    if (!wrote.ok) return { ok: false, error: wrote.error };
+    return { ok: true, skill };
+  });
 }
 
 /** 删除:内置技能只能禁用(随扩展发布,删掉下次启动还会回来) */
 export async function deleteSkill(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  const existing = await listSkills();
-  const target = existing.find((skill) => skill.id === id);
-  if (!target) return { ok: false, error: `No skill with id ${JSON.stringify(id)}.` };
-  if (target.source === 'builtin') {
-    return {
-      ok: false,
-      error: `"${target.name}" is a built-in skill and cannot be deleted — disable it instead.`,
-    };
-  }
-  await writeSkills(existing.filter((skill) => skill.id !== id));
-  return { ok: true };
+  return serializeSkillWrite(async () => {
+    const existing = await listSkills();
+    const target = existing.find((skill) => skill.id === id);
+    if (!target) return { ok: false, error: `No skill with id ${JSON.stringify(id)}.` };
+    if (target.source === 'builtin') {
+      return {
+        ok: false,
+        error: `"${target.name}" is a built-in skill and cannot be deleted — disable it instead.`,
+      };
+    }
+    return writeSkills(existing.filter((skill) => skill.id !== id));
+  });
 }
 
 /** 启用/禁用(对内置技能同样有效,且升级时保留) */
@@ -301,11 +337,12 @@ export async function setSkillEnabled(
   id: string,
   enabled: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const existing = await listSkills();
-  const target = existing.find((skill) => skill.id === id);
-  if (!target) return { ok: false, error: `No skill with id ${JSON.stringify(id)}.` };
-  await writeSkills(existing.map((skill) => (skill.id === id ? { ...skill, enabled } : skill)));
-  return { ok: true };
+  return serializeSkillWrite(async () => {
+    const existing = await listSkills();
+    const target = existing.find((skill) => skill.id === id);
+    if (!target) return { ok: false, error: `No skill with id ${JSON.stringify(id)}.` };
+    return writeSkills(existing.map((skill) => (skill.id === id ? { ...skill, enabled } : skill)));
+  });
 }
 
 /** 模型可自行载入的技能集(= catalog 可见集):禁用与"仅手动唤起"都不在其中 */

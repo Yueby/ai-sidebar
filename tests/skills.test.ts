@@ -14,6 +14,9 @@ import assert from 'node:assert/strict';
 import type { Skill } from '../lib/types';
 import {
   findSkillByName,
+  listSkills,
+  saveSkill,
+  SKILL_CONTENT_MAX,
   mergeBuiltinSkills,
   modelFacingSkills,
   parseSkillMarkdown,
@@ -198,5 +201,36 @@ test('read_skill:未启用/仅手动唤起的技能不可由模型自行载入',
     const res = await tool.execute('c1', { name });
     const text = String((res.content as { type: string; text: string }[])[0]?.text ?? '');
     assert.ok(text.startsWith('skill_not_available:'), `${name} 必须被挡住且说明原因`);
+  }
+});
+
+test('存储:并发保存不丢更新(读-改-写串行化)', async () => {
+  // 两个写者同时基于同一份旧列表改:未串行化时后写者会把先写者抹掉
+  const [a, b] = await Promise.all([
+    saveSkill({ name: 'race-a', description: 'A skill', content: 'BODY-A' }),
+    saveSkill({ name: 'race-b', description: 'B skill', content: 'BODY-B' }),
+  ]);
+  assert.ok(a.ok && b.ok, '两次保存都成功');
+  const names = (await listSkills()).map((skill) => skill.name);
+  assert.ok(
+    names.includes('race-a') && names.includes('race-b'),
+    `两个技能都必须存在,实际: ${names.join(', ')}`,
+  );
+});
+
+test('解析:正文超长时截断,并在正文里留痕', () => {
+  const body = 'x'.repeat(SKILL_CONTENT_MAX + 50);
+  const parsed = parseSkillMarkdown(`---\nname: big-body\ndescription: A skill\n---\n${body}`);
+  assert.ok(parsed.ok, '可解析');
+  if (parsed.ok) {
+    assert.ok(parsed.content.length <= SKILL_CONTENT_MAX + 150, '截断后长度受限');
+    assert.ok(
+      parsed.content.includes('truncated at'),
+      '正文里必须带截断说明 —— 模型看不出自己拿到的指令被切过',
+    );
+    assert.ok(
+      parsed.diagnostics.some((d) => d.includes('body is longer')),
+      '解析告警仍要保留',
+    );
   }
 });

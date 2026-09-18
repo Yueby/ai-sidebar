@@ -28,7 +28,35 @@ const eventStub = { addListener: noop, removeListener: noop, hasListener: () => 
     onActivated: eventStub,
   },
   storage: {
-    local: { get: async () => ({}), set: asyncUndefined, remove: asyncUndefined },
+    // 内存实现:键值真往返。原先 get 恒返回 {}、set 是 no-op —— 任何"写入后读回"的测试
+    // 都看不到自己的写入(技能列表就是读-改-写,并发保护必须能这样测)
+    local: (() => {
+      const data = new Map<string, unknown>();
+      const pick = (keys: unknown): Record<string, unknown> => {
+        if (keys === null || keys === undefined) return Object.fromEntries(data);
+        if (typeof keys === 'string') return data.has(keys) ? { [keys]: data.get(keys) } : {};
+        if (Array.isArray(keys)) {
+          return Object.fromEntries(keys.filter((k) => data.has(k)).map((k) => [k, data.get(k)]));
+        }
+        if (typeof keys === 'object') {
+          const out: Record<string, unknown> = {};
+          for (const [k, fallback] of Object.entries(keys as Record<string, unknown>)) {
+            out[k] = data.has(k) ? data.get(k) : fallback;
+          }
+          return out;
+        }
+        return {};
+      };
+      return {
+        get: async (keys?: unknown) => pick(keys),
+        set: async (items: Record<string, unknown>) => {
+          for (const [key, value] of Object.entries(items)) data.set(key, value);
+        },
+        remove: async (keys: string | string[]) => {
+          for (const key of Array.isArray(keys) ? keys : [keys]) data.delete(key);
+        },
+      };
+    })(),
     onChanged: eventStub,
   },
   scripting: { executeScript: async () => [] },
