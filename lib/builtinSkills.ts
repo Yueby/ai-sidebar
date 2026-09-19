@@ -16,6 +16,10 @@ description: Create or update a skill that captures a workflow the user wants re
 
 A skill is a folder with a SKILL.md file: YAML frontmatter plus Markdown instructions. In this sidebar there is no filesystem — a skill is stored as data and loaded on demand with read_skill, so what you produce here is the frontmatter and the body, nothing else. There are no scripts or asset files.
 
+## Before writing
+
+Ask for one or two concrete instances of the workflow if the user has not already given them. A real example shows which steps actually matter, what the inputs look like, and where it usually goes wrong; a skill written from a vague description tends to describe the obvious.
+
 ## Frontmatter
 
 Required fields:
@@ -45,6 +49,8 @@ Keep it under roughly 500 lines. State constraints explicitly instead of implyin
 ## Before saving
 
 - Read the plan back to the user when they are present: the name, the description, and what the skill will instruct. Correct it if they object.
+- When revising an existing skill, load it first with read_skill and rewrite from that body — save_skill replaces the whole content for that name, so anything left out is lost.
+- Check the name and description against the rules above before saving, and make sure the description says **when to use** the skill, not only what it does: that sentence is the only thing a future model sees before deciding to load it.
 - Then call \`save_skill\` with \`name\`, \`description\` and the body as \`content\` (frontmatter not included — the fields are separate arguments).
 - Calling it again with the same name updates the skill, so use that to revise.
 
