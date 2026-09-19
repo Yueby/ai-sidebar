@@ -78,7 +78,9 @@ lib/
   shiki.ts            # 代码高亮单例(决策 40 ⑤):模块级懒初始化 29 语言+github-light/dark,highlightToHtml 同步双主题 CSS 变量输出(未就绪降级 null),onShikiReady 订阅重渲染,normalizeShikiLang 别名归一
   models.ts           # fetchProviderModels/fetchModelsDevMeta/applyModelMeta/syncModelsWithModelsDev/testConnection
   refGroups.ts        # 网页引用的纯决策逻辑(会话级引用组记忆/焦点切换/初同步资格/草稿改写;零浏览器依赖,tests/ref-groups.test.ts 覆盖)
-  skills.ts           # 技能(Agent Skills 标准子集,决策 52):纯逻辑(parseSkillMarkdown 含未加引号含冒号的 YAML 兜底/validateSkillName/renderSkillsCatalog 只含 enabled 且非仅手动唤起/sanitizeSkill/mergeBuiltinSkills)+ 存储(local:skills 键:listSkills/saveSkill/deleteSkill/setSkillEnabled);tests/skills.test.ts 覆盖
+  skillFormat.ts      # 技能格式层(纯逻辑,不得引入持久化/扩展 API):parseSkillMarkdown(含未加引号含冒号的 YAML 兜底与缩进敏感的嵌套字段)、validateSkillName/normalizeSkillName、renderSkillsCatalog(只含 enabled 且非仅手动唤起)、sanitizeSkill、mergeBuiltinSkills、withContentBudget
+  skillStore.ts       # 技能存储层(local:skills 键):listSkills/saveSkill/deleteSkill/setSkillEnabled + "读-改-写"串行化(读永不写盘;跨窗口竞态已记档接受)
+  skillRuntime.ts     # 技能运行时状态:会话 → 技能名 → 正文指纹(markSkillLoaded/clearLoadedSkills);斜杠命令与 read_skill 共用,正文变化即重新注入
   builtinSkills.ts    # 三个内置技能文本(skill-creator/skill-installer/memory):走同一条解析路径,可禁用不可删,正文随代码刷新
   pageRefs.ts         # renderPageRefsBlock/parsePageRefs/stripPageRefs/collectPageRefs(纯函数,<page-refs> 块)
   elementLabel.ts     # elementChipLabel/elementListLabel(元素预览 chip label,CJK 视觉宽度加权)

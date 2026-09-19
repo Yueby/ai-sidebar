@@ -21,7 +21,7 @@ import { i18n } from '#i18n';
 import { effectiveMessages } from '@/lib/contextTokens';
 import { getActiveTabMeta, getTabMeta, type RefTab } from '@/lib/pageContext';
 import { parsePageRefs } from '@/lib/pageRefs';
-import { clearLoadedSkills } from '@/lib/tools/read-skill';
+import { clearLoadedSkills } from '@/lib/skillRuntime';
 import { draftAfterSend } from '@/lib/refGroups';
 import { activeRuntimeSessionIds, runtimeFor } from '@/lib/sessionRuntime';
 import type { SessionRuntime } from '@/lib/sessionRuntime';

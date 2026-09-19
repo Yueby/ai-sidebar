@@ -1,21 +1,21 @@
 /**
- * 技能(Skills)纯逻辑与工具形状回归(决策 52)。
+ * 技能**格式层**回归(`lib/skillFormat.ts`,纯逻辑)。
+ *
+ * 本文件**不得加载浏览器环境 stub**:格式层不许引入持久化或扩展侧 API,这正是它能在
+ * node 里直接跑的原因(也是模块三分拆要拿到的性质)。
  *
  * 契约:
  * ①SKILL.md 解析:frontmatter 取 name/description,正文剥掉 frontmatter;
  * ②宽松校验 —— 名字不合规只告警仍载入,description 缺失/空白才拒绝(没有它 catalog 无从工作);
  * ③跨客户端兼容 —— 值里未加引号却含冒号时整行剩余部分就是值(按 YAML 非法,但别人这么写);
  * ④catalog 只含启用且非"仅手动唤起"的技能,且必须做 XML 转义;
- * ⑤read_skill 返回 <skill_content> 包裹的正文,同一会话第二次调用不重复注入,未知名字给可行动错误。
+ * ⑤存储条目清洗、内置合并与正文预算同属纯逻辑,一并在此覆盖。
  */
-import './helpers/browser-stub';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Skill } from '../lib/types';
 import {
   findSkillByName,
-  listSkills,
-  saveSkill,
   SKILL_CONTENT_MAX,
   mergeBuiltinSkills,
   modelFacingSkills,
@@ -24,8 +24,7 @@ import {
   sanitizeSkill,
   validateSkillName,
   withContentBudget,
-} from '../lib/skills';
-import { clearLoadedSkills, createReadSkillToolDefinition } from '../lib/tools/read-skill';
+} from '../lib/skillFormat';
 import { BUILTIN_SKILL_MARKDOWN } from '../lib/builtinSkills';
 
 const skill = (over: Partial<Skill> = {}): Skill => ({
@@ -168,57 +167,6 @@ test('模型可见技能集:禁用与仅手动唤起都排除在外', () => {
   assert.equal(findSkillByName(list, 'OFF')?.name, 'off', '查名字大小写不敏感');
 });
 
-test('read_skill:返回 <skill_content> 包裹的正文,未知名字给可行动错误', async () => {
-  const tool = createReadSkillToolDefinition([skill({ name: 'demo', content: 'Do the thing.' })], 'sess-1');
-  const first = await tool.execute('c1', { name: 'demo' });
-  const text = String((first.content as { type: string; text: string }[])[0]?.text ?? '');
-  assert.ok(text.startsWith('<skill_content name="demo">'), '正文必须被 skill_content 包裹(压缩豁免靠它识别)');
-  assert.ok(text.includes('Do the thing.'));
-  assert.ok(text.includes('</skill_content>'));
-
-  const missing = await tool.execute('c2', { name: 'nope' });
-  const missingText = String((missing.content as { type: string; text: string }[])[0]?.text ?? '');
-  assert.ok(missingText.startsWith('skill_not_found:'), '未安装:结构化前缀');
-  assert.ok(missingText.includes('demo'), '错误里要列出可用技能名');
-});
-
-test('read_skill:同一会话第二次调用不重复注入正文', async () => {
-  const skills = [skill({ name: 'once', content: 'UNIQUE-BODY-MARKER' })];
-  const tool = createReadSkillToolDefinition(skills, 'sess-dedupe');
-  const first = await tool.execute('c1', { name: 'once' });
-  assert.ok(String((first.content as { type: string; text: string }[])[0]?.text).includes('UNIQUE-BODY-MARKER'));
-  const second = await tool.execute('c2', { name: 'once' });
-  const secondText = String((second.content as { type: string; text: string }[])[0]?.text ?? '');
-  assert.ok(!secondText.includes('UNIQUE-BODY-MARKER'), '重复调用不再注入正文');
-  assert.ok(secondText.includes('already loaded'));
-});
-
-test('read_skill:未启用/仅手动唤起的技能不可由模型自行载入', async () => {
-  const tool = createReadSkillToolDefinition(
-    [skill({ name: 'off', enabled: false }), skill({ name: 'manual', disableModelInvocation: true })],
-    'sess-guard',
-  );
-  for (const name of ['off', 'manual']) {
-    const res = await tool.execute('c1', { name });
-    const text = String((res.content as { type: string; text: string }[])[0]?.text ?? '');
-    assert.ok(text.startsWith('skill_not_available:'), `${name} 必须被挡住且说明原因`);
-  }
-});
-
-test('存储:并发保存不丢更新(读-改-写串行化)', async () => {
-  // 两个写者同时基于同一份旧列表改:未串行化时后写者会把先写者抹掉
-  const [a, b] = await Promise.all([
-    saveSkill({ name: 'race-a', description: 'A skill', content: 'BODY-A' }),
-    saveSkill({ name: 'race-b', description: 'B skill', content: 'BODY-B' }),
-  ]);
-  assert.ok(a.ok && b.ok, '两次保存都成功');
-  const names = (await listSkills()).map((skill) => skill.name);
-  assert.ok(
-    names.includes('race-a') && names.includes('race-b'),
-    `两个技能都必须存在,实际: ${names.join(', ')}`,
-  );
-});
-
 test('解析:正文超长时截断,并在正文里留痕', () => {
   const body = 'x'.repeat(SKILL_CONTENT_MAX + 50);
   const parsed = parseSkillMarkdown(`---\nname: big-body\ndescription: A skill\n---\n${body}`);
@@ -292,78 +240,3 @@ test('正文预算:截断留痕、幂等,且清洗路径不抹掉痕迹', () => 
   assert.ok(sanitized!.content.includes('truncated at'), '清洗路径不得把留痕切掉');
 });
 
-test('安装:不合标准的名字被规范化后保存(手写路径仍严格)', async () => {
-  const installed = await saveSkill({
-    name: 'PDF_Processing',
-    description: 'A skill',
-    content: 'BODY',
-    source: 'github',
-    allowNonStandardName: true,
-  });
-  assert.ok(installed.ok, '外部导入不因名字被拒');
-  if (installed.ok) {
-    assert.equal(installed.skill.name, 'pdf-processing', '规范化到标准形状');
-    assert.equal(installed.renamedFrom, 'PDF_Processing', '回报被规范化的原名');
-  }
-
-  const handwritten = await saveSkill({ name: 'PDF_Processing', description: 'A skill', content: 'BODY' });
-  assert.equal(handwritten.ok, false, '手写/编辑路径仍然严格');
-});
-
-test('保存:disable-model-invocation 只在明确传值时才改变', async () => {
-  const created = await saveSkill({
-    name: 'manual-skill',
-    description: 'A skill',
-    content: 'BODY',
-    disableModelInvocation: true,
-  });
-  assert.ok(created.ok);
-
-  const kept = await saveSkill({ name: 'manual-skill', description: 'Updated', content: 'BODY2' });
-  assert.ok(kept.ok);
-  if (kept.ok) assert.equal(kept.skill.disableModelInvocation, true, '未传 = 保留原值');
-
-  const cleared = await saveSkill({
-    name: 'manual-skill',
-    description: 'Updated',
-    content: 'BODY3',
-    disableModelInvocation: false,
-  });
-  assert.ok(cleared.ok);
-  if (cleared.ok) assert.equal(cleared.skill.disableModelInvocation, undefined, '明确 false = 清掉');
-});
-
-test('read_skill:转录被截断后清掉已载入记录,正文可以再次载入', async () => {
-  const skills = [skill({ name: 'reloadable', content: 'RELOAD-BODY-MARKER' })];
-  const tool = createReadSkillToolDefinition(skills, 'sess-reload');
-  const textOf = (res: { content: unknown }) =>
-    String((res.content as { type: string; text: string }[])[0]?.text ?? '');
-
-  assert.ok(textOf(await tool.execute('c1', { name: 'reloadable' })).includes('RELOAD-BODY-MARKER'));
-  assert.ok(
-    !textOf(await tool.execute('c2', { name: 'reloadable' })).includes('RELOAD-BODY-MARKER'),
-    '未清之前不重复注入',
-  );
-
-  // 编辑重发截断了转录 → 旧正文已不在上下文里,去重记录必须失效
-  clearLoadedSkills('sess-reload');
-  assert.ok(
-    textOf(await tool.execute('c3', { name: 'reloadable' })).includes('RELOAD-BODY-MARKER'),
-    '清掉之后必须能再次拿到正文',
-  );
-});
-
-test('read_skill:技能正文被改动后必须重新注入(去重按内容指纹,不是布尔)', async () => {
-  // 会话中途在设置里改了正文:旧指令已过时,再调必须拿到新版本
-  const before = [skill({ name: 'mutable', content: 'OLD-INSTRUCTIONS' })];
-  const t1 = createReadSkillToolDefinition(before, 'sess-fingerprint');
-  const first = await t1.execute('c1', { name: 'mutable' });
-  assert.ok(String((first.content as { type: string; text: string }[])[0]?.text).includes('OLD-INSTRUCTIONS'));
-
-  const after = [skill({ name: 'mutable', content: 'NEW-INSTRUCTIONS' })];
-  const t2 = createReadSkillToolDefinition(after, 'sess-fingerprint');
-  const second = await t2.execute('c2', { name: 'mutable' });
-  const text = String((second.content as { type: string; text: string }[])[0]?.text ?? '');
-  assert.ok(text.includes('NEW-INSTRUCTIONS'), '正文变了就要给新的');
-  assert.ok(!text.includes('already loaded'), '不能拿旧记录挡住新正文');
-});

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { i18n } from '#i18n';
 import type { Skill } from '@/lib/types';
-import { listSkills, saveSkill, deleteSkill, setSkillEnabled } from '@/lib/skills';
+import { deleteSkill, listSkills, saveSkill, setSkillEnabled } from '@/lib/skillStore';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

@@ -2,7 +2,8 @@ import { Type } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { toolLabel } from '../toolLabels';
 import type { Skill, ToolRisk } from '../types';
-import { findSkillByName, modelFacingSkills } from '../skills';
+import { findSkillByName, modelFacingSkills } from '../skillFormat';
+import { markSkillLoaded } from '../skillRuntime';
 
 const READ_SKILL_PARAMS = Type.Object({
   name: Type.String({
@@ -10,30 +11,6 @@ const READ_SKILL_PARAMS = Type.Object({
       'Name of the skill to load, exactly as listed in <available_skills> (case-insensitive).',
   }),
 });
-
-/**
- * 同一会话里已载入的技能:同一套指令重复进转录纯属浪费 token,标准也要求去重。
- *
- * 会话即作用域(新对话 = 新 sessionId),面板存活期内的 Map 足够。
- * **随转录截断重置**:编辑重发会截掉旧工具结果,这时正文已经不在转录里了,
- * 继续去重会让模型只拿到"already loaded"而拿不到指令 —— 故由转录替换路径调 clearLoadedSkills。
- */
-/**
- * 已载入记录:会话 → (技能名 → 正文指纹)。
- * 指纹而非布尔:技能在会话中途被编辑后,旧正文已过时,必须重新注入当前版本,
- * 否则模型会继续照着**被替换掉的指令**行事(布尔标记看不出这一点)。
- */
-const loadedBySession = new Map<string, Map<string, string>>();
-
-/** 正文指纹:长度 + 头尾片段,足以识别"这份技能正文换了" */
-function contentFingerprint(content: string): string {
-  return `${content.length}:${content.slice(0, 48)}:${content.slice(-48)}`;
-}
-
-/** 清掉某会话的已载入记录(转录被替换/截断时调用:旧正文已不在上下文里) */
-export function clearLoadedSkills(sessionId: string): void {
-  loadedBySession.delete(sessionId);
-}
 
 /**
  * read_skill 工具定义(safe):按需载入技能正文(渐进披露第二层;决策 52)。
@@ -99,9 +76,8 @@ export function createReadSkillToolDefinition(
         };
       }
       const sessionKey = sessionId ?? '';
-      const loaded = loadedBySession.get(sessionKey) ?? new Map<string, string>();
-      const fingerprint = contentFingerprint(skill.content);
-      if (loaded.get(skill.name) === fingerprint) {
+      // 已载入记录由 lib/skillRuntime 维护(与斜杠命令共用):同一版本 → 只告知,不重复注入正文
+      if (markSkillLoaded(sessionKey, skill.name, skill.content)) {
         return {
           content: [
             {
@@ -112,8 +88,6 @@ export function createReadSkillToolDefinition(
           details: { skill: skill.name, loaded: false },
         };
       }
-      loaded.set(skill.name, fingerprint);
-      loadedBySession.set(sessionKey, loaded);
       return {
         content: [
           {

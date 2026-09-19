@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { i18n } from '#i18n';
 import type { Skill } from '@/lib/types';
-import { validateSkillName, SKILL_NAME_MAX, SKILL_DESCRIPTION_MAX } from '@/lib/skills';
+import { SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX, validateSkillName } from '@/lib/skillFormat';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';

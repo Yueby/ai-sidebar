@@ -20,7 +20,8 @@ import { localDate, utcOffsetLabel, weekdayName } from './tools/time';
 import { getTools } from './tools/registry';
 import { getAgentOpenedTabs } from './pageContext';
 import { collectPageRefs, PAGE_REFS_TAG, parsePageRefs, renderPageRefsBlock } from './pageRefs';
-import { listSkills, renderSkillsCatalog } from './skills';
+import { renderSkillsCatalog } from './skillFormat';
+import { listSkills } from './skillStore';
 
 export type { AgentEvent } from '@earendil-works/pi-agent-core';
 

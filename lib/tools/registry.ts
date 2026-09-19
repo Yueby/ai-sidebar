@@ -18,7 +18,7 @@ import { isWebSearchConfigured } from '../webSearch';
 import { createExecuteJsToolDefinition } from './execute-js';
 import { createReadSkillToolDefinition } from './read-skill';
 import { createSaveSkillToolDefinition } from './save-skill';
-import { modelFacingSkills } from '../skills';
+import { modelFacingSkills } from '../skillFormat';
 import { createReadTimeToolDefinition } from './read-time';
 import { createAskUserToolDefinition } from './ask-user';
 import { createCompactContextToolDefinition } from './compact-context';

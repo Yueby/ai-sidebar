@@ -4,7 +4,7 @@ import { i18n } from '#i18n';
 import { toolLabel } from '../toolLabels';
 import type { ToolRisk } from '../types';
 import { createGatedTool } from '../gate';
-import { saveSkill } from '../skills';
+import { saveSkill } from '../skillStore';
 
 const SAVE_SKILL_PARAMS = Type.Object({
   name: Type.String({

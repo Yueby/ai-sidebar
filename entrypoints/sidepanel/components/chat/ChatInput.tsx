@@ -22,7 +22,9 @@ import type { QueuedMessage } from '../../store/chatSlice';
 import type { Settings, ReasoningLevel, PickedElement, Skill } from '@/lib/types';
 import { reasoningLabel } from '@/lib/reasoningLabels';
 import { SLASH_COMMANDS, type SlashCommand } from '@/lib/slashCommands';
-import { listSkills } from '@/lib/skills';
+import { listSkills } from '@/lib/skillStore';
+import { markSkillLoaded } from '@/lib/skillRuntime';
+import { useAppStore } from '../../store';
 import type { ContextUsage } from '@/lib/contextTokens';
 import { getModelReasoningLevels, resolveReasoningLevel } from '@/lib/providers';
 import { listCandidateTabs, getActiveTabMeta, type RefTab } from '@/lib/pageContext';
@@ -224,6 +226,11 @@ export function ChatInput({
         return;
       }
       const body = `<skill_content name="${fresh.name}">\n${fresh.content}\n</skill_content>`;
+      // 记入"已载入":正文已经作为用户消息进了转录，模型随后若调 read_skill
+      // 应该得到 already loaded 而不是再注入一份(两条激活路径共用同一份记录)。
+      // 取不到会话 id 就跳过标记 —— 宁可重复一次，也不要在这里报错挡住发送。
+      const activeSessionId = useAppStore.getState().activeSessionId;
+      if (activeSessionId) markSkillLoaded(activeSessionId, fresh.name, fresh.content);
       onSend(args ? `${body}\n\nUser: ${args}` : body);
     },
     [disabled, onSend, resetToSkillPrefix]

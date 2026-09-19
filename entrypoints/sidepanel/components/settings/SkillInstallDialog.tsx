@@ -1,7 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { i18n } from '#i18n';
 import type { Skill } from '@/lib/types';
-import { parseSkillMarkdown, normalizeSkillName, validateSkillName, type SkillParseResult } from '@/lib/skills';
+import {
+  normalizeSkillName,
+  parseSkillMarkdown,
+  validateSkillName,
+  type SkillParseResult,
+} from '@/lib/skillFormat';
 import { fetchRawText, normalizeGitHubRawUrl } from '@/lib/fetchPage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
