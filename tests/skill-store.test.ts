@@ -15,7 +15,7 @@ import './helpers/browser-stub';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Skill } from '../lib/types';
-import { listSkills, saveSkill } from '../lib/skillStore';
+import { deleteSkill, listSkills, saveSkill, setSkillEnabled } from '../lib/skillStore';
 import { createReadSkillToolDefinition } from '../lib/tools/read-skill';
 import { clearLoadedSkills } from '../lib/skillRuntime';
 
@@ -155,4 +155,42 @@ test('read_skill:技能正文被改动后必须重新注入(去重按内容指�
   const text = String((second.content as { type: string; text: string }[])[0]?.text ?? '');
   assert.ok(text.includes('NEW-INSTRUCTIONS'), '正文变了就要给新的');
   assert.ok(!text.includes('already loaded'), '不能拿旧记录挡住新正文');
+});
+
+test('存储:内置技能不可覆盖、不可删除;用户技能可删', async () => {
+  const all = await listSkills();
+  const builtin = all.find((entry) => entry.source === 'builtin');
+  assert.ok(builtin, '至少有一个内置技能');
+
+  const overwrite = await saveSkill({
+    name: builtin.name,
+    description: '试图覆盖内置技能',
+    content: 'hijacked',
+  });
+  assert.equal(overwrite.ok, false, '内置技能不可被同名覆盖');
+  const removeBuiltin = await deleteSkill(builtin.id);
+  assert.equal(removeBuiltin.ok, false, '内置技能不可删除(可禁用)');
+  const stillThere = (await listSkills()).find((entry) => entry.id === builtin.id);
+  assert.ok(stillThere, '两次拒绝之后内置技能仍在');
+
+  const created = await saveSkill({ name: 'deletable', description: '可删', content: 'BODY' });
+  assert.ok(created.ok);
+  if (created.ok) {
+    assert.equal((await deleteSkill(created.skill.id)).ok, true, '用户技能可删除');
+    assert.ok(
+      !(await listSkills()).some((entry) => entry.name === 'deletable'),
+      '删除后列表里不再有它',
+    );
+  }
+});
+
+test('存储:启用切换落盘,且禁用后不再面向模型', async () => {
+  const all = await listSkills();
+  const target = all[0]!;
+  assert.equal((await setSkillEnabled(target.id, false)).ok, true);
+  const after = (await listSkills()).find((entry) => entry.id === target.id);
+  assert.equal(after?.enabled, false, '禁用状态必须落盘');
+  assert.equal((await setSkillEnabled(target.id, true)).ok, true);
+  assert.equal((await listSkills()).find((entry) => entry.id === target.id)?.enabled, true, '可再启用');
+  assert.equal((await setSkillEnabled('no-such-id', false)).ok, false, '未知 id 给出失败而非静默成功');
 });
