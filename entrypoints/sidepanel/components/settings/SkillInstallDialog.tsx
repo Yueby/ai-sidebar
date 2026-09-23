@@ -19,8 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { AlertCircle, AlertTriangle, CheckCircle2, Download, Info } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface SkillInstallDialogProps {
   open: boolean;
@@ -143,161 +147,155 @@ export function SkillInstallDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] flex flex-col">
         <DialogHeader>
           <DialogTitle>{i18n.t('skillInstallDialog.title')}</DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription>
             {i18n.t('skillInstallDialog.subtitle')}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3.5 pt-1">
-          <FieldGroup className="gap-2">
-            <Field data-invalid={Boolean(fetchError)}>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <FieldLabel className="text-[11px] font-medium">{i18n.t('skillInstallDialog.urlLabel')}</FieldLabel>
-                <span className="text-[10px] opacity-70">{i18n.t('skillInstallDialog.urlHint')}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      void handleFetch();
-                    }
-                  }}
-                  placeholder={i18n.t('skillInstallDialog.urlPlaceholder')}
-                  className="h-8 text-xs font-mono flex-1 min-w-0"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={fetching || !url.trim()}
-                  onClick={() => void handleFetch()}
-                  className="h-8 shrink-0 text-xs px-2.5 gap-1.5"
-                >
-                  {fetching ? <Spinner className="size-3.5" /> : <Download className="size-3.5" />}
-                  <span>{fetching ? i18n.t('skillInstallDialog.fetching') : i18n.t('skillInstallDialog.fetchAction')}</span>
-                </Button>
-              </div>
-            </Field>
-          </FieldGroup>
-
-          {/* 抓取或解析错误 */}
-          {fetchError && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-              <AlertCircle className="size-4 shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1 leading-relaxed break-all">{fetchError}</div>
-            </div>
-          )}
-          {parseError && (
-            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
-              <AlertCircle className="size-4 shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1 leading-relaxed break-all">{parseError}</div>
-            </div>
-          )}
-
-          {/* 预览区域 (仅抓取解析成功后呈现) */}
-          {preview && (
-            <div className="space-y-2.5 rounded-lg border border-border/80 bg-muted/20 p-3 animate-in fade-in-0 duration-150 motion-reduce:animate-none">
-              <div className="flex items-center justify-between gap-2 border-b border-border/50 pb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
-                  <span className="font-mono text-xs font-semibold text-foreground truncate">
-                    {willRename && normalizedName ? normalizedName : preview.name}
-                  </span>
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          <div className="space-y-4">
+            <FieldGroup>
+              <Field data-invalid={Boolean(fetchError)}>
+                <div className="flex items-center justify-between">
+                  <FieldLabel>{i18n.t('skillInstallDialog.urlLabel')}</FieldLabel>
+                  <span className="text-muted-foreground text-xs">{i18n.t('skillInstallDialog.urlHint')}</span>
                 </div>
-                <span className="text-[10px] text-muted-foreground shrink-0 uppercase tracking-wider font-medium">
-                  {i18n.t('skillInstallDialog.previewTitle')}
-                </span>
-              </div>
-
-              {collision && (
-                <div
-                  className={`flex items-start gap-2 rounded-md p-2 text-xs border ${
-                    collision.type === 'builtin'
-                      ? 'border-destructive/40 bg-destructive/10 text-destructive'
-                      : 'border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300'
-                  }`}
-                >
-                  <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
-                  <span className="min-w-0 flex-1 leading-tight">{collision.message}</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void handleFetch();
+                      }
+                    }}
+                    placeholder={i18n.t('skillInstallDialog.urlPlaceholder')}
+                    className="font-mono flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={fetching || !url.trim()}
+                    onClick={() => void handleFetch()}
+                  >
+                    {fetching ? <Spinner data-icon="inline-start" /> : <Download data-icon="inline-start" />}
+                    <span>{fetching ? i18n.t('skillInstallDialog.fetching') : i18n.t('skillInstallDialog.fetchAction')}</span>
+                  </Button>
                 </div>
-              )}
+              </Field>
+            </FieldGroup>
 
-              {/* 名字不合标准:会被规范化后保存(外部仓库无法要求改名) */}
-              {willRename && (
-                <div className="flex items-start gap-2 rounded-md p-2 text-xs border border-border/70 bg-muted/40 text-muted-foreground">
-                  <Info className="size-3.5 shrink-0 mt-0.5" />
-                  <span className="min-w-0 flex-1 leading-tight break-all">
-                    {normalizedName
-                      ? i18n.t('skillInstallDialog.renameNote', {
-                          from: preview.name,
-                          to: normalizedName,
-                        })
-                      : i18n.t('skillInstallDialog.renameImpossible', { from: preview.name })}
-                  </span>
-                </div>
-              )}
+            {/* 抓取或解析错误 */}
+            {fetchError && (
+              <Alert variant="destructive">
+                <AlertCircle />
+                <AlertDescription className="break-all">{fetchError}</AlertDescription>
+              </Alert>
+            )}
+            {parseError && (
+              <Alert variant="destructive">
+                <AlertCircle />
+                <AlertDescription className="break-all">{parseError}</AlertDescription>
+              </Alert>
+            )}
 
-              {/* 描述 */}
-              <div className="text-xs text-muted-foreground leading-relaxed bg-background/80 p-2 rounded border border-border/50">
-                {preview.description}
-              </div>
-
-              {/* 告警信息 */}
-              {preview.diagnostics.length > 0 && (
-                <div className="space-y-1 rounded border border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/10 p-2 text-[11px] text-amber-700 dark:text-amber-300">
-                  <div className="font-medium flex items-center gap-1">
-                    <AlertTriangle className="size-3 shrink-0" />
-                    <span>{i18n.t('skillInstallDialog.diagnosticsTitle')}</span>
+            {/* 预览区域 (仅抓取解析成功后呈现) */}
+            {preview && (
+              <Card size="sm">
+                <CardHeader className="flex flex-row items-center justify-between border-b">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 className="text-emerald-500 shrink-0" />
+                    <CardTitle className="font-mono text-xs truncate">
+                      {willRename && normalizedName ? normalizedName : preview.name}
+                    </CardTitle>
                   </div>
-                  <ul className="list-disc list-inside space-y-0.5 pl-1 opacity-90">
-                    {preview.diagnostics.map((d, idx) => (
-                      <li key={idx} className="break-all">{d}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                  <Badge variant="outline">
+                    {i18n.t('skillInstallDialog.previewTitle')}
+                  </Badge>
+                </CardHeader>
 
-              {/* 正文摘要 */}
-              <div className="space-y-1">
-                <div className="text-[10px] text-muted-foreground font-medium">{i18n.t('messages.skillInstructions')}</div>
-                <pre className="max-h-32 overflow-y-auto rounded border border-border/50 bg-background/90 p-2 font-mono text-[10px] leading-relaxed text-muted-foreground whitespace-pre-wrap select-text">
-                  {preview.content.slice(0, 1000)}
-                  {preview.content.length > 1000 ? '\n…' : ''}
-                </pre>
-              </div>
-            </div>
-          )}
+                <CardContent className="space-y-3 pt-3">
+                  {collision && (
+                    <Alert variant={collision.type === 'builtin' ? 'destructive' : 'default'}>
+                      <AlertTriangle />
+                      <AlertDescription>{collision.message}</AlertDescription>
+                    </Alert>
+                  )}
 
-          <DialogFooter className="gap-2 pt-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-            >
-              {i18n.t('skillInstallDialog.cancel')}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={
-                !preview ||
-                collision?.type === 'builtin' ||
-                installing ||
-                (willRename && !normalizedName)
-              }
-              onClick={() => void handleConfirmInstall()}
-            >
-              {installing ? i18n.t('app.loading') : i18n.t('skillInstallDialog.installAction')}
-            </Button>
-          </DialogFooter>
+                  {/* 名字不合标准:会被规范化后保存(外部仓库无法要求改名) */}
+                  {willRename && (
+                    <Alert>
+                      <Info />
+                      <AlertDescription className="break-all">
+                        {normalizedName
+                          ? i18n.t('skillInstallDialog.renameNote', {
+                              from: preview.name,
+                              to: normalizedName,
+                            })
+                          : i18n.t('skillInstallDialog.renameImpossible', { from: preview.name })}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* 描述 */}
+                  <CardDescription className="text-xs">
+                    {preview.description}
+                  </CardDescription>
+
+                  {/* 告警信息 */}
+                  {preview.diagnostics.length > 0 && (
+                    <Alert>
+                      <AlertTriangle />
+                      <AlertTitle>{i18n.t('skillInstallDialog.diagnosticsTitle')}</AlertTitle>
+                      <AlertDescription>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          {preview.diagnostics.map((d, idx) => (
+                            <li key={idx} className="break-all">{d}</li>
+                          ))}
+                        </ul>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* 正文摘要 */}
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">{i18n.t('messages.skillInstructions')}</div>
+                    <pre className="max-h-32 overflow-y-auto rounded-lg border bg-muted/40 p-2.5 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap select-text">
+                      {preview.content.slice(0, 1000)}
+                      {preview.content.length > 1000 ? '\n…' : ''}
+                    </pre>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            {i18n.t('skillInstallDialog.cancel')}
+          </Button>
+          <Button
+            type="button"
+            disabled={
+              !preview ||
+              collision?.type === 'builtin' ||
+              installing ||
+              (willRename && !normalizedName)
+            }
+            onClick={() => void handleConfirmInstall()}
+          >
+            {installing ? i18n.t('app.loading') : i18n.t('skillInstallDialog.installAction')}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

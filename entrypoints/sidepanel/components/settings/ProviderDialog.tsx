@@ -350,7 +350,7 @@ export function ProviderDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[88vh] flex flex-col">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] flex flex-col">
           <DialogHeader>
             <DialogTitle>
               {isNew ? i18n.t('providerDialog.addTitle') : i18n.t('providerDialog.editTitle')}
@@ -361,107 +361,104 @@ export function ProviderDialog({
           </DialogHeader>
 
           {/* Form Content */}
-          <FieldGroup className="flex-1 overflow-y-auto space-y-3 pr-1">
-            {/* Provider Name */}
-            <Field>
-              <FieldLabel className="text-xs">{i18n.t('providerDialog.nameLabel')}</FieldLabel>
-              <Input
-                value={draft.name}
-                onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
-                placeholder={i18n.t('providerDialog.namePlaceholder')}
-                className="h-8 text-xs"
-              />
-            </Field>
-
-            {/* Protocol */}
-            <Field>
-              <FieldLabel className="text-xs">{i18n.t('providerDialog.apiLabel')}</FieldLabel>
-              <Select items={API_TYPE_OPTIONS} value={draft.api} onValueChange={(v) => handleApiChange(v as ApiType)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={i18n.t('providerDialog.apiPlaceholder')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {API_TYPE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-
-            {/* Base URL */}
-            <Field>
-              <FieldLabel className="text-xs">Base URL</FieldLabel>
-              <Input
-                value={draft.baseUrl}
-                onChange={(e) => setDraft((p) => ({ ...p, baseUrl: e.target.value }))}
-                placeholder="https://api.openai.com/v1"
-                className="h-8 text-xs font-mono truncate"
-              />
-            </Field>
-
-            {/* API Key */}
-            <Field>
-              <FieldLabel className="text-xs">API Key</FieldLabel>
-              <InputGroup className="h-8">
-                <InputGroupInput
-                  type={showApiKey ? 'text' : 'password'}
-                  value={draft.apiKey}
-                  onChange={(e) => setDraft((p) => ({ ...p, apiKey: e.target.value }))}
-                  placeholder="sk-..."
-                  className="text-xs font-mono truncate"
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            <FieldGroup>
+              {/* Provider Name */}
+              <Field>
+                <FieldLabel>{i18n.t('providerDialog.nameLabel')}</FieldLabel>
+                <Input
+                  value={draft.name}
+                  onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
+                  placeholder={i18n.t('providerDialog.namePlaceholder')}
                 />
-                <InputGroupAddon align="inline-end">
-                  <TooltipProvider delay={200}>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => setShowApiKey((v) => !v)}
-                            className="text-muted-foreground hover:text-foreground"
-                            aria-label={showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
-                          >
-                            {showApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                          </Button>
-                        }
-                      />
-                      <TooltipContent side="top">
-                        {showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </InputGroupAddon>
-              </InputGroup>
-            </Field>
+              </Field>
 
-            {/* Test Connection Button & Result */}
-            <div className="flex items-center gap-2 pt-0.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={testing || !draft.baseUrl}
-                onClick={handleTest}
-                className="h-7 text-xs gap-1.5"
-              >
-                {testing ? (
-                  <Spinner className="size-3" />
-                ) : (
-                  <Zap className="size-3" />
-                )}
-                <span>{testing ? i18n.t('providerDialog.testing') : i18n.t('providerDialog.testConnectivity')}</span>
-              </Button>
+              {/* Protocol */}
+              <Field>
+                <FieldLabel>{i18n.t('providerDialog.apiLabel')}</FieldLabel>
+                <Select items={API_TYPE_OPTIONS} value={draft.api} onValueChange={(v) => handleApiChange(v as ApiType)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={i18n.t('providerDialog.apiPlaceholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {API_TYPE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {/* Base URL */}
+              <Field>
+                <FieldLabel>Base URL</FieldLabel>
+                <Input
+                  value={draft.baseUrl}
+                  onChange={(e) => setDraft((p) => ({ ...p, baseUrl: e.target.value }))}
+                  placeholder="https://api.openai.com/v1"
+                  className="font-mono truncate"
+                />
+              </Field>
+
+              {/* API Key */}
+              <Field>
+                <FieldLabel>API Key</FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
+                    type={showApiKey ? 'text' : 'password'}
+                    value={draft.apiKey}
+                    onChange={(e) => setDraft((p) => ({ ...p, apiKey: e.target.value }))}
+                    placeholder="sk-..."
+                    className="font-mono truncate"
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <TooltipProvider delay={200}>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => setShowApiKey((v) => !v)}
+                              aria-label={showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
+                            >
+                              {showApiKey ? <EyeOff /> : <Eye />}
+                            </Button>
+                          }
+                        />
+                        <TooltipContent side="top">
+                          {showApiKey ? i18n.t('providerDialog.hideApiKey') : i18n.t('providerDialog.showApiKey')}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </InputGroupAddon>
+                </InputGroup>
+              </Field>
+
+              {/* Test Connection Button & Result */}
+              <div className="flex items-center gap-2 pt-0.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={testing || !draft.baseUrl}
+                  onClick={handleTest}
+                >
+                  {testing ? (
+                    <Spinner data-icon="inline-start" />
+                  ) : (
+                    <Zap data-icon="inline-start" />
+                  )}
+                  <span>{testing ? i18n.t('providerDialog.testing') : i18n.t('providerDialog.testConnectivity')}</span>
+                </Button>
 
               {testResult && (
-                <div className="text-[11px] truncate flex-1 font-medium">
+                <div className="truncate flex-1">
                   {testResult.success ? (
-                    <span className="text-foreground">{testResult.message}</span>
+                    <span className="text-sm">{testResult.message}</span>
                   ) : (
-                    <FieldError className="text-[11px] inline text-destructive font-medium">{testResult.message}</FieldError>
+                    <FieldError>{testResult.message}</FieldError>
                   )}
                 </div>
               )}
@@ -475,7 +472,7 @@ export function ProviderDialog({
                 <div className="flex items-center justify-between gap-1">
                   <div className="font-medium text-foreground text-xs flex items-center gap-1 min-w-0">
                     <span className="truncate">{i18n.t('providerDialog.pickModels')}</span>
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 font-normal">
+                    <Badge variant="secondary">
                       {candidates.length}
                     </Badge>
                   </div>
@@ -485,7 +482,7 @@ export function ProviderDialog({
                     variant="ghost"
                     size="sm"
                     onClick={() => toggleSelectAllCandidates(filteredCandidates)}
-                    className="h-6 text-[11px] px-1.5 font-normal"
+                    className="font-normal"
                   >
                     {i18n.t('providerDialog.selectAll')}
                   </Button>
@@ -493,15 +490,15 @@ export function ProviderDialog({
 
                 {/* Candidate filter input */}
                 {candidates.length > 3 && (
-                  <InputGroup className="h-7">
+                  <InputGroup>
                     <InputGroupAddon align="inline-start">
-                      <Search className="size-3 text-muted-foreground" />
+                      <Search />
                     </InputGroupAddon>
                     <InputGroupInput
                       value={candidateSearch}
                       onChange={(e) => setCandidateSearch(e.target.value)}
                       placeholder={i18n.t('providerDialog.filterCandidatePlaceholder')}
-                      className="text-xs font-mono"
+                      className="font-mono"
                     />
                   </InputGroup>
                 )}
@@ -542,33 +539,33 @@ export function ProviderDialog({
                                 {c.id}
                               </span>
                               {c.meta?.name && (
-                                <span className="truncate text-[10px] text-muted-foreground">
+                                <span className="truncate text-xs text-muted-foreground">
                                   ({c.meta.name})
                                 </span>
                               )}
                               {isExisting && (
-                                <Badge variant="secondary" className="text-[9px] h-3.5 px-1 font-normal">
+                                <Badge variant="secondary">
                                   {i18n.t('providerDialog.added')}
                                 </Badge>
                               )}
                             </div>
 
                             {c.meta && (
-                              <div className="flex items-center gap-1 mt-0.5 flex-wrap text-[10px] text-muted-foreground">
+                              <div className="flex items-center gap-1 mt-0.5 flex-wrap text-xs text-muted-foreground">
                                 {ctx && <span>{ctx} ctx</span>}
                                 {out && <span>· {out} out</span>}
                                 {c.meta.vision && (
-                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                  <Badge variant="outline">
                                     Vision
                                   </Badge>
                                 )}
                                 {c.meta.reasoning && (
-                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                  <Badge variant="outline">
                                     {i18n.t('providerDialog.badgeReasoning')}
                                   </Badge>
                                 )}
                                 {c.meta.tools && (
-                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                  <Badge variant="outline">
                                     {i18n.t('providerDialog.badgeTools')}
                                   </Badge>
                                 )}
@@ -588,7 +585,6 @@ export function ProviderDialog({
                     variant="ghost"
                     size="sm"
                     onClick={() => setCandidates(null)}
-                    className="h-6.5 text-xs px-2"
                   >
                     {i18n.t('providerDialog.cancel')}
                   </Button>
@@ -598,7 +594,6 @@ export function ProviderDialog({
                     size="sm"
                     disabled={selectedCandidateIds.size === 0}
                     onClick={handleImportSelectedCandidates}
-                    className="h-6.5 text-xs px-2.5"
                   >
                     {i18n.t('providerDialog.importSelected', { count: selectedCandidateIds.size })}
                   </Button>
@@ -610,7 +605,7 @@ export function ProviderDialog({
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-medium text-foreground flex items-center gap-1.5 min-w-0">
                     <span className="truncate">{i18n.t('providerDialog.modelList')}</span>
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-normal">
+                    <Badge variant="secondary">
                       {draft.models.length}
                     </Badge>
                   </div>
@@ -627,13 +622,12 @@ export function ProviderDialog({
                                 size="sm"
                                 disabled={fetchingModels || syncingModels || !draft.baseUrl}
                                 onClick={handleFetchModels}
-                                className="h-6.5 text-xs gap-1 px-1.5"
                                 aria-label={i18n.t('providerDialog.fetchModelsTitle')}
                               >
                                 {fetchingModels ? (
-                                  <Spinner className="size-3" />
+                                  <Spinner data-icon="inline-start" />
                                 ) : (
-                                  <CloudDownload className="size-3" />
+                                  <CloudDownload data-icon="inline-start" />
                                 )}
                                 <span>{fetchingModels ? i18n.t('providerDialog.fetching') : i18n.t('providerDialog.fetch')}</span>
                               </Button>
@@ -655,13 +649,12 @@ export function ProviderDialog({
                                 size="sm"
                                 disabled={syncingModels || fetchingModels || draft.models.length === 0}
                                 onClick={handleSyncModels}
-                                className="h-6.5 text-xs gap-1 px-1.5"
                                 aria-label={i18n.t('providerDialog.syncModelsTitle')}
                               >
                                 {syncingModels ? (
-                                  <Spinner className="size-3" />
+                                  <Spinner data-icon="inline-start" />
                                 ) : (
-                                  <RefreshCw className="size-3" />
+                                  <RefreshCw data-icon="inline-start" />
                                 )}
                                 <span>{syncingModels ? i18n.t('providerDialog.syncing') : i18n.t('providerDialog.sync')}</span>
                               </Button>
@@ -684,10 +677,9 @@ export function ProviderDialog({
                                 setModelConfigTarget(null);
                                 setModelConfigOpen(true);
                               }}
-                              className="h-6.5 text-xs gap-1 px-1.5"
                               aria-label={i18n.t('providerDialog.addManualTitle')}
                             >
-                              <Plus className="size-3" />
+                              <Plus data-icon="inline-start" />
                               <span>{i18n.t('providerDialog.manual')}</span>
                             </Button>
                           }
@@ -702,27 +694,27 @@ export function ProviderDialog({
 
                 {/* Inline fetch status feedback */}
                 {fetchResultMsg && (
-                  <FieldDescription className="text-[11px] bg-muted/40 p-1.5 rounded">
+                  <FieldDescription>
                     {fetchResultMsg}
                   </FieldDescription>
                 )}
                 {fetchErrorMsg && (
-                  <FieldError className="text-[11px] bg-destructive/10 p-1.5 rounded">
+                  <FieldError>
                     {fetchErrorMsg}
                   </FieldError>
                 )}
 
                 {/* Search input for models */}
                 {draft.models.length > 3 && (
-                  <InputGroup className="h-7">
+                  <InputGroup>
                     <InputGroupAddon align="inline-start">
-                      <Search className="size-3 text-muted-foreground" />
+                      <Search />
                     </InputGroupAddon>
                     <InputGroupInput
                       value={modelSearch}
                       onChange={(e) => setModelSearch(e.target.value)}
                       placeholder={i18n.t('providerDialog.filterModelsPlaceholder')}
-                      className="text-xs font-mono"
+                      className="font-mono"
                     />
                   </InputGroup>
                 )}
@@ -731,7 +723,7 @@ export function ProviderDialog({
                 {draft.models.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
                     <p>{i18n.t('providerDialog.noModelsTitle')}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {i18n.t('providerDialog.noModelsDesc')}
                     </p>
                   </div>
@@ -752,27 +744,27 @@ export function ProviderDialog({
                                 {m.id}
                               </span>
                               {m.displayName && (
-                                <span className="truncate text-[10px] text-muted-foreground">
+                                <span className="truncate text-xs text-muted-foreground">
                                   ({m.displayName})
                                 </span>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-1 mt-0.5 flex-wrap text-[10px] text-muted-foreground">
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap text-xs text-muted-foreground">
                               {ctx && <span>{ctx} ctx</span>}
                               {out && <span>· {out} out</span>}
                               {m.vision && (
-                                <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                <Badge variant="outline">
                                   Vision
                                 </Badge>
                               )}
                               {m.reasoning && (
-                                <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                <Badge variant="outline">
                                   {i18n.t('providerDialog.badgeReasoning')}
                                 </Badge>
                               )}
                               {m.tools && (
-                                <Badge variant="outline" className="text-[9px] h-3.5 px-1 font-normal">
+                                <Badge variant="outline">
                                   {i18n.t('providerDialog.badgeTools')}
                                 </Badge>
                               )}
@@ -787,15 +779,14 @@ export function ProviderDialog({
                                     <Button
                                       type="button"
                                       variant="ghost"
-                                      size="icon"
+                                      size="icon-xs"
                                       onClick={() => {
                                         setModelConfigTarget(m);
                                         setModelConfigOpen(true);
                                       }}
-                                      className="size-6 text-muted-foreground hover:text-foreground"
                                       aria-label={i18n.t('providerDialog.configParamsTitle')}
                                     >
-                                      <Pencil className="size-3" />
+                                      <Pencil />
                                     </Button>
                                   }
                                 />
@@ -809,12 +800,11 @@ export function ProviderDialog({
                                     <Button
                                       type="button"
                                       variant="ghost"
-                                      size="icon"
+                                      size="icon-xs"
                                       onClick={() => handleDeleteModel(m.id)}
-                                      className="size-6 text-muted-foreground hover:text-destructive"
                                       aria-label={i18n.t('providerDialog.deleteModelTitle')}
                                     >
-                                      <Trash2 className="size-3" />
+                                      <Trash2 />
                                     </Button>
                                   }
                                 />
@@ -831,24 +821,21 @@ export function ProviderDialog({
                 )}
               </div>
             )}
-          </FieldGroup>
+            </FieldGroup>
+          </div>
 
-          <DialogFooter className="flex-row justify-end gap-2">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              size="sm"
               onClick={() => onOpenChange(false)}
-              className="h-7 text-xs"
             >
               {i18n.t('providerDialog.cancel')}
             </Button>
             <Button
               type="button"
-              size="sm"
               disabled={!draft.name.trim() || !draft.baseUrl.trim()}
               onClick={handleSave}
-              className="h-7 text-xs"
             >
               {i18n.t('providerDialog.save')}
             </Button>
