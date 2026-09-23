@@ -135,3 +135,196 @@ export function nextElementId(draft: SessionDraft): number {
     ) + 1
   );
 }
+
+/**
+ * 检查草稿是否为空(既无未发文本输入,也无网页引用与框选元素)。
+ * 用于新建/复用会话决策:技能创作等入口要求目标会话是干净的,不能冲掉用户正在写的草稿或引用的网页。
+ */
+export function isBlankDraft(draft?: SessionDraft | null): boolean {
+  if (!draft) return true;
+  if (typeof draft.input === 'string' && draft.input.trim().length > 0) return false;
+  if (Array.isArray(draft.refTabs) && draft.refTabs.length > 0) return false;
+  if (Array.isArray(draft.pickedElements) && draft.pickedElements.length > 0) return false;
+  return true;
+}
+
+/**
+ * 检查会话是否可作为空闲空会话复用。
+ *
+ * @param session 当前会话对象
+ * @param options.requireBlankDraft 是否要求草稿也是纯白板(技能创作传 true;常规 handleNewSession 传 false/undefined)
+ * @param options.hasPendingWork 是否存在未完成的后台任务(排队消息、运行态、准备中、门控)
+ */
+export function isSessionReusable(
+  session: { messages: readonly unknown[]; draft?: SessionDraft } | null | undefined,
+  options?: { requireBlankDraft?: boolean; hasPendingWork?: boolean },
+): boolean {
+  if (!session) return false;
+  if (session.messages.length > 0) return false;
+  if (options?.hasPendingWork) return false;
+  if (options?.requireBlankDraft && !isBlankDraft(session.draft)) return false;
+  return true;
+}
+
+export interface PlanSessionTargetParams {
+  currentSession: {
+    id: string;
+    messages: readonly unknown[];
+    draft?: SessionDraft;
+  } | null;
+  hasPendingWork?: boolean;
+  options?: {
+    requireBlankDraft?: boolean;
+    initialInput?: string;
+  };
+}
+
+export type PlannedSessionTarget =
+  | {
+      action: 'reuse';
+      targetId: string;
+      draftPatch: { input: string } | null;
+    }
+  | {
+      action: 'create';
+      initialDraft: SessionDraft | undefined;
+    };
+
+/**
+ * 纯决策函数:为会话新建/技能创作入口规划目标会话(复用现有空闲会话还是新建)。
+ *
+ * 契约:
+ * ① 老会话保留:当前会话有历史消息，或 (requireBlankDraft 为 true 时) 草稿有未发输入/页面引用/框选元素，必须新建，绝不冲掉老会话。
+ * ② 空闲复用:当前会话无消息、无后台任务、草稿满足白板要求，直接复用当前会话。
+ * ③ 忙会话新建:当前会话虽无消息但有后台任务(排队/运行/门控)，必须新建，不把用户留在忙碌会话中。
+ * ④ 异步目标锁定:若提供 initialInput，无论复用还是新建，目标会话在异步保存前就已确定其草稿载荷。
+ */
+export function planSessionTarget(params: PlanSessionTargetParams): PlannedSessionTarget {
+  const { currentSession, hasPendingWork = false, options } = params;
+
+  const reusable = isSessionReusable(currentSession, {
+    requireBlankDraft: options?.requireBlankDraft,
+    hasPendingWork,
+  });
+
+  if (reusable && currentSession) {
+    return {
+      action: 'reuse',
+      targetId: currentSession.id,
+      draftPatch: options?.initialInput !== undefined ? { input: options.initialInput } : null,
+    };
+  }
+
+  return {
+    action: 'create',
+    initialDraft: options?.initialInput !== undefined
+      ? { input: options.initialInput, refTabs: [], pickedElements: [] }
+      : undefined,
+  };
+}
+
+export interface SessionCreationStoreAdapter<TSession extends { id: string; messages: readonly unknown[]; draft?: SessionDraft } = any> {
+  getSessions: () => TSession[];
+  getActiveSessionId: () => string | null;
+  setSessions: (sessions: TSession[]) => void;
+  setActiveSessionId: (id: string) => void;
+  patchDraftOf: (id: string, patch: (d: SessionDraft) => SessionDraft) => void;
+  dropPendingDraftSave: (id: string) => void;
+  flushDraftSaves: () => void;
+  createSession: (initialDraft?: SessionDraft) => TSession;
+  saveSession: (session: TSession) => Promise<void>;
+  setActiveSessionIdStorage: (id: string) => Promise<void>;
+  hasPendingWork?: (sessionId: string) => boolean;
+}
+
+/**
+ * 校验目标会话在异步操作后是否仍具备继续导航资格:
+ * 必须会话仍在列表中,且当前激活会话仍与目标一致。
+ * 若用户在异步期间已切换至其它会话或目标被删,则不得触发界面切回或重绘。
+ */
+export function shouldNavigateToSkillSession(params: {
+  targetSessionId: string | null | undefined;
+  activeSessionId: string | null | undefined;
+  sessions: Array<{ id: string }>;
+}): boolean {
+  const { targetSessionId, activeSessionId, sessions } = params;
+  if (!targetSessionId) return false;
+  if (activeSessionId !== targetSessionId) return false;
+  return sessions.some((s) => s.id === targetSessionId);
+}
+
+/**
+ * 异步会话创建与落盘编排核心(与 React 解耦,可完整受控测试)。
+ *
+ * 契约:
+ * 1. 同步目标草稿锁定:在首个 await 前同步写入 initialInput / 生成带 draft 的 session;
+ * 2. 存储回写防踩踏:若 await saveSession 期间 activeSessionId 已变,不向 storage 回写旧目标 ID;
+ * 3. 失败回滚保护:saveSession 失败时,仅在用户仍停留在失败目标、且其间未产生消息或后台工作时才回滚剔除;若用户已切走,绝不抢夺切走后的 active ID;
+ * 4. 清理待写草稿:失败时 dropPendingDraftSave,防防抖定时器复活该会话。
+ */
+export async function executeSessionCreation<TSession extends { id: string; messages: readonly unknown[]; draft?: SessionDraft }>(
+  adapter: SessionCreationStoreAdapter<TSession>,
+  options?: { requireBlankDraft?: boolean; initialInput?: string },
+): Promise<string> {
+  const currentId = adapter.getActiveSessionId();
+  const sessions = adapter.getSessions();
+  const cur = currentId ? sessions.find((s) => s.id === currentId) ?? null : null;
+
+  const hasWork = cur ? (adapter.hasPendingWork ? adapter.hasPendingWork(cur.id) : false) : false;
+
+  const plan = planSessionTarget({
+    currentSession: cur,
+    hasPendingWork: hasWork,
+    options,
+  });
+
+  if (plan.action === 'reuse') {
+    if (plan.draftPatch) {
+      adapter.patchDraftOf(plan.targetId, (d) => ({
+        ...d,
+        ...plan.draftPatch,
+      }));
+    }
+    return plan.targetId;
+  }
+
+  adapter.flushDraftSaves();
+
+  const newSess = adapter.createSession(plan.initialDraft);
+  const next = [newSess, ...adapter.getSessions()];
+  adapter.setSessions(next);
+  adapter.setActiveSessionId(newSess.id);
+
+  try {
+    await adapter.saveSession(newSess);
+  } catch (err) {
+    adapter.dropPendingDraftSave(newSess.id);
+    const stNowSessions = adapter.getSessions();
+    const latestSess = stNowSessions.find((s) => s.id === newSess.id);
+    const hasWorkNow =
+      !!latestSess &&
+      (latestSess.messages.length > 0 ||
+        (adapter.hasPendingWork ? adapter.hasPendingWork(newSess.id) : false));
+
+    if (!hasWorkNow) {
+      const rollbackSessions = stNowSessions.filter((s) => s.id !== newSess.id);
+      adapter.setSessions(rollbackSessions);
+      // 仅当前激活会话仍在失败目标时，且旧目标仍存在才恢复
+      if (adapter.getActiveSessionId() === newSess.id) {
+        const curStillExists = cur && rollbackSessions.some((s) => s.id === cur.id);
+        if (curStillExists) {
+          adapter.setActiveSessionId(cur.id);
+        } else if (rollbackSessions.length > 0) {
+          adapter.setActiveSessionId(rollbackSessions[0]!.id);
+        }
+      }
+    }
+    throw err;
+  }
+
+  // 避免较新切换被回写
+  if (adapter.getActiveSessionId() === newSess.id) {
+    await adapter.setActiveSessionIdStorage(newSess.id);
+  }
+  return newSess.id;
+}

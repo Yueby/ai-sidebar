@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/tooltip';
 import { cn, getErrorMessage } from '@/lib/utils';
 import { ModelConfigDialog } from './ModelConfigDialog';
+import { InfoTip } from './InfoTip';
 
 interface ProviderDialogProps {
   open: boolean;
@@ -352,10 +353,13 @@ export function ProviderDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] flex flex-col">
           <DialogHeader>
-            <DialogTitle>
-              {isNew ? i18n.t('providerDialog.addTitle') : i18n.t('providerDialog.editTitle')}
-            </DialogTitle>
-            <DialogDescription>
+            <div className="flex items-center gap-1.5">
+              <DialogTitle>
+                {isNew ? i18n.t('providerDialog.addTitle') : i18n.t('providerDialog.editTitle')}
+              </DialogTitle>
+              <InfoTip content={i18n.t('providerDialog.subtitle')} />
+            </div>
+            <DialogDescription className="sr-only">
               {i18n.t('providerDialog.subtitle')}
             </DialogDescription>
           </DialogHeader>

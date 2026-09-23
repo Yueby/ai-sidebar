@@ -34,16 +34,21 @@ import { toast } from '@/components/ui/toast';
 import { Plus, Pencil, Trash2, Sparkles, Download, Info, Layers, GitBranch, User } from 'lucide-react';
 import { SkillDialog } from './SkillDialog';
 import { SkillInstallDialog } from './SkillInstallDialog';
-import { cn } from '@/lib/utils';
+import { InfoTip } from './InfoTip';
+import { cn, getErrorMessage } from '@/lib/utils';
 
 interface SettingsSkillsViewProps {
   onBack: () => void;
-  onPrefillPrompt?: (promptText: string) => void;
+  onCreateSkillWithAi: (template: string) => Promise<void>;
 }
 
-export function SettingsSkillsView({ onBack, onPrefillPrompt }: SettingsSkillsViewProps) {
+export function SettingsSkillsView({
+  onBack,
+  onCreateSkillWithAi,
+}: SettingsSkillsViewProps) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creatingWithAi, setCreatingWithAi] = useState(false);
 
   // 弹窗状态
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -146,24 +151,29 @@ export function SettingsSkillsView({ onBack, onPrefillPrompt }: SettingsSkillsVi
     }
   };
 
-  // 让 AI 创作: 关闭设置 Drawer, 并预填提示词至 Composer
-  const handleCreateWithAi = () => {
+  // 让 AI 创作: 导航至空白会话并预填提示词至 Composer
+  const handleCreateWithAi = async () => {
+    if (creatingWithAi) return;
     const template = i18n.t('settings.skills.createPromptText');
-    onPrefillPrompt?.(template);
-    onBack();
+    setCreatingWithAi(true);
+    try {
+      await onCreateSkillWithAi(template);
+    } catch (err) {
+      toast.error(getErrorMessage(err) || i18n.t('settings.skills.saveFailed'));
+    } finally {
+      setCreatingWithAi(false);
+    }
   };
 
   return (
     <div className="space-y-3.5">
       {/* 头部标题与快捷操作 */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
           <div className="text-xs font-semibold text-foreground">
             {i18n.t('settings.skills.title', { count: skills.length })}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-            {i18n.t('settings.skills.desc')}
-          </p>
+          <InfoTip content={i18n.t('settings.skills.desc')} />
         </div>
 
         {/* 顶部操作按钮 */}
@@ -172,6 +182,7 @@ export function SettingsSkillsView({ onBack, onPrefillPrompt }: SettingsSkillsVi
             type="button"
             variant="outline"
             size="xs"
+            disabled={creatingWithAi}
             onClick={handleCreateWithAi}
             className="h-7 px-2 text-xs gap-1"
           >
@@ -232,6 +243,7 @@ export function SettingsSkillsView({ onBack, onPrefillPrompt }: SettingsSkillsVi
                 type="button"
                 variant="secondary"
                 size="sm"
+                disabled={creatingWithAi}
                 onClick={handleCreateWithAi}
                 className="gap-1"
               >

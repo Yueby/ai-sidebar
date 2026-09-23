@@ -5,6 +5,7 @@ import { settingsItem, activeSessionIdItem, sanitizeSettings, createSession } fr
 import { listSessions, saveSession, deleteSession } from '@/lib/sessionStore';
 import { resolveAuxModel } from '@/lib/providers';
 import { resolveAiLanguage } from '@/lib/language';
+import { isBlankDraft, executeSessionCreation, type SessionCreationStoreAdapter } from '@/lib/refGroups';
 import { buildProvider } from '@/lib/agent';
 import { disposeSessionAgent } from '@/lib/agent';
 import { disposeRuntime } from '@/lib/sessionRuntime';
@@ -251,11 +252,12 @@ export function useSessionManager() {
       const leaving = leavingId
         ? sessions.find((s) => s.id === leavingId) ?? null
         : null;
-      // 回收空会话仅当它没有任何后台遗留(队列/运行/门控);否则切走会杀掉其排队消息
+      // 回收空会话仅当它没有任何后台遗留(队列/运行/门控)且草稿也是干净的(保护未发草稿与网页引用);否则切走不回收
       const st = useAppStore.getState();
       const recycle =
         !!leaving &&
         leaving.messages.length === 0 &&
+        isBlankDraft(leaving.draft) &&
         !st.queuedMessages.some((q) => q.sessionId === leaving.id) &&
         !st.runs[leaving.id] &&
         !st.preparingSessionIds.includes(leaving.id) &&
@@ -272,41 +274,43 @@ export function useSessionManager() {
         await deleteSession(leaving!.id);
       }
       setActiveSessionId(id);
-      await activeSessionIdItem.setValue(id);
+      if (useAppStore.getState().activeSessionId === id) {
+        await activeSessionIdItem.setValue(id);
+      }
       // 不再清空错误:错误按归属分流(App),后台错误需在切回时仍可见
     },
     [resetGates, setErrorMessage, setActiveSessionId, setSessions]
   );
 
-  const handleNewSession = useCallback(async () => {
-    // 规则 2:当前会话已是空的 → 直接复用不叠加
-    const { sessions, activeSessionId } = useAppStore.getState();
-    const cur = activeSessionId
-      ? sessions.find((s) => s.id === activeSessionId) ?? null
-      : null;
-    // 复用仅当空会话且无后台遗留(排队/运行/门控);否则新建,不把用户留在有任务的会话
-    const st0 = useAppStore.getState();
-    const idleEmpty =
-      !!cur &&
-      cur.messages.length === 0 &&
-      !st0.queuedMessages.some((q) => q.sessionId === cur.id) &&
-      !st0.runs[cur.id] &&
-      !st0.preparingSessionIds.includes(cur.id) &&
-      !st0.gates[cur.id];
-    if (idleEmpty) {
+  const handleNewSession = useCallback(
+    async (options?: { requireBlankDraft?: boolean; initialInput?: string }): Promise<string> => {
       setErrorMessage(null);
-      return;
-    }
-    // 会话隔离:新建仅新增视图,后台门控/队列按会话归属保留
-    flushDraftSaves();
-    // 删空后自动补一个新会话(当前页由发送时聚焦注入承载)
-    const newSess = createSession();
-    const next = [newSess, ...useAppStore.getState().sessions];
-    setSessions(next);
-    setActiveSessionId(newSess.id);
-    await saveSession(newSess);
-    await activeSessionIdItem.setValue(newSess.id);
-  }, [setActiveSessionId, setSessions]);
+      const adapter: SessionCreationStoreAdapter = {
+        getSessions: () => useAppStore.getState().sessions,
+        getActiveSessionId: () => useAppStore.getState().activeSessionId,
+        setSessions,
+        setActiveSessionId,
+        patchDraftOf: (id, mutator) => useAppStore.getState().patchDraftOf(id, mutator),
+        dropPendingDraftSave,
+        flushDraftSaves,
+        createSession: (initialDraft) => createSession(undefined, initialDraft),
+        saveSession: (s) => saveSession(s),
+        setActiveSessionIdStorage: (id) => activeSessionIdItem.setValue(id),
+        hasPendingWork: (sessionId) => {
+          const st = useAppStore.getState();
+          return (
+            st.queuedMessages.some((q) => q.sessionId === sessionId) ||
+            Boolean(st.runs[sessionId]) ||
+            Boolean(st.preparingSessionIds.includes(sessionId)) ||
+            Boolean(st.gates[sessionId])
+          );
+        },
+      };
+
+      return executeSessionCreation(adapter, options);
+    },
+    [setActiveSessionId, setSessions, setErrorMessage]
+  );
 
   const handleDeleteSession = useCallback(
     async (id: string) => {

@@ -41,6 +41,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 import { toast } from '@/components/ui/toast';
+import { shouldNavigateToSkillSession } from '@/lib/refGroups';
 
 type ViewMode = 'chat' | 'settings';
 
@@ -214,6 +215,40 @@ export default function App() {
       setComposerNonce((n) => n + 1);
     },
     [patchActiveDraft, followUps]
+  );
+
+  // ── 技能创作专属预填与会话导航 ──────────────────────────────────
+  const creatingSkillWithAiRef = useRef(false);
+  const handleCreateSkillWithAi = useCallback(
+    async (template: string) => {
+      if (creatingSkillWithAiRef.current) return;
+      creatingSkillWithAiRef.current = true;
+      try {
+        const targetSessionId = await session.handleNewSession({
+          requireBlankDraft: true,
+          initialInput: template,
+        });
+        const st = useAppStore.getState();
+        const canNavigate = shouldNavigateToSkillSession({
+          targetSessionId,
+          activeSessionId: st.activeSessionId,
+          sessions: st.sessions,
+        });
+        // 仅当目标会话存在且用户仍停留在该目标会话时，才继续后续视图收尾
+        if (canNavigate) {
+          followUps.clearSuggestions();
+          setComposerNonce((n) => n + 1);
+          handleBackToChat();
+        }
+      } catch (err) {
+        console.error('[App] handleCreateSkillWithAi failed:', err);
+        // 不吞异常、不在此重复弹出 toast，由 SettingsSkillsView 一层统一提示
+        throw err;
+      } finally {
+        creatingSkillWithAiRef.current = false;
+      }
+    },
+    [session, followUps, handleBackToChat]
   );
 
   // ChatInput 上报输入变化 → 写入当前会话 draft(会话域防抖落盘,见 commitSessions)
@@ -769,7 +804,7 @@ export default function App() {
               onRestoreAll={handleSyncRestore}
               latestLocalSessionAt={latestLocalSessionAt}
               activeSessionId={activeSessionId}
-              onPrefillPrompt={handleSelectPrompt}
+              onCreateSkillWithAi={handleCreateSkillWithAi}
             />
           </div>
         </DrawerContent>

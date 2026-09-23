@@ -77,8 +77,8 @@ interface SettingsMainViewProps {
   latestLocalSessionAt: number | null;
   /** 当前激活会话(上传快照元数据) */
   activeSessionId: string | null;
-  /** 预填提示词至输入框(让 AI 创作等) */
-  onPrefillPrompt?: (promptText: string) => void;
+  /** 技能创作专属会话导航与预填 */
+  onCreateSkillWithAi: (template: string) => Promise<void>;
 }
 
 type SettingsTab = 'providers' | 'models' | 'prompt' | 'skills' | 'search' | 'appearance' | 'backup' | 'about';
@@ -117,7 +117,7 @@ export function SettingsMainView({
   onRestoreAll,
   latestLocalSessionAt,
   activeSessionId,
-  onPrefillPrompt,
+  onCreateSkillWithAi,
 }: SettingsMainViewProps) {
   const [currentTab, setCurrentTab] = useState<SettingsTab>('providers');
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -867,7 +867,10 @@ export function SettingsMainView({
 
         {/* VIEW: Skills Settings */}
         {currentTab === 'skills' && (
-          <SettingsSkillsView onBack={onBack} onPrefillPrompt={onPrefillPrompt} />
+          <SettingsSkillsView
+            onBack={onBack}
+            onCreateSkillWithAi={onCreateSkillWithAi}
+          />
         )}
 
         {/* VIEW 2: Search Settings */}

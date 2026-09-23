@@ -24,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { AlertCircle, AlertTriangle, CheckCircle2, Download, Info } from 'lucide-react';
+import { InfoTip } from './InfoTip';
 import { cn } from '@/lib/utils';
 
 interface SkillInstallDialogProps {
@@ -149,8 +150,11 @@ export function SkillInstallDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{i18n.t('skillInstallDialog.title')}</DialogTitle>
-          <DialogDescription>
+          <div className="flex items-center gap-1.5">
+            <DialogTitle>{i18n.t('skillInstallDialog.title')}</DialogTitle>
+            <InfoTip content={i18n.t('skillInstallDialog.subtitle')} />
+          </div>
+          <DialogDescription className="sr-only">
             {i18n.t('skillInstallDialog.subtitle')}
           </DialogDescription>
         </DialogHeader>

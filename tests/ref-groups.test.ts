@@ -22,7 +22,13 @@ import {
   draftAfterSend,
   getBucket,
   groupSnapshotTargets,
+  executeSessionCreation,
+  isBlankDraft,
+  isSessionReusable,
   nextElementId,
+  planSessionTarget,
+  shouldNavigateToSkillSession,
+  type SessionCreationStoreAdapter,
   removeRefTabFromDraft,
   shouldSeedCurrentPage,
   type RefGroupBuckets,
@@ -181,4 +187,283 @@ test('元素标记号:取现有元素与正文块标记号的最大值 +1', () =
     input: 'A <picked-element elementId="7" tabId="1" selector=".e7" tagName="a" label="x" /> B',
   });
   assert.equal(nextElementId(withText), 8);
+});
+
+test('isBlankDraft:只有无输入、无引用、无框选元素时为 true', () => {
+  assert.equal(isBlankDraft(), true);
+  assert.equal(isBlankDraft(null), true);
+  assert.equal(isBlankDraft(draft()), true);
+  assert.equal(isBlankDraft(draft({ input: '   ' })), true, '纯空白字符串视为空草稿');
+
+  assert.equal(isBlankDraft(draft({ input: 'hello' })), false, '有文本输入视为非空');
+  assert.equal(isBlankDraft(draft({ refTabs: [tab(1)] })), false, '有网页引用视为非空');
+  assert.equal(isBlankDraft(draft({ pickedElements: [element(1, 1)] })), false, '有框选元素视为非空');
+});
+
+test('isSessionReusable:空闲且按需检查白板草稿', () => {
+  // 无会话不可复用
+  assert.equal(isSessionReusable(null), false);
+
+  // 有历史消息不可复用
+  assert.equal(isSessionReusable({ messages: [{ role: 'user' }], draft: draft() }), false);
+
+  // 有后台进行中任务不可复用
+  assert.equal(isSessionReusable({ messages: [], draft: draft() }, { hasPendingWork: true }), false);
+
+  // 常规新建(未要求纯白板草稿):即使草稿有输入,也算空消息空闲会话
+  assert.equal(
+    isSessionReusable({ messages: [], draft: draft({ input: 'unsent' }) }),
+    true,
+    '常规新建逻辑保持兼容',
+  );
+
+  // 技能创作要求纯白板草稿(requireBlankDraft: true):
+  assert.equal(
+    isSessionReusable({ messages: [], draft: draft() }, { requireBlankDraft: true }),
+    true,
+    '纯白板空闲会话可直接复用',
+  );
+  assert.equal(
+    isSessionReusable({ messages: [], draft: draft({ input: 'draft text' }) }, { requireBlankDraft: true }),
+    false,
+    '有草稿输入不可复用,必须开新会话防冲掉',
+  );
+  assert.equal(
+    isSessionReusable({ messages: [], draft: draft({ refTabs: [tab(1)] }) }, { requireBlankDraft: true }),
+    false,
+    '有网页引用不可复用,必须开新会话防冲掉',
+  );
+  assert.equal(
+    isSessionReusable({ messages: [], draft: draft({ pickedElements: [element(1, 1)] }) }, { requireBlankDraft: true }),
+    false,
+    '有框选元素不可复用,必须开新会话防冲掉',
+  );
+});
+
+test('planSessionTarget:入口编排纯决策(老会话保留、空闲复用、忙会话新建、异步目标锁定)', () => {
+  const idleEmptySession = { id: 's-empty', messages: [], draft: draft() };
+  const busySession = { id: 's-busy', messages: [], draft: draft() };
+  const sessionWithDraft = { id: 's-draft', messages: [], draft: draft({ input: 'unsent text' }) };
+  const sessionWithRefs = { id: 's-refs', messages: [], draft: draft({ refTabs: [tab(1)] }) };
+  const activeChatSession = { id: 's-chat', messages: [{ role: 'user' }], draft: draft() };
+
+  // 1. 空闲白板复用:复用目标会话,且 initialInput 在返回值中直接就绪
+  const plan1 = planSessionTarget({
+    currentSession: idleEmptySession,
+    hasPendingWork: false,
+    options: { requireBlankDraft: true, initialInput: '创作技能A' },
+  });
+  assert.equal(plan1.action, 'reuse');
+  if (plan1.action === 'reuse') {
+    assert.equal(plan1.targetId, 's-empty');
+    assert.deepEqual(plan1.draftPatch, { input: '创作技能A' });
+  }
+
+  // 2. 老会话保留:当前会话有历史消息时,必须新建,不修改且保留原会话
+  const plan2 = planSessionTarget({
+    currentSession: activeChatSession,
+    hasPendingWork: false,
+    options: { requireBlankDraft: true, initialInput: '创作技能B' },
+  });
+  assert.equal(plan2.action, 'create');
+  if (plan2.action === 'create') {
+    assert.deepEqual(plan2.initialDraft, { input: '创作技能B', refTabs: [], pickedElements: [] });
+  }
+
+  // 3. 技能创作严格保护未发草稿与网页引用:若要求 requireBlankDraft,有草稿或引用时必须新建
+  const planDraft = planSessionTarget({
+    currentSession: sessionWithDraft,
+    hasPendingWork: false,
+    options: { requireBlankDraft: true, initialInput: '创作技能C' },
+  });
+  assert.equal(planDraft.action, 'create', '有未发草稿文本时不可冲掉,必须新建');
+
+  const planRefs = planSessionTarget({
+    currentSession: sessionWithRefs,
+    hasPendingWork: false,
+    options: { requireBlankDraft: true, initialInput: '创作技能D' },
+  });
+  assert.equal(planRefs.action, 'create', '有网页引用时不可冲掉,必须新建');
+
+  // 4. 忙会话新建:当前会话虽空但有后台任务(排队/运行/门控),必须新建
+  const planBusy = planSessionTarget({
+    currentSession: busySession,
+    hasPendingWork: true,
+    options: { requireBlankDraft: true, initialInput: '创作技能E' },
+  });
+  assert.equal(planBusy.action, 'create', '忙碌会话不可复用,必须新建');
+
+  // 5. 常规新建保持兼容:未开启 requireBlankDraft 时可复用带草稿的空会话
+  const planNormal = planSessionTarget({
+    currentSession: sessionWithDraft,
+    hasPendingWork: false,
+  });
+  assert.equal(planNormal.action, 'reuse');
+  if (planNormal.action === 'reuse') {
+    assert.equal(planNormal.targetId, 's-draft');
+    assert.equal(planNormal.draftPatch, null);
+  }
+});
+
+test('shouldNavigateToSkillSession:目标消失或用户切走时不继续导航', () => {
+  const sessions = [{ id: 's-1' }, { id: 's-2' }];
+
+  // 1. 目标会话存在且仍为活动会话 -> 允许继续收尾导航
+  assert.equal(
+    shouldNavigateToSkillSession({
+      targetSessionId: 's-1',
+      activeSessionId: 's-1',
+      sessions,
+    }),
+    true,
+  );
+
+  // 2. 异步完成时用户已经切去其它会话 -> 不得继续收尾导航
+  assert.equal(
+    shouldNavigateToSkillSession({
+      targetSessionId: 's-1',
+      activeSessionId: 's-2',
+      sessions,
+    }),
+    false,
+  );
+
+  // 3. 目标会话在异步期间被删除/不存在 -> 不得继续收尾导航
+  assert.equal(
+    shouldNavigateToSkillSession({
+      targetSessionId: 's-deleted',
+      activeSessionId: 's-deleted',
+      sessions,
+    }),
+    false,
+  );
+
+  // 4. 空值安全
+  assert.equal(
+    shouldNavigateToSkillSession({
+      targetSessionId: null,
+      activeSessionId: 's-1',
+      sessions,
+    }),
+    false,
+  );
+});
+
+test('executeSessionCreation:受控延迟保存期间切走,失败不抢夺当前活动 ID', async () => {
+  let activeId: string = 's-orig';
+  let storageSavedActiveId: string | null = null;
+  let sessions: Array<{ id: string; messages: any[]; draft?: SessionDraft }> = [
+    { id: 's-orig', messages: [{ role: 'user' }], draft: draft() },
+    { id: 's-other', messages: [], draft: draft() },
+  ];
+  let droppedDraftId: string | null = null;
+
+  // 构造受控延迟与拒绝的 adapter
+  const adapter: SessionCreationStoreAdapter = {
+    getSessions: () => sessions,
+    getActiveSessionId: () => activeId,
+    setSessions: (next) => {
+      sessions = next;
+    },
+    setActiveSessionId: (id) => {
+      activeId = id;
+    },
+    patchDraftOf: (id, patch) => {
+      const s = sessions.find((x) => x.id === id);
+      if (s) s.draft = patch(s.draft ?? draft());
+    },
+    dropPendingDraftSave: (id) => {
+      droppedDraftId = id;
+    },
+    flushDraftSaves: () => {},
+    createSession: (initialDraft) => ({
+      id: 's-new-1',
+      title: '新会话',
+      messages: [],
+      draft: initialDraft ?? draft(),
+    }),
+    // 模拟可控延迟并在 15ms 后失败抛错
+    saveSession: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      throw new Error('Disk IO error');
+    },
+    setActiveSessionIdStorage: async (id) => {
+      storageSavedActiveId = id;
+    },
+  };
+
+  // 发起创建任务(老会话有消息,触发新建)
+  const createPromise = executeSessionCreation(adapter, {
+    requireBlankDraft: true,
+    initialInput: '模板输入',
+  });
+
+  // 在保存完成前,验证首个 await 前新会话的 draft 已同步注入
+  assert.equal(sessions[0]?.id, 's-new-1');
+  assert.equal(sessions[0]?.draft?.input, '模板输入');
+  assert.equal(activeId, 's-new-1', '创建瞬间同步切至新会话');
+
+  // 模拟用户在保存期间主动切到另一个会话 s-other
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  activeId = 's-other';
+
+  // 等待保存失败抛出
+  await assert.rejects(createPromise, /Disk IO error/);
+
+  // 关键断言 1:保存失败回滚后,绝不抢夺用户已经切走的 s-other!
+  assert.equal(activeId, 's-other', '保存失败绝不得将 activeId 抢夺回 s-orig');
+
+  // 关键断言 2:失败目标的待写草稿被清理
+  assert.equal(droppedDraftId, 's-new-1', '失败目标的防抖草稿被清除');
+
+  // 关键断言 3:未持久化成功的 s-new-1 已被回滚剔除
+  assert.equal(sessions.some((s) => s.id === 's-new-1'), false, '失败会话被回滚移除');
+
+  // 关键断言 4:storage 不会被错误回写为失败的 ID
+  assert.equal(storageSavedActiveId, null, 'storage 未被写为已失败的会话 ID');
+});
+
+test('executeSessionCreation:保存期间若会话产生了工作内容,失败不删除该会话', async () => {
+  let activeId: string = 's-orig';
+  let sessions: Array<{ id: string; messages: any[]; draft?: SessionDraft }> = [
+    { id: 's-orig', messages: [{ role: 'user' }], draft: draft() },
+  ];
+
+  const adapter: SessionCreationStoreAdapter = {
+    getSessions: () => sessions,
+    getActiveSessionId: () => activeId,
+    setSessions: (next) => {
+      sessions = next;
+    },
+    setActiveSessionId: (id) => {
+      activeId = id;
+    },
+    patchDraftOf: () => {},
+    dropPendingDraftSave: () => {},
+    flushDraftSaves: () => {},
+    createSession: (initialDraft) => ({
+      id: 's-new-busy',
+      title: '新会话',
+      messages: [],
+      draft: initialDraft ?? draft(),
+    }),
+    saveSession: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      throw new Error('Save failed');
+    },
+    setActiveSessionIdStorage: async () => {},
+  };
+
+  const createPromise = executeSessionCreation(adapter);
+
+  // 模拟在保存等待期间,用户向该会话注入了一条消息
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const createdSess = sessions.find((s) => s.id === 's-new-busy');
+  assert.ok(createdSess);
+  createdSess.messages.push({ role: 'user', content: '用户急切发送的内容' });
+
+  await assert.rejects(createPromise, /Save failed/);
+
+  // 关键断言:因为产生了用户消息,回滚时不删除此会话
+  assert.equal(sessions.some((s) => s.id === 's-new-busy'), true, '已产生用户内容的会话保留');
 });
