@@ -84,7 +84,8 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
+        {/* 与底部操作栏保持间距:DialogFooter 在表单内部,拿不到官方 grid 的 gap-4 */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <FieldGroup>
             {/* Rule Name */}
             <Field data-invalid={!!(validationError && !name.trim())}>
@@ -142,8 +143,8 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
               />
             </Field>
 
-            {/* 启用开关:右侧留出内衬,开关不贴内容边缘 */}
-            <Field orientation="horizontal" className="pr-4">
+            {/* 启用开关(表单最后一行) */}
+            <Field orientation="horizontal">
               <FieldLabel htmlFor="rule-enabled">{i18n.t('settings.rules.enableHint')}</FieldLabel>
               <Switch
                 id="rule-enabled"
