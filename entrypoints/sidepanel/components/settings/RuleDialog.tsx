@@ -143,7 +143,7 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
             </Field>
 
             {/* 启用开关:右侧留出内衬,开关不贴内容边缘 */}
-            <Field orientation="horizontal" className="pr-2.5">
+            <Field orientation="horizontal" className="pr-4">
               <FieldLabel htmlFor="rule-enabled">{i18n.t('settings.rules.enableHint')}</FieldLabel>
               <Switch
                 id="rule-enabled"
