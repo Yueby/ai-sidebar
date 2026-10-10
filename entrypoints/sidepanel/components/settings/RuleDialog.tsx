@@ -142,15 +142,17 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
               />
             </Field>
 
-            {/* Switch as standard form field */}
-            <Field orientation="horizontal">
-              <FieldLabel htmlFor="rule-enabled">{i18n.t('settings.rules.enableHint')}</FieldLabel>
-              <Switch
-                id="rule-enabled"
-                checked={enabled}
-                onCheckedChange={setEnabled}
-              />
-            </Field>
+            {/* 启用开关:与模型配置弹窗的能力开关同一写法(带边框的独立行,开关不贴内容边缘) */}
+            <div className="rounded-lg border bg-muted/30 p-2.5">
+              <Field orientation="horizontal">
+                <FieldLabel htmlFor="rule-enabled">{i18n.t('settings.rules.enableHint')}</FieldLabel>
+                <Switch
+                  id="rule-enabled"
+                  checked={enabled}
+                  onCheckedChange={setEnabled}
+                />
+              </Field>
+            </div>
 
             {validationError && (
               <FieldError>{validationError}</FieldError>
