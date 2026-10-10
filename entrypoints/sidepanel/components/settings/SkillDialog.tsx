@@ -118,91 +118,89 @@ export function SkillDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onKeyDown={handleKeyDown} className="max-h-[calc(100dvh-2rem)] flex flex-col">
+      <DialogContent onKeyDown={handleKeyDown}>
         <DialogHeader>
           <DialogTitle>
             {isEditing ? i18n.t('skillDialog.editTitle') : i18n.t('skillDialog.addTitle')}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-            <FieldGroup>
-              {/* Skill Name(编辑时锁定:改名 = 另一条技能,saveSkill 是按名字 upsert 的) */}
-              <Field data-invalid={nameIssues.length > 0 || collision?.type === 'builtin'}>
-                <div className="flex items-center justify-between">
-                  <FieldLabel>{i18n.t('skillDialog.nameLabel')}</FieldLabel>
-                  <span className="text-muted-foreground text-xs">
-                    {isEditing ? i18n.t('skillDialog.nameLockedHint') : i18n.t('skillDialog.nameHint')}
-                  </span>
-                </div>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value.toLowerCase())}
-                  placeholder={i18n.t('skillDialog.namePlaceholder')}
-                  maxLength={SKILL_NAME_MAX}
-                  autoFocus={!isEditing}
-                  disabled={isEditing}
-                  className="font-mono"
-                />
-                {nameIssues.map((issue, idx) => (
-                  <FieldError key={idx}>
-                    {issue}
-                  </FieldError>
-                ))}
-                {collision && (
-                  collision.type === 'builtin' ? (
-                    <FieldError>{collision.message}</FieldError>
-                  ) : (
-                    <FieldDescription>{collision.message}</FieldDescription>
-                  )
-                )}
-              </Field>
+        <form onSubmit={handleSubmit}>
+          <FieldGroup>
+            {/* Skill Name(编辑时锁定:改名 = 另一条技能,saveSkill 是按名字 upsert 的) */}
+            <Field data-invalid={nameIssues.length > 0 || collision?.type === 'builtin'}>
+              <div className="flex items-center justify-between">
+                <FieldLabel>{i18n.t('skillDialog.nameLabel')}</FieldLabel>
+                <span className="text-muted-foreground text-xs">
+                  {isEditing ? i18n.t('skillDialog.nameLockedHint') : i18n.t('skillDialog.nameHint')}
+                </span>
+              </div>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value.toLowerCase())}
+                placeholder={i18n.t('skillDialog.namePlaceholder')}
+                maxLength={SKILL_NAME_MAX}
+                autoFocus={!isEditing}
+                disabled={isEditing}
+                className="font-mono"
+              />
+              {nameIssues.map((issue, idx) => (
+                <FieldError key={idx}>
+                  {issue}
+                </FieldError>
+              ))}
+              {collision && (
+                collision.type === 'builtin' ? (
+                  <FieldError>{collision.message}</FieldError>
+                ) : (
+                  <FieldDescription>{collision.message}</FieldDescription>
+                )
+              )}
+            </Field>
 
-              {/* Description */}
-              <Field data-invalid={descEmpty || descTooLong}>
-                <div className="flex items-center justify-between">
-                  <FieldLabel>{i18n.t('skillDialog.descLabel')}</FieldLabel>
-                  <span
-                    className={cn(
-                      'font-mono text-xs',
-                      descTooLong ? 'text-destructive font-medium' : 'text-muted-foreground',
-                    )}
-                  >
-                    {description.length} / {SKILL_DESCRIPTION_MAX}
-                  </span>
-                </div>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={i18n.t('skillDialog.descPlaceholder')}
-                  rows={3}
-                />
-                {descEmpty && (
-                  <FieldError>
-                    {i18n.t('skillDialog.validationDescRequired')}
-                  </FieldError>
-                )}
-              </Field>
+            {/* Description */}
+            <Field data-invalid={descEmpty || descTooLong}>
+              <div className="flex items-center justify-between">
+                <FieldLabel>{i18n.t('skillDialog.descLabel')}</FieldLabel>
+                <span
+                  className={cn(
+                    'font-mono text-xs',
+                    descTooLong ? 'text-destructive font-medium' : 'text-muted-foreground',
+                  )}
+                >
+                  {description.length} / {SKILL_DESCRIPTION_MAX}
+                </span>
+              </div>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={i18n.t('skillDialog.descPlaceholder')}
+                rows={3}
+              />
+              {descEmpty && (
+                <FieldError>
+                  {i18n.t('skillDialog.validationDescRequired')}
+                </FieldError>
+              )}
+            </Field>
 
-              {/* Instruction Body */}
-              <Field data-invalid={contentEmpty}>
-                <FieldLabel>{i18n.t('skillDialog.contentLabel')}</FieldLabel>
-                <Textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder={i18n.t('skillDialog.contentPlaceholder')}
-                  className="font-mono"
-                  rows={6}
-                />
-                {contentEmpty && (
-                  <FieldError>
-                    {i18n.t('skillDialog.validationContentRequired')}
-                  </FieldError>
-                )}
-              </Field>
-            </FieldGroup>
-          </div>
+            {/* Instruction Body */}
+            <Field data-invalid={contentEmpty}>
+              <FieldLabel>{i18n.t('skillDialog.contentLabel')}</FieldLabel>
+              <Textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={i18n.t('skillDialog.contentPlaceholder')}
+                className="font-mono"
+                rows={6}
+              />
+              {contentEmpty && (
+                <FieldError>
+                  {i18n.t('skillDialog.validationContentRequired')}
+                </FieldError>
+              )}
+            </Field>
+          </FieldGroup>
 
           <DialogFooter>
             <Button

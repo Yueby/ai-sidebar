@@ -148,7 +148,7 @@ export function SkillInstallDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] flex flex-col">
+      <DialogContent>
         <DialogHeader>
           <div className="flex items-center gap-1.5">
             <DialogTitle>{i18n.t('skillInstallDialog.title')}</DialogTitle>
@@ -159,39 +159,38 @@ export function SkillInstallDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          <div className="space-y-4">
-            <FieldGroup>
-              <Field data-invalid={Boolean(fetchError)}>
-                <div className="flex items-center justify-between">
-                  <FieldLabel>{i18n.t('skillInstallDialog.urlLabel')}</FieldLabel>
-                  <span className="text-muted-foreground text-xs">{i18n.t('skillInstallDialog.urlHint')}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void handleFetch();
-                      }
-                    }}
-                    placeholder={i18n.t('skillInstallDialog.urlPlaceholder')}
-                    className="font-mono flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={fetching || !url.trim()}
-                    onClick={() => void handleFetch()}
-                  >
-                    {fetching ? <Spinner data-icon="inline-start" /> : <Download data-icon="inline-start" />}
-                    <span>{fetching ? i18n.t('skillInstallDialog.fetching') : i18n.t('skillInstallDialog.fetchAction')}</span>
-                  </Button>
-                </div>
-              </Field>
-            </FieldGroup>
+        <div className="space-y-4">
+          <FieldGroup>
+            <Field data-invalid={Boolean(fetchError)}>
+              <div className="flex items-center justify-between">
+                <FieldLabel>{i18n.t('skillInstallDialog.urlLabel')}</FieldLabel>
+                <span className="text-muted-foreground text-xs">{i18n.t('skillInstallDialog.urlHint')}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleFetch();
+                    }
+                  }}
+                  placeholder={i18n.t('skillInstallDialog.urlPlaceholder')}
+                  className="font-mono flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={fetching || !url.trim()}
+                  onClick={() => void handleFetch()}
+                >
+                  {fetching ? <Spinner data-icon="inline-start" /> : <Download data-icon="inline-start" />}
+                  <span>{fetching ? i18n.t('skillInstallDialog.fetching') : i18n.t('skillInstallDialog.fetchAction')}</span>
+                </Button>
+              </div>
+            </Field>
+          </FieldGroup>
 
             {/* 抓取或解析错误 */}
             {fetchError && (
@@ -277,7 +276,6 @@ export function SkillInstallDialog({
               </Card>
             )}
           </div>
-        </div>
 
         <DialogFooter>
           <Button

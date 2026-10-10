@@ -77,16 +77,15 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onKeyDown={handleKeyDown} className="sm:max-w-sm max-h-[calc(100dvh-2rem)] flex flex-col">
-        <DialogHeader className="shrink-0">
+      <DialogContent onKeyDown={handleKeyDown}>
+        <DialogHeader>
           <DialogTitle>
             {rule ? i18n.t('settings.rules.edit') : i18n.t('settings.rules.addRule')}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-auto min-h-0 overflow-y-auto overflow-x-hidden pr-1">
-            <FieldGroup>
+        <form onSubmit={handleSubmit}>
+          <FieldGroup>
             {/* Rule Name */}
             <Field data-invalid={!!(validationError && !name.trim())}>
               <div className="flex items-center justify-between">
@@ -139,7 +138,6 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
                 maxLength={MAX_RULE_CONTENT_LENGTH}
                 placeholder={i18n.t('settings.rules.contentPlaceholder')}
                 rows={4}
-                className="max-h-48 resize-y"
                 aria-invalid={!!(validationError && !content.trim())}
               />
             </Field>
@@ -158,9 +156,8 @@ export function RuleDialog({ open, onOpenChange, rule, onSave }: RuleDialogProps
               <FieldError>{validationError}</FieldError>
             )}
           </FieldGroup>
-          </div>
 
-          <DialogFooter className="shrink-0">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
